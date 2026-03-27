@@ -86,6 +86,16 @@ def _path_value_completion(
     context_mode: str,
     specs: list[CommandSpec],
 ) -> str | None:
+    matches = _path_value_completions(state, raw_buffer, context_mode, specs)
+    return matches[0] if matches else None
+
+
+def _path_value_completions(
+    state: PiespectorState,
+    raw_buffer: str,
+    context_mode: str,
+    specs: list[CommandSpec],
+) -> list[str]:
     buffer = raw_buffer.lstrip()
     source = _command_source(state, context_mode)
 
@@ -98,7 +108,7 @@ def _path_value_completion(
             continue
 
         if buffer.lower() == command:
-            return f"{command} "
+            return [f"{command} "]
         if not buffer.lower().startswith(f"{command} "):
             continue
 
@@ -119,27 +129,39 @@ def _path_value_completion(
             if not normalized_value or match.display.lower().startswith(normalized_value.lower())
         ]
         if not prefix_matches:
-            return None
-        return f"{command} {_quote_command_value(prefix_matches[0].display, raw_value=value)}"
+            return []
+        return [
+            f"{command} {_quote_command_value(match.display, raw_value=value)}"
+            for match in prefix_matches
+        ]
 
     for command in ("import", "export"):
         if not any(spec.tokens == (command,) for spec in specs):
             continue
         if buffer.lower() == command:
-            return f"{command} "
+            return [f"{command} "]
         if not buffer.lower().startswith(f"{command} "):
             continue
 
         value = buffer[len(command) :].lstrip()
-        completed_value = _filesystem_path_completion(value)
-        if completed_value is None:
-            return None
-        return f"{command} {completed_value}"
+        completed_values = _filesystem_path_completions(value)
+        if not completed_values:
+            return []
+        return [f"{command} {completed_value}" for completed_value in completed_values]
 
-    return None
+    return []
 
 
 def _filesystem_path_completion(raw_value: str) -> str | None:
+    completions = _filesystem_path_completions(raw_value)
+    return completions[0] if completions else None
+
+
+def filesystem_path_completions(raw_value: str) -> list[str]:
+    return _filesystem_path_completions(raw_value)
+
+
+def _filesystem_path_completions(raw_value: str) -> list[str]:
     quote_char = raw_value[:1] if raw_value[:1] in {'"', "'"} else ""
     value = raw_value[1:] if quote_char else raw_value
     if quote_char and value.endswith(quote_char):
@@ -165,7 +187,7 @@ def _filesystem_path_completion(raw_value: str) -> str | None:
     try:
         entries = sorted(base_dir.iterdir(), key=lambda item: (not item.is_dir(), item.name.lower()))
     except OSError:
-        return None
+        return []
 
     candidates = [
         entry
@@ -174,21 +196,25 @@ def _filesystem_path_completion(raw_value: str) -> str | None:
         and (prefix.startswith(".") or not entry.name.startswith("."))
     ]
     if not candidates:
-        return None
+        return []
 
-    chosen = candidates[0]
-    chosen_name = chosen.name + ("/" if chosen.is_dir() else "")
-    if not raw_parent:
-        completed = chosen_name
-    elif raw_parent == "/":
-        completed = f"/{chosen_name}"
-    else:
-        completed = f"{raw_parent}/{chosen_name}"
-    return _quote_command_value(
-        completed,
-        raw_value=raw_value,
-        keep_open=chosen.is_dir(),
-    )
+    completions: list[str] = []
+    for chosen in candidates:
+        chosen_name = chosen.name + ("/" if chosen.is_dir() else "")
+        if not raw_parent:
+            completed = chosen_name
+        elif raw_parent == "/":
+            completed = f"/{chosen_name}"
+        else:
+            completed = f"{raw_parent}/{chosen_name}"
+        completions.append(
+            _quote_command_value(
+                completed,
+                raw_value=raw_value,
+                keep_open=chosen.is_dir(),
+            )
+        )
+    return completions
 
 
 def _command_specs(state: PiespectorState, context_mode: str) -> list[CommandSpec]:
@@ -363,11 +389,16 @@ def help_commands(
 
 
 def command_completion(state: PiespectorState, raw_buffer: str) -> str | None:
+    matches = command_completion_matches(state, raw_buffer)
+    return matches[0] if matches else None
+
+
+def command_completion_matches(state: PiespectorState, raw_buffer: str) -> list[str]:
     context_mode = state.command_context_mode or state.mode
     specs = _command_specs(state, context_mode)
-    path_completion = _path_value_completion(state, raw_buffer, context_mode, specs)
-    if path_completion is not None:
-        return path_completion
+    path_completions = _path_value_completions(state, raw_buffer, context_mode, specs)
+    if path_completions:
+        return path_completions
 
     buffer = raw_buffer.lstrip()
     trailing_space = buffer.endswith(" ")
@@ -399,21 +430,23 @@ def command_completion(state: PiespectorState, raw_buffer: str) -> str | None:
             candidates.append(candidate)
 
     if not candidates:
-        return None
+        return []
 
-    chosen = candidates[0]
-    new_tokens = [*completed_prefix, chosen]
-    completed = " ".join(new_tokens)
+    completions: list[str] = []
+    for chosen in candidates:
+        new_tokens = [*completed_prefix, chosen]
+        completed = " ".join(new_tokens)
 
-    exact_specs = [spec for spec in specs if spec.tokens == tuple(new_tokens)]
-    has_children = any(
-        len(spec.tokens) > len(new_tokens) and spec.tokens[: len(new_tokens)] == tuple(new_tokens)
-        for spec in specs
-    )
-    needs_value = any(spec.takes_value for spec in exact_specs)
-    if has_children or needs_value:
-        completed += " "
-    return completed
+        exact_specs = [spec for spec in specs if spec.tokens == tuple(new_tokens)]
+        has_children = any(
+            len(spec.tokens) > len(new_tokens) and spec.tokens[: len(new_tokens)] == tuple(new_tokens)
+            for spec in specs
+        )
+        needs_value = any(spec.takes_value for spec in exact_specs)
+        if has_children or needs_value:
+            completed += " "
+        completions.append(completed)
+    return completions
 
 
 def _command_path(value: str) -> Path:

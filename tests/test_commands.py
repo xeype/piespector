@@ -7,7 +7,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from piespector.commands import command_completion, help_commands, run_command
+from piespector.commands import command_completion, command_completion_matches, help_commands, run_command
 from piespector.state import (
     CollectionDefinition,
     FolderDefinition,
@@ -99,6 +99,24 @@ class CommandTests(unittest.TestCase):
                 completion = command_completion(state, 'import "My')
 
         self.assertEqual(completion, 'import "My Env.env"')
+
+    def test_import_completion_returns_all_matching_files_in_order(self) -> None:
+        state = PiespectorState(current_tab="env", mode="COMMAND", command_context_mode="NORMAL")
+        with TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            (root / "alpha.env").write_text("A=1\n", encoding="utf-8")
+            (root / "alpine.env").write_text("A=2\n", encoding="utf-8")
+            (root / "beta.env").write_text("A=3\n", encoding="utf-8")
+            with chdir(root):
+                completions = command_completion_matches(state, "import al")
+
+        self.assertEqual(
+            completions,
+            [
+                "import alpha.env",
+                "import alpine.env",
+            ],
+        )
 
     def test_mv_completion_quotes_destination_paths_with_spaces(self) -> None:
         source_collection = CollectionDefinition(name="Source")
