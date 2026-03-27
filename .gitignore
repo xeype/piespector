@@ -1,0 +1,15 @@
+.DS_Store
+.idea/
+.venv/
+venv/
+.pytest_cache/
+__pycache__/
+*.py[cod]
+build/
+dist/
+*.egg-info/
+.env
+.piespector.env.json
+.piespector.log
+.piespector.requests.json
+.piespector.history.jsonl

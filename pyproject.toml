@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "piespector"
+dynamic = ["version"]
+description = "A terminal-first API client for organized request workflows, history, and replay."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+keywords = ["api", "http", "rest", "terminal", "textual", "tui"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Utilities",
+]
+dependencies = [
+    "textual[syntax]>=0.58.1",
+]
+
+[project.urls]
+Homepage = "https://www.piespector.com"
+Documentation = "https://www.piespector.com"
+Installation = "https://www.piespector.com/getting-started/installation/#install-from-source"
+
+[project.scripts]
+piespector = "piespector.__main__:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.dynamic]
+version = {attr = "piespector.__version__"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
