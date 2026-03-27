@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import base64
 import errno
+from html.parser import HTMLParser
 import json
+from pathlib import Path
 import re
 import socket
 import ssl
@@ -58,7 +60,12 @@ def perform_request(
         resolved_query_items,
     )
     resolved_header_items = _resolve_request_headers(definition, env_pairs)
-    _apply_auth_headers(definition, env_pairs, resolved_header_items)
+    _apply_auth_headers(
+        definition,
+        env_pairs,
+        resolved_header_items,
+        timeout_seconds=timeout_seconds,
+    )
 
     try:
         final_url = _build_url(resolved_url, resolved_query_items + resolved_auth_query_items)
@@ -223,11 +230,14 @@ def validate_raw_body(
     body_text: str,
     headers: dict[str, str] | None = None,
 ) -> str | None:
-    if definition.body_type != "raw":
-        return None
-
     payload = body_text.strip()
     if not payload:
+        return None
+
+    if definition.body_type == "graphql":
+        return _validate_graphql_body(payload)
+
+    if definition.body_type != "raw":
         return None
 
     if _raw_body_should_validate_as_json(definition, payload, headers):
@@ -248,6 +258,220 @@ def validate_raw_body(
                 return f"Invalid XML at line {line}, column {column + 1}: {exc}."
             return f"Invalid XML: {exc}."
 
+    if definition.raw_subtype == "html":
+        return _validate_html_body(payload)
+
+    if definition.raw_subtype == "javascript":
+        return _validate_javascript_body(payload)
+
+    return None
+
+
+class _BodyHtmlValidator(HTMLParser):
+    VOID_TAGS = {
+        "area",
+        "base",
+        "br",
+        "col",
+        "embed",
+        "hr",
+        "img",
+        "input",
+        "link",
+        "meta",
+        "param",
+        "source",
+        "track",
+        "wbr",
+    }
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.open_tags: list[tuple[str, tuple[int, int]]] = []
+        self.error_message = ""
+
+    def handle_starttag(self, tag: str, attrs) -> None:  # type: ignore[override]
+        if tag.lower() not in self.VOID_TAGS:
+            self.open_tags.append((tag.lower(), self.getpos()))
+
+    def handle_startendtag(self, tag: str, attrs) -> None:  # type: ignore[override]
+        return None
+
+    def handle_endtag(self, tag: str) -> None:  # type: ignore[override]
+        normalized = tag.lower()
+        if not self.open_tags:
+            line, column = self.getpos()
+            self.error_message = (
+                f"Unexpected closing tag </{normalized}> at line {line}, column {column + 1}."
+            )
+            return
+        open_tag, (line, column) = self.open_tags.pop()
+        if open_tag != normalized:
+            self.error_message = (
+                f"Mismatched closing tag </{normalized}> at line {self.getpos()[0]}, "
+                f"column {self.getpos()[1] + 1}; expected </{open_tag}> for "
+                f"<{open_tag}> opened at line {line}, column {column + 1}."
+            )
+
+    def error(self, message: str) -> None:
+        self.error_message = message
+
+
+def _validate_html_body(body_text: str) -> str | None:
+    parser = _BodyHtmlValidator()
+    try:
+        parser.feed(body_text)
+        parser.close()
+    except ValueError as exc:
+        return f"Invalid HTML: {exc}."
+    if parser.error_message:
+        return f"Invalid HTML: {parser.error_message}"
+    if parser.open_tags:
+        tag, (line, column) = parser.open_tags[-1]
+        return (
+            f"Invalid HTML: unclosed tag <{tag}> opened at line {line}, "
+            f"column {column + 1}."
+        )
+    return None
+
+
+def _validate_javascript_body(body_text: str) -> str | None:
+    return _validate_balanced_source(body_text, label="JavaScript", require_curly=False)
+
+
+def _validate_graphql_body(body_text: str) -> str | None:
+    if "{" not in body_text:
+        return "Invalid GraphQL: expected a selection set starting with '{'."
+    return _validate_balanced_source(body_text, label="GraphQL", require_curly=True)
+
+
+def _validate_balanced_source(
+    body_text: str,
+    *,
+    label: str,
+    require_curly: bool,
+) -> str | None:
+    stack: list[tuple[str, int, int]] = []
+    pairs = {"(": ")", "[": "]", "{": "}"}
+    in_string = False
+    string_quote = ""
+    escaped = False
+    in_line_comment = False
+    in_block_comment = False
+    in_template_expression = False
+    line = 1
+    column = 0
+    index = 0
+    saw_curly = False
+
+    while index < len(body_text):
+        char = body_text[index]
+        column += 1
+
+        if char == "\n":
+            line += 1
+            column = 0
+            if in_line_comment:
+                in_line_comment = False
+            index += 1
+            continue
+
+        next_char = body_text[index + 1] if index + 1 < len(body_text) else ""
+
+        if in_line_comment:
+            index += 1
+            continue
+
+        if in_block_comment:
+            if char == "*" and next_char == "/":
+                in_block_comment = False
+                index += 2
+                column += 1
+            else:
+                index += 1
+            continue
+
+        if in_string:
+            if escaped:
+                escaped = False
+                index += 1
+                continue
+            if char == "\\":
+                escaped = True
+                index += 1
+                continue
+            if string_quote == "`" and char == "$" and next_char == "{":
+                stack.append(("{", line, column + 1))
+                saw_curly = True
+                in_template_expression = True
+                in_string = False
+                string_quote = ""
+                index += 2
+                column += 1
+                continue
+            if char == string_quote:
+                in_string = False
+                string_quote = ""
+            index += 1
+            continue
+
+        if char == "/" and next_char == "/":
+            in_line_comment = True
+            index += 2
+            column += 1
+            continue
+
+        if char == "/" and next_char == "*":
+            in_block_comment = True
+            index += 2
+            column += 1
+            continue
+
+        if char in {'"', "'", "`"}:
+            in_string = True
+            string_quote = char
+            index += 1
+            continue
+
+        if char in pairs:
+            stack.append((char, line, column))
+            if char == "{":
+                saw_curly = True
+            index += 1
+            continue
+
+        if char in pairs.values():
+            if not stack:
+                return f"Invalid {label}: unexpected {char!r} at line {line}, column {column}."
+            opener, open_line, open_column = stack.pop()
+            expected = pairs[opener]
+            if char != expected:
+                return (
+                    f"Invalid {label}: unexpected {char!r} at line {line}, column {column}; "
+                    f"expected {expected!r} for {opener!r} opened at line {open_line}, "
+                    f"column {open_column}."
+                )
+            if in_template_expression and opener == "{":
+                in_template_expression = False
+                in_string = True
+                string_quote = "`"
+            index += 1
+            continue
+
+        index += 1
+
+    if in_string:
+        return f"Invalid {label}: unterminated string literal."
+    if in_block_comment:
+        return f"Invalid {label}: unterminated block comment."
+    if stack:
+        opener, open_line, open_column = stack[-1]
+        return (
+            f"Invalid {label}: unclosed {opener!r} opened at line {open_line}, "
+            f"column {open_column}."
+        )
+    if require_curly and not saw_curly:
+        return f"Invalid {label}: expected a selection set enclosed in braces."
     return None
 
 
@@ -296,6 +520,9 @@ def _resolve_request_query_items(
 def _resolve_auth_header_items(
     definition: RequestDefinition,
     env_pairs: dict[str, str],
+    *,
+    fetch_oauth_token: bool = False,
+    timeout_seconds: float = 15.0,
 ) -> list[tuple[str, str]]:
     if definition.auth_type == "basic":
         username = resolve_placeholders(definition.auth_basic_username, env_pairs)
@@ -317,6 +544,38 @@ def _resolve_auth_header_items(
         if not key:
             return []
         return [(key, value)]
+
+    if definition.auth_type == "cookie":
+        cookie_name = resolve_placeholders(definition.auth_cookie_name, env_pairs).strip()
+        cookie_value = resolve_placeholders(definition.auth_cookie_value, env_pairs)
+        if not cookie_name:
+            return []
+        return [("Cookie", f"{cookie_name}={cookie_value}")]
+
+    if definition.auth_type == "custom-header":
+        header_name = resolve_placeholders(definition.auth_custom_header_name, env_pairs).strip()
+        header_value = resolve_placeholders(definition.auth_custom_header_value, env_pairs)
+        if not header_name:
+            return []
+        return [(header_name, header_value)]
+
+    if definition.auth_type == "oauth2-client-credentials":
+        token_url = resolve_placeholders(definition.auth_oauth_token_url, env_pairs).strip()
+        client_id = resolve_placeholders(definition.auth_oauth_client_id, env_pairs).strip()
+        client_secret = resolve_placeholders(definition.auth_oauth_client_secret, env_pairs)
+        scope = resolve_placeholders(definition.auth_oauth_scope, env_pairs).strip()
+        if not token_url or not client_id:
+            return []
+        if not fetch_oauth_token:
+            return [("Authorization", "Bearer <oauth2-token>")]
+        token_type, access_token = _fetch_oauth_client_credentials_token(
+            token_url=token_url,
+            client_id=client_id,
+            client_secret=client_secret,
+            scope=scope,
+            timeout_seconds=timeout_seconds,
+        )
+        return [("Authorization", f"{token_type} {access_token}")]
 
     return []
 
@@ -365,8 +624,15 @@ def _apply_auth_headers(
     definition: RequestDefinition,
     env_pairs: dict[str, str],
     headers: dict[str, str],
+    *,
+    timeout_seconds: float = 15.0,
 ) -> None:
-    for key, value in _resolve_auth_header_items(definition, env_pairs):
+    for key, value in _resolve_auth_header_items(
+        definition,
+        env_pairs,
+        fetch_oauth_token=True,
+        timeout_seconds=timeout_seconds,
+    ):
         if _has_header(headers, key) or not _is_auto_header_enabled(definition, key):
             continue
         headers[key] = value
@@ -393,6 +659,16 @@ def _build_request_body(
             headers["Content-Type"] = _default_raw_content_type(definition.raw_subtype)
         return resolved_body.encode("utf-8") if resolved_body else b""
 
+    if definition.body_type == "graphql":
+        if not _has_content_type(headers) and _is_auto_header_enabled(definition, "Content-Type"):
+            headers["Content-Type"] = "application/graphql"
+        return resolved_body.encode("utf-8") if resolved_body else b""
+
+    if definition.body_type == "binary":
+        if not _has_content_type(headers) and _is_auto_header_enabled(definition, "Content-Type"):
+            headers["Content-Type"] = "application/octet-stream"
+        return _read_binary_body(resolved_body)
+
     if definition.body_type == "form-data":
         if not _has_content_type(headers) and _is_auto_header_enabled(definition, "Content-Type"):
             headers["Content-Type"] = f"multipart/form-data; boundary={MULTIPART_BOUNDARY}"
@@ -404,6 +680,81 @@ def _build_request_body(
         return parse.urlencode(resolved_body_urlencoded_items).encode("utf-8")
 
     return resolved_body.encode("utf-8") if resolved_body else None
+
+
+def _fetch_oauth_client_credentials_token(
+    *,
+    token_url: str,
+    client_id: str,
+    client_secret: str,
+    scope: str,
+    timeout_seconds: float,
+) -> tuple[str, str]:
+    payload = {"grant_type": "client_credentials"}
+    if scope:
+        payload["scope"] = scope
+    data = parse.urlencode(payload).encode("utf-8")
+    basic_token = base64.b64encode(
+        f"{client_id}:{client_secret}".encode("utf-8")
+    ).decode("ascii")
+    oauth_request = request.Request(
+        token_url,
+        data=data,
+        headers={
+            "Authorization": f"Basic {basic_token}",
+            "Accept": "application/json",
+            "Content-Type": "application/x-www-form-urlencoded",
+            "User-Agent": DEFAULT_USER_AGENT,
+        },
+        method="POST",
+    )
+    try:
+        with request.urlopen(oauth_request, timeout=timeout_seconds) as response:
+            raw_body = response.read()
+    except error.HTTPError as exc:
+        raw_body = exc.read()
+        detail = _oauth_error_detail(raw_body) or str(exc)
+        raise ValueError(f"OAuth token request failed: {detail}.") from exc
+    except error.URLError as exc:
+        raise ValueError(
+            f"OAuth token request failed: {_friendly_request_error(exc.reason)}"
+        ) from exc
+    except TimeoutError as exc:
+        raise ValueError(
+            f"OAuth token request failed: {_friendly_request_error(exc)}"
+        ) from exc
+    except ssl.SSLError as exc:
+        raise ValueError(
+            f"OAuth token request failed: {_friendly_request_error(exc)}"
+        ) from exc
+
+    try:
+        payload = json.loads(_decode_body(raw_body, "utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError("OAuth token response is not valid JSON.") from exc
+    if not isinstance(payload, dict):
+        raise ValueError("OAuth token response must be a JSON object.")
+    access_token = str(payload.get("access_token", "")).strip()
+    if not access_token:
+        raise ValueError("OAuth token response did not include access_token.")
+    token_type = str(payload.get("token_type", "Bearer")).strip() or "Bearer"
+    return token_type, access_token
+
+
+def _oauth_error_detail(raw_body: bytes) -> str:
+    if not raw_body:
+        return ""
+    try:
+        payload = json.loads(_decode_body(raw_body, "utf-8"))
+    except json.JSONDecodeError:
+        return _decode_body(raw_body, "utf-8").strip()
+    if not isinstance(payload, dict):
+        return ""
+    error_code = str(payload.get("error", "")).strip()
+    error_description = str(payload.get("error_description", "")).strip()
+    if error_code and error_description:
+        return f"{error_code}: {error_description}"
+    return error_description or error_code
 
 
 def _validate_url(url: str) -> str | None:
@@ -523,6 +874,10 @@ def _raw_body_should_validate_as_xml(
 def _default_raw_content_type(raw_subtype: str) -> str:
     if raw_subtype == "xml":
         return "application/xml"
+    if raw_subtype == "html":
+        return "text/html"
+    if raw_subtype == "javascript":
+        return "application/javascript"
     if raw_subtype == "text":
         return "text/plain"
     return "application/json"
@@ -538,11 +893,32 @@ def _default_content_type(
         return None
     if definition.body_type == "raw":
         return _default_raw_content_type(definition.raw_subtype)
+    if definition.body_type == "graphql":
+        return "application/graphql"
+    if definition.body_type == "binary":
+        return "application/octet-stream"
     if definition.body_type == "form-data":
         return f"multipart/form-data; boundary={MULTIPART_BOUNDARY}"
     if definition.body_type == "x-www-form-urlencoded":
         return "application/x-www-form-urlencoded"
     return None
+
+
+def _read_binary_body(path_text: str) -> bytes | None:
+    candidate = path_text.strip()
+    if not candidate:
+        return None
+    path = Path(candidate).expanduser()
+    if not path.is_absolute():
+        path = Path.cwd() / path
+    if not path.exists():
+        raise ValueError(f"Binary body file does not exist: {path}.")
+    if not path.is_file():
+        raise ValueError(f"Binary body path is not a file: {path}.")
+    try:
+        return path.read_bytes()
+    except OSError as exc:
+        raise ValueError(f"Could not read binary body file: {exc}.") from exc
 
 
 def _encode_multipart_form_data(

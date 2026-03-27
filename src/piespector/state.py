@@ -20,6 +20,9 @@ AUTH_TYPE_OPTIONS: tuple[tuple[str, str], ...] = (
     ("basic", "Basic Auth"),
     ("bearer", "Bearer Token"),
     ("api-key", "API Key"),
+    ("cookie", "Cookie Auth"),
+    ("custom-header", "Custom Header"),
+    ("oauth2-client-credentials", "OAuth 2.0"),
 )
 AUTH_API_KEY_LOCATION_OPTIONS: tuple[tuple[str, str], ...] = (
     ("header", "Header"),
@@ -30,12 +33,17 @@ BODY_TYPE_OPTIONS: tuple[tuple[str, str], ...] = (
     ("form-data", "Form-Data"),
     ("x-www-form-urlencoded", "x-www-form-urlencoded"),
     ("raw", "Raw"),
+    ("graphql", "GraphQL"),
+    ("binary", "Binary"),
 )
 RAW_SUBTYPE_OPTIONS: tuple[tuple[str, str], ...] = (
     ("text", "Text"),
     ("json", "JSON"),
     ("xml", "XML"),
+    ("html", "HTML"),
+    ("javascript", "JavaScript"),
 )
+BODY_TEXT_EDITOR_TYPES = frozenset({"raw", "graphql"})
 HTTP_METHODS: tuple[str, ...] = ("GET", "POST", "PUT", "PATCH", "DELETE")
 REQUEST_FIELDS_BY_EDITOR_TAB: dict[str, tuple[tuple[str, str], ...]] = {
     "request": (
@@ -114,15 +122,61 @@ class RequestDefinition:
     auth_api_key_name: str = "X-API-Key"
     auth_api_key_value: str = ""
     auth_api_key_location: str = "header"
+    auth_cookie_name: str = "session"
+    auth_cookie_value: str = ""
+    auth_custom_header_name: str = "X-Auth-Token"
+    auth_custom_header_value: str = ""
+    auth_oauth_token_url: str = ""
+    auth_oauth_client_id: str = ""
+    auth_oauth_client_secret: str = ""
+    auth_oauth_scope: str = ""
     transient: bool = False
     body_type: str = "none"
     raw_subtype: str = "json"
     body_text: str = ""
+    raw_body_texts: dict[str, str] = field(default_factory=dict)
+    graphql_body_text: str = ""
+    binary_file_path: str = ""
     body_form_items: list[RequestKeyValue] = field(default_factory=list)
     body_urlencoded_items: list[RequestKeyValue] = field(default_factory=list)
     body_form_text: str = ""
     disabled_auto_headers: list[str] = field(default_factory=list)
     last_response: ResponseSummary | None = None
+
+    def __post_init__(self) -> None:
+        self.restore_active_body_text(seed_from_body_text=True)
+
+    def sync_active_body_text(self) -> None:
+        if self.body_type == "raw":
+            self.raw_body_texts[self.raw_subtype] = self.body_text
+            return
+        if self.body_type == "graphql":
+            self.graphql_body_text = self.body_text
+            return
+        if self.body_type == "binary":
+            self.binary_file_path = self.body_text
+
+    def restore_active_body_text(self, *, seed_from_body_text: bool = False) -> None:
+        if self.body_type == "raw":
+            existing = self.raw_body_texts.get(self.raw_subtype)
+            if existing is None and seed_from_body_text and self.body_text:
+                self.raw_body_texts[self.raw_subtype] = self.body_text
+                return
+            self.body_text = existing or ""
+            return
+        if self.body_type == "graphql":
+            if not self.graphql_body_text and seed_from_body_text and self.body_text:
+                self.graphql_body_text = self.body_text
+                return
+            self.body_text = self.graphql_body_text
+            return
+        if self.body_type == "binary":
+            if not self.binary_file_path and seed_from_body_text and self.body_text:
+                self.binary_file_path = self.body_text
+                return
+            self.body_text = self.binary_file_path
+            return
+        self.body_text = ""
 
 
 @dataclass
@@ -1304,6 +1358,8 @@ class PiespectorState:
         redacted_marker = "<redacted>"
         redacted_omitted = False
         auth_api_key_value = ""
+        auth_cookie_value = ""
+        auth_custom_header_value = ""
         header_items: list[RequestKeyValue] = []
 
         for key, value in entry.request_headers:
@@ -1322,6 +1378,17 @@ class PiespectorState:
                 and normalized_key.lower() == entry.auth_name.lower()
             ):
                 auth_api_key_value = value
+                continue
+            if entry.auth_type == "custom-header" and entry.auth_name:
+                if normalized_key.lower() == entry.auth_name.lower():
+                    auth_custom_header_value = value
+                    continue
+            if entry.auth_type == "cookie" and normalized_key.lower() == "cookie":
+                if entry.auth_name and value != redacted_marker:
+                    for cookie_key, cookie_value in parse_headers_text(value.replace(";", "\n")):
+                        if cookie_key == entry.auth_name:
+                            auth_cookie_value = cookie_value
+                            break
                 continue
             header_items.append(
                 RequestKeyValue(key=normalized_key, value=value, enabled=True)
@@ -1347,7 +1414,7 @@ class PiespectorState:
         body_text = ""
         body_form_items: list[RequestKeyValue] = []
         body_urlencoded_items: list[RequestKeyValue] = []
-        if entry.request_body_type == "raw":
+        if entry.request_body_type in BODY_TEXT_EDITOR_TYPES:
             body_text = entry.request_body
         elif entry.request_body_type == "form-data":
             body_form_items = [
@@ -1370,12 +1437,31 @@ class PiespectorState:
             url=base_url,
             query_items=query_items,
             header_items=header_items,
-            auth_type=entry.auth_type if entry.auth_type in {"basic", "bearer", "api-key"} else "none",
+            auth_type=(
+                entry.auth_type
+                if entry.auth_type in {"basic", "bearer", "api-key", "cookie", "custom-header"}
+                else "none"
+            ),
             auth_api_key_name=entry.auth_name or "X-API-Key",
             auth_api_key_value=auth_api_key_value,
             auth_api_key_location=entry.auth_location if entry.auth_location in {"header", "query"} else "header",
+            auth_cookie_name=entry.auth_name or "session",
+            auth_cookie_value=auth_cookie_value,
+            auth_custom_header_name=entry.auth_name or "X-Auth-Token",
+            auth_custom_header_value=auth_custom_header_value,
             transient=True,
-            body_type=entry.request_body_type if entry.request_body_type in {"none", "raw", "form-data", "x-www-form-urlencoded"} else "none",
+            body_type=(
+                entry.request_body_type
+                if entry.request_body_type in {
+                    "none",
+                    "raw",
+                    "form-data",
+                    "x-www-form-urlencoded",
+                    "graphql",
+                    "binary",
+                }
+                else "none"
+            ),
             body_text=body_text,
             body_form_items=body_form_items,
             body_urlencoded_items=body_urlencoded_items,
@@ -2020,6 +2106,23 @@ class PiespectorState:
                 ("auth_api_key_name", "Key"),
                 ("auth_api_key_value", "Value"),
             )
+        if current.auth_type == "cookie":
+            return (
+                ("auth_cookie_name", "Cookie"),
+                ("auth_cookie_value", "Value"),
+            )
+        if current.auth_type == "custom-header":
+            return (
+                ("auth_custom_header_name", "Header"),
+                ("auth_custom_header_value", "Value"),
+            )
+        if current.auth_type == "oauth2-client-credentials":
+            return (
+                ("auth_oauth_token_url", "Token URL"),
+                ("auth_oauth_client_id", "Client ID"),
+                ("auth_oauth_client_secret", "Client Secret"),
+                ("auth_oauth_scope", "Scope"),
+            )
         return ()
 
     def auth_type_label(self, auth_type: str | None = None) -> str:
@@ -2166,9 +2269,23 @@ class PiespectorState:
         if request is None or field is None:
             return None
         field_name, field_label = field
-        value = self.edit_buffer.strip() if field_name == "auth_api_key_name" else self.edit_buffer
+        strip_fields = {"auth_api_key_name", "auth_cookie_name", "auth_custom_header_name"}
+        strip_fields.update({"auth_oauth_token_url", "auth_oauth_client_id", "auth_oauth_scope"})
+        value = self.edit_buffer.strip() if field_name in strip_fields else self.edit_buffer
         if field_name == "auth_api_key_name" and not value.strip():
             self.message = "Key cannot be empty."
+            return None
+        if field_name == "auth_cookie_name" and not value.strip():
+            self.message = "Cookie cannot be empty."
+            return None
+        if field_name == "auth_custom_header_name" and not value.strip():
+            self.message = "Header cannot be empty."
+            return None
+        if field_name == "auth_oauth_token_url" and not value.strip():
+            self.message = "Token URL cannot be empty."
+            return None
+        if field_name == "auth_oauth_client_id" and not value.strip():
+            self.message = "Client ID cannot be empty."
             return None
         setattr(request, field_name, value)
         self.mode = "HOME_AUTH_TYPE_EDIT"
@@ -2513,11 +2630,13 @@ class PiespectorState:
         request = self.get_active_request()
         if request is None:
             return None
+        request.sync_active_body_text()
         values = [value for value, _label in BODY_TYPE_OPTIONS]
         if request.body_type not in values:
             request.body_type = values[0]
         index = values.index(request.body_type)
         request.body_type = values[(index + step) % len(values)]
+        request.restore_active_body_text()
         self.selected_body_index = 0
         self.message = f"Body type: {self.body_type_label(request.body_type)}."
         return request.body_type
@@ -2526,11 +2645,13 @@ class PiespectorState:
         request = self.get_active_request()
         if request is None:
             return None
+        request.sync_active_body_text()
         values = [value for value, _label in RAW_SUBTYPE_OPTIONS]
         if request.raw_subtype not in values:
             request.raw_subtype = values[0]
         index = values.index(request.raw_subtype)
         request.raw_subtype = values[(index + step) % len(values)]
+        request.restore_active_body_text()
         self.message = f"Raw format: {self.raw_subtype_label(request.raw_subtype)}."
         return request.raw_subtype
 
@@ -2542,7 +2663,7 @@ class PiespectorState:
         if request.body_type in {"form-data", "x-www-form-urlencoded"}:
             min_index = 1
             max_index = len(self.get_active_request_body_items()) + 1
-        elif request.body_type == "raw":
+        elif request.body_type in BODY_TEXT_EDITOR_TYPES | {"binary"}:
             min_index = 0
             max_index = 1
         else:
@@ -2558,7 +2679,7 @@ class PiespectorState:
         if request.body_type in {"form-data", "x-www-form-urlencoded"}:
             min_index = 1
             max_index = len(self.get_active_request_body_items()) + 1
-        elif request.body_type == "raw":
+        elif request.body_type in BODY_TEXT_EDITOR_TYPES | {"binary"}:
             min_index = 0
             max_index = 1
         else:
@@ -2668,10 +2789,15 @@ class PiespectorState:
             return
         self.home_body_content_return_mode = origin_mode or self.mode
         self.clamp_selected_body_index()
-        if request.body_type == "raw":
+        if request.body_type in BODY_TEXT_EDITOR_TYPES:
             self.enter_home_body_text_editor_mode(
                 origin_mode=self.home_body_content_return_mode
             )
+            return
+        if request.body_type == "binary":
+            self.mode = "HOME_BODY_EDIT"
+            self.set_edit_buffer(request.body_text, replace_on_next_input=False)
+            self.message = ""
             return
         self.mode = "HOME_BODY_EDIT"
         if request.body_type in {"form-data", "x-www-form-urlencoded"}:
@@ -2711,6 +2837,7 @@ class PiespectorState:
         if request is None:
             return None
         request.body_text = value
+        request.sync_active_body_text()
         self._restore_home_body_parent_mode()
         self.message = "Updated body."
         return "body_text"
@@ -2719,6 +2846,13 @@ class PiespectorState:
         request = self.get_active_request()
         if request is None:
             return None
+        if request.body_type == "binary":
+            request.body_text = self.edit_buffer.strip()
+            request.sync_active_body_text()
+            self.clear_edit_buffer()
+            self._restore_home_body_parent_mode()
+            self.message = "Updated binary file path."
+            return "body_text"
         if request.body_type in {"form-data", "x-www-form-urlencoded"}:
             payload = self.edit_buffer.strip()
             if not payload:

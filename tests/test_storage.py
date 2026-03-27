@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import patch
 
 from piespector import storage
-from piespector.state import HistoryEntry
+from piespector.state import HistoryEntry, RequestDefinition
 
 
 class StorageTests(unittest.TestCase):
@@ -139,6 +139,89 @@ class StorageTests(unittest.TestCase):
         self.assertEqual(env_names, ["Default"])
         self.assertEqual(env_sets, {"Default": {"API_URL": "https://example.com"}})
         self.assertEqual(selected_env_name, "Default")
+
+    def test_request_workspace_round_trips_cookie_and_custom_header_auth(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "requests.json"
+            requests = [
+                RequestDefinition(
+                    request_id="cookie-request",
+                    name="Cookie Request",
+                    auth_type="cookie",
+                    auth_cookie_name="session",
+                    auth_cookie_value="secret",
+                ),
+                RequestDefinition(
+                    request_id="header-request",
+                    name="Header Request",
+                    auth_type="custom-header",
+                    auth_custom_header_name="X-Session-Token",
+                    auth_custom_header_value="secret-token",
+                ),
+                RequestDefinition(
+                    request_id="oauth-request",
+                    name="OAuth Request",
+                    auth_type="oauth2-client-credentials",
+                    auth_oauth_token_url="https://example.com/oauth/token",
+                    auth_oauth_client_id="client-id",
+                    auth_oauth_client_secret="client-secret",
+                    auth_oauth_scope="read:all",
+                ),
+                RequestDefinition(
+                    request_id="graphql-request",
+                    name="GraphQL Request",
+                    body_type="graphql",
+                    body_text="query Health { health }",
+                ),
+                RequestDefinition(
+                    request_id="binary-request",
+                    name="Binary Request",
+                    body_type="binary",
+                    body_text="/tmp/payload.bin",
+                ),
+                RequestDefinition(
+                    request_id="html-request",
+                    name="HTML Request",
+                    body_type="raw",
+                    raw_subtype="html",
+                    body_text="<p>hello</p>",
+                    raw_body_texts={"javascript": "console.log('hi')"},
+                ),
+                RequestDefinition(
+                    request_id="javascript-request",
+                    name="JavaScript Request",
+                    body_type="raw",
+                    raw_subtype="javascript",
+                    body_text="console.log('hi')",
+                ),
+            ]
+
+            storage.save_request_workspace(path, [], [], requests, set(), set())
+            _collections, _folders, loaded_requests, _collapsed_collections, _collapsed_folders = (
+                storage.load_request_workspace(path)
+            )
+
+        self.assertEqual(loaded_requests[0].auth_type, "cookie")
+        self.assertEqual(loaded_requests[0].auth_cookie_name, "session")
+        self.assertEqual(loaded_requests[0].auth_cookie_value, "secret")
+        self.assertEqual(loaded_requests[1].auth_type, "custom-header")
+        self.assertEqual(loaded_requests[1].auth_custom_header_name, "X-Session-Token")
+        self.assertEqual(loaded_requests[1].auth_custom_header_value, "secret-token")
+        self.assertEqual(loaded_requests[2].auth_type, "oauth2-client-credentials")
+        self.assertEqual(
+            loaded_requests[2].auth_oauth_token_url,
+            "https://example.com/oauth/token",
+        )
+        self.assertEqual(loaded_requests[2].auth_oauth_client_id, "client-id")
+        self.assertEqual(loaded_requests[2].auth_oauth_client_secret, "client-secret")
+        self.assertEqual(loaded_requests[2].auth_oauth_scope, "read:all")
+        self.assertEqual(loaded_requests[3].body_type, "graphql")
+        self.assertEqual(loaded_requests[3].body_text, "query Health { health }")
+        self.assertEqual(loaded_requests[4].body_type, "binary")
+        self.assertEqual(loaded_requests[4].body_text, "/tmp/payload.bin")
+        self.assertEqual(loaded_requests[5].raw_subtype, "html")
+        self.assertEqual(loaded_requests[5].raw_body_texts["javascript"], "console.log('hi')")
+        self.assertEqual(loaded_requests[6].raw_subtype, "javascript")
 
 
 if __name__ == "__main__":

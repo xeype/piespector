@@ -18,11 +18,19 @@ def build_history_entry(
     source_request_path: str,
 ) -> HistoryEntry:
     final_url = preview_request_url(definition, env_pairs)
+    auth_type, auth_location, auth_name = _history_auth_snapshot(definition, env_pairs)
     effective_headers, _auto_headers = preview_effective_headers(definition, env_pairs)
-    request_headers = _redact_headers(effective_headers.items())
+    extra_sensitive_headers = set()
+    if auth_type == "cookie":
+        extra_sensitive_headers.add("Cookie")
+    elif auth_location == "header" and auth_name:
+        extra_sensitive_headers.add(auth_name)
+    request_headers = _redact_headers(
+        effective_headers.items(),
+        extra_sensitive_names=extra_sensitive_headers,
+    )
     request_body = _request_body_snapshot(definition, env_pairs)
     response_body = _history_body_snapshot(response.body_text)
-    auth_type, auth_location, auth_name = _history_auth_snapshot(definition, env_pairs)
 
     return HistoryEntry(
         created_at=datetime.now().astimezone().isoformat(timespec="seconds"),
@@ -57,6 +65,14 @@ def _history_auth_snapshot(
     if definition.auth_type == "api-key":
         resolved_name = resolve_placeholders(definition.auth_api_key_name, env_pairs).strip()
         return ("api-key", definition.auth_api_key_location, resolved_name)
+    if definition.auth_type == "cookie":
+        resolved_name = resolve_placeholders(definition.auth_cookie_name, env_pairs).strip()
+        return ("cookie", "header", resolved_name)
+    if definition.auth_type == "custom-header":
+        resolved_name = resolve_placeholders(definition.auth_custom_header_name, env_pairs).strip()
+        return ("custom-header", "header", resolved_name)
+    if definition.auth_type == "oauth2-client-credentials":
+        return ("oauth2-client-credentials", "header", "Authorization")
     return ("none", "", "")
 
 
@@ -67,7 +83,7 @@ def _request_body_snapshot(
     if definition.method.upper() == "GET" or definition.body_type == "none":
         return ""
 
-    if definition.body_type == "raw":
+    if definition.body_type in {"raw", "graphql", "binary"}:
         body = resolve_placeholders(definition.body_text, env_pairs)
         return _history_body_snapshot(body)
 
@@ -99,10 +115,20 @@ def _history_body_snapshot(body_text: str) -> str:
     return body_text[:BODY_STORAGE_LIMIT] + TRUNCATION_MARKER
 
 
-def _redact_headers(headers: object) -> list[tuple[str, str]]:
+def _redact_headers(
+    headers: object,
+    *,
+    extra_sensitive_names: set[str] | None = None,
+) -> list[tuple[str, str]]:
+    sensitive_names = {
+        value.strip().lower()
+        for value in (extra_sensitive_names or set())
+        if value.strip()
+    }
     redacted: list[tuple[str, str]] = []
     for key, value in headers:
-        if _is_sensitive_header_name(str(key)):
+        header_name = str(key)
+        if header_name.strip().lower() in sensitive_names or _is_sensitive_header_name(header_name):
             redacted.append((str(key), SENSITIVE_HEADER_MARKER))
         else:
             redacted.append((str(key), str(value)))

@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import platform
 import textwrap
+from pygments.style import Style as PygmentsStyle
+from pygments.token import Comment, Keyword, Name, Number, Operator, Punctuation, String, Text as PygmentsText
 from rich import box
 from rich.align import Align
 from rich.console import Group, RenderableType
@@ -12,7 +14,12 @@ from rich.table import Table
 from rich.text import Text
 
 from piespector.http_client import preview_auto_headers, preview_request_url, resolve_placeholders
-from piespector.commands import command_completion, help_commands
+from piespector.commands import (
+    command_completion,
+    command_completion_matches,
+    filesystem_path_completions,
+    help_commands,
+)
 from piespector.formatting import format_bytes
 from piespector.search import search_completion, search_matches
 from piespector.search import (
@@ -23,6 +30,7 @@ from piespector.search import (
 from piespector.state import (
     AUTH_API_KEY_LOCATION_OPTIONS,
     AUTH_TYPE_OPTIONS,
+    BODY_TEXT_EDITOR_TYPES,
     BODY_TYPE_OPTIONS,
     HTTP_METHODS,
     HistoryEntry,
@@ -35,6 +43,41 @@ from piespector.state import (
     parse_query_text,
 )
 from piespector.placeholders import placeholder_match
+
+
+class _PiespectorMonokaiStyle(PygmentsStyle):
+    background_color = "#272822"
+    default_style = ""
+    styles = {
+        PygmentsText: "#f8f8f2",
+        Comment: "#75715e",
+        Keyword: "#f92672",
+        Operator: "#f8f8f2",
+        Punctuation: "#f8f8f2",
+        Name: "#f8f8f2",
+        Name.Variable: "#f8f8f2",
+        Name.Other: "#f8f8f2",
+        Name.Attribute: "#a6e22e",
+        Name.Function: "#a6e22e",
+        Name.Class: "#a6e22e",
+        Name.Tag: "#f92672",
+        Number: "#ae81ff",
+        String: "#e6db74",
+    }
+
+
+SYNTAX_THEME = _PiespectorMonokaiStyle
+
+
+class _PiespectorGraphQLStyle(_PiespectorMonokaiStyle):
+    styles = {
+        **_PiespectorMonokaiStyle.styles,
+        Name: "#a6e22e",
+        Name.Function: "#66d9ef",
+    }
+
+
+GRAPHQL_SYNTAX_THEME = _PiespectorGraphQLStyle
 
 
 def _display_mode(mode: str) -> str:
@@ -105,12 +148,70 @@ def _body_context_label(state: PiespectorState) -> str:
     if request.body_type == "raw":
         return f"{request_label} / Body / Raw / {state.raw_subtype_label(request.raw_subtype)}"
 
+    if request.body_type == "graphql":
+        return f"{request_label} / Body / GraphQL"
+
+    if request.body_type == "binary":
+        return f"{request_label} / Body / Binary"
+
     if request.body_type in {"form-data", "x-www-form-urlencoded"}:
         if state.mode == "HOME_BODY_EDIT":
             return f"{request_label} / Body / {state.body_type_label(request.body_type)}"
         return f"{request_label} / Body / {state.body_type_label(request.body_type)}"
 
-    return f"{request_label} / Body / None"
+    return f"{request_label} / Body / {state.body_type_label(request.body_type)}"
+
+
+def request_body_syntax_language(request: RequestDefinition | None) -> str | None:
+    if request is None:
+        return None
+    if request.body_type == "graphql":
+        return "graphql"
+    if request.body_type != "raw":
+        return None
+    if request.raw_subtype == "text":
+        return None
+    return request.raw_subtype
+
+
+def text_area_syntax_language(language: str | None) -> str | None:
+    if language == "graphql":
+        return "piespector-graphql"
+    return language
+
+
+def syntax_theme_for_language(language: str | None) -> type[PygmentsStyle]:
+    if language == "graphql":
+        return GRAPHQL_SYNTAX_THEME
+    return SYNTAX_THEME
+
+
+def preview_syntax_language(language: str | None) -> str | None:
+    if language == "xml":
+        return "html"
+    return language
+
+
+def detect_text_syntax_language(body_text: str) -> str | None:
+    stripped = body_text.strip()
+    if not stripped:
+        return None
+    lowered = stripped.lower()
+    if stripped[0] in "[{":
+        return "json"
+    if lowered.startswith(("query ", "mutation ", "subscription ", "fragment ")):
+        return "graphql"
+    if lowered.startswith(("function ", "const ", "let ", "var ", "import ", "export ", "class ")):
+        return "javascript"
+    if lowered.startswith("<!doctype html") or lowered.startswith("<html"):
+        return "html"
+    if lowered.startswith("<?xml"):
+        return "xml"
+    if stripped.startswith("<"):
+        if any(marker in lowered for marker in ("<head", "<body", "<div", "<span", "<script", "<style")):
+            return "html"
+        return "xml"
+    return None
 
 
 def _mode_and_context(state: PiespectorState) -> tuple[str, str]:
@@ -749,7 +850,14 @@ def _render_request_auth_editor(
                 current_value.append(f" {option_label} ", style=style)
         else:
             raw_value = str(getattr(request, field_name) or "")
-            if field_name in {"auth_basic_password", "auth_bearer_token", "auth_api_key_value"}:
+            if field_name in {
+                "auth_basic_password",
+                "auth_bearer_token",
+                "auth_api_key_value",
+                "auth_cookie_value",
+                "auth_custom_header_value",
+                "auth_oauth_client_secret",
+            }:
                 display_value = _render_auth_secret(raw_value)
             else:
                 display_value = raw_value or "-"
@@ -765,6 +873,15 @@ def _render_request_auth_editor(
     footer = Text()
     if request.auth_type == "api-key" and request.auth_api_key_location == "query":
         footer.append("API key will be appended to the request URL as a query parameter.", style="#7f848e")
+    elif request.auth_type == "cookie":
+        footer.append("Cookie auth is sent as a Cookie header.", style="#7f848e")
+    elif request.auth_type == "custom-header":
+        footer.append("Custom header auth is inferred at send time. Explicit headers override it.", style="#7f848e")
+    elif request.auth_type == "oauth2-client-credentials":
+        footer.append(
+            "OAuth 2.0 client credentials fetches a bearer token from the token URL at send time.",
+            style="#7f848e",
+        )
     else:
         footer.append(
             "Auth headers are inferred at send time. Explicit headers override inferred auth.",
@@ -957,10 +1074,7 @@ def _render_request_body_editor(
     if request.body_type in {"form-data", "x-www-form-urlencoded"}:
         return Group(selector, _render_body_key_value_table(request, state))
 
-    return Group(
-        selector,
-        _render_body_raw_editor(request, state, viewport_width),
-    )
+    return Group(selector, _render_body_text_editor(request, state, viewport_width))
 
 
 def _render_body_key_value_table(
@@ -1014,21 +1128,23 @@ def _render_body_key_value_table(
     return table
 
 
-def _render_body_raw_editor(
+def _render_body_text_editor(
     request: RequestDefinition,
     state: PiespectorState,
     viewport_width: int | None,
 ) -> RenderableType:
-    subtype_selector = Text()
-    for index, (value, label) in enumerate(RAW_SUBTYPE_OPTIONS):
-        if index:
-            subtype_selector.append(" ")
-        is_active = request.raw_subtype == value
-        is_selected = state.mode == "HOME_BODY_RAW_TYPE_EDIT" and is_active
-        style = "bold #1f2329 on #61afef" if is_active else "bold #abb2bf on #343944"
-        if is_selected:
-            style = "bold #1f2329 on #e5c07b"
-        subtype_selector.append(f" {label} ", style=style)
+    subtype_selector: RenderableType = Text()
+    if request.body_type == "raw":
+        subtype_selector = Text()
+        for index, (value, label) in enumerate(RAW_SUBTYPE_OPTIONS):
+            if index:
+                subtype_selector.append(" ")
+            is_active = request.raw_subtype == value
+            is_selected = state.mode == "HOME_BODY_RAW_TYPE_EDIT" and is_active
+            style = "bold #1f2329 on #61afef" if is_active else "bold #abb2bf on #343944"
+            if is_selected:
+                style = "bold #1f2329 on #e5c07b"
+            subtype_selector.append(f" {label} ", style=style)
     value = request.body_text
     preview = value or ""
     line_limit = 8
@@ -1044,34 +1160,34 @@ def _render_body_raw_editor(
 
     renderable: RenderableType
     stripped = value.strip()
-    if request.raw_subtype == "json" and stripped:
+    language = request_body_syntax_language(request)
+    preview_language = preview_syntax_language(language)
+    if language is not None and stripped:
         renderable = Syntax(
             visible_preview,
-            "json",
-            theme="monokai",
-            line_numbers=False,
-            word_wrap=True,
-            code_width=max((viewport_width or 100) - 10, 24),
-            indent_guides=True,
-        )
-    elif request.raw_subtype == "xml" and stripped:
-        renderable = Syntax(
-            visible_preview,
-            "xml",
-            theme="monokai",
+            preview_language or language,
+            theme=syntax_theme_for_language(language),
             line_numbers=False,
             word_wrap=True,
             code_width=max((viewport_width or 100) - 10, 24),
             indent_guides=True,
         )
     else:
-        renderable = Text(visible_preview or "No raw body.", style="#d7dae0")
+        empty_label = "No binary file path." if request.body_type == "binary" else "No body."
+        renderable = Text(visible_preview or empty_label, style="#d7dae0")
+
+    if request.body_type == "graphql":
+        title = "GraphQL"
+    elif request.body_type == "binary":
+        title = "Binary File"
+    else:
+        title = f"Raw {request.raw_subtype.upper()}"
 
     return Group(
         subtype_selector,
         Panel(
             renderable,
-            title=f"Raw {request.raw_subtype.upper()}",
+            title=title,
             border_style=border_style,
             box=box.SIMPLE_HEAVY,
         ),
@@ -1181,11 +1297,12 @@ def _render_response_body(
     if not formatted:
         return Text("-", style="#d7dae0")
 
-    if _looks_like_json(formatted):
+    language = detect_text_syntax_language(formatted)
+    if language is not None:
         return Syntax(
             formatted,
-            "json",
-            theme="monokai",
+            preview_syntax_language(language) or language,
+            theme=syntax_theme_for_language(language),
             line_numbers=False,
             line_range=(start + 1, end),
             word_wrap=True,
@@ -1610,6 +1727,14 @@ def _history_auth_summary(entry: HistoryEntry) -> tuple[str, str]:
             return (f"API Key via query param {name}", "#e5c07b")
         name = entry.auth_name or "header"
         return (f"API Key via header {name}", "#e5c07b")
+    if entry.auth_type == "cookie":
+        name = entry.auth_name or "cookie"
+        return (f"Cookie Auth via Cookie header ({name})", "#e5c07b")
+    if entry.auth_type == "custom-header":
+        name = entry.auth_name or "custom header"
+        return (f"Custom Header via {name}", "#e5c07b")
+    if entry.auth_type == "oauth2-client-credentials":
+        return ("OAuth 2.0 Client Credentials via Authorization header", "#e5c07b")
     return ("No Auth", "#7f848e")
 
 
@@ -2037,17 +2162,40 @@ def _append_edit_buffer_preview(text: Text, state: PiespectorState) -> None:
         text.append(f"  env: {match.suggestion}", style="#7f848e")
 
 
+def _append_completion_hint(text: Text, current_value: str, matches: list[str]) -> None:
+    if not matches:
+        return
+    first = matches[0]
+    if first != current_value and first.startswith(current_value):
+        suffix = first[len(current_value) :]
+        if suffix:
+            text.append(suffix, style="#7f848e")
+    else:
+        previews = matches[:3]
+        text.append("  ", style="")
+        text.append("  |  ".join(previews), style="#7f848e")
+        if len(matches) > 3:
+            text.append(f"  (+{len(matches) - 3} more)", style="#5c6370")
+        return
+    if len(matches) > 1:
+        text.append(f"  (+{len(matches) - 1} more)", style="#5c6370")
+
+
+def _append_path_completion_hint(text: Text, current_value: str) -> None:
+    _append_completion_hint(text, current_value, filesystem_path_completions(current_value))
+
+
 def render_command_line(state: PiespectorState) -> Text:
     text = Text()
     if state.mode == "CONFIRM":
         text.append(state.confirm_prompt, style="bold #e5c07b")
     elif state.mode == "COMMAND":
         text.append(f":{state.command_buffer}", style="bold #d7dae0")
-        completion = command_completion(state, state.command_buffer)
-        if completion is not None and completion != state.command_buffer:
-            suffix = completion[len(state.command_buffer) :]
-            if suffix:
-                text.append(suffix, style="#7f848e")
+        _append_completion_hint(
+            text,
+            state.command_buffer,
+            command_completion_matches(state, state.command_buffer),
+        )
     elif state.mode == "SEARCH":
         text.append(f"Search {state.command_buffer}", style="bold #d7dae0")
         completion = (
@@ -2137,8 +2285,14 @@ def render_command_line(state: PiespectorState) -> Text:
         else:
             text.append("Raw body editor", style="bold #d7dae0")
     elif state.mode == "HOME_BODY_EDIT":
-        text.append("Body ", style="bold #d7dae0")
+        request = state.get_active_request()
+        text.append(
+            "Path " if request is not None and request.body_type == "binary" else "Body ",
+            style="bold #d7dae0",
+        )
         _append_edit_buffer_preview(text, state)
+        if request is not None and request.body_type == "binary":
+            _append_path_completion_hint(text, state.edit_buffer)
     elif state.mode == "ENV_EDIT":
         if state.env_creating_new:
             text.append("New key=", style="bold #d7dae0")

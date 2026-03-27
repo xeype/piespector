@@ -462,10 +462,23 @@ def _load_requests_payload(payload: object) -> list[RequestDefinition]:
                 auth_api_key_location=_normalize_auth_api_key_location(
                     item.get("auth_api_key_location", "header")
                 ),
+                auth_cookie_name=str(item.get("auth_cookie_name", "session")),
+                auth_cookie_value=str(item.get("auth_cookie_value", "")),
+                auth_custom_header_name=str(
+                    item.get("auth_custom_header_name", "X-Auth-Token")
+                ),
+                auth_custom_header_value=str(item.get("auth_custom_header_value", "")),
+                auth_oauth_token_url=str(item.get("auth_oauth_token_url", "")),
+                auth_oauth_client_id=str(item.get("auth_oauth_client_id", "")),
+                auth_oauth_client_secret=str(item.get("auth_oauth_client_secret", "")),
+                auth_oauth_scope=str(item.get("auth_oauth_scope", "")),
                 disabled_auto_headers=_load_disabled_auto_headers(item),
                 body_type=_normalize_body_type(item.get("body_type", "none")),
                 raw_subtype=_normalize_raw_subtype(item.get("raw_subtype", "json")),
                 body_text=item.get("body_text", ""),
+                raw_body_texts=_load_body_text_map(item.get("raw_body_texts")),
+                graphql_body_text=str(item.get("graphql_body_text", "")),
+                binary_file_path=str(item.get("binary_file_path", "")),
                 body_form_items=_load_request_items(
                     item.get("body_form_items"),
                     item.get("body_form_text", ""),
@@ -563,10 +576,21 @@ def save_request_workspace(
                 "auth_api_key_name": request.auth_api_key_name,
                 "auth_api_key_value": request.auth_api_key_value,
                 "auth_api_key_location": request.auth_api_key_location,
+                "auth_cookie_name": request.auth_cookie_name,
+                "auth_cookie_value": request.auth_cookie_value,
+                "auth_custom_header_name": request.auth_custom_header_name,
+                "auth_custom_header_value": request.auth_custom_header_value,
+                "auth_oauth_token_url": request.auth_oauth_token_url,
+                "auth_oauth_client_id": request.auth_oauth_client_id,
+                "auth_oauth_client_secret": request.auth_oauth_client_secret,
+                "auth_oauth_scope": request.auth_oauth_scope,
                 "disabled_auto_headers": request.disabled_auto_headers,
                 "body_type": request.body_type,
                 "raw_subtype": request.raw_subtype,
                 "body_text": request.body_text,
+                "raw_body_texts": request.raw_body_texts,
+                "graphql_body_text": request.graphql_body_text,
+                "binary_file_path": request.binary_file_path,
                 "body_form_items": [
                     {
                         "key": item.key,
@@ -619,12 +643,21 @@ def _normalize_body_type(value: object) -> str:
     body_type = str(value or "none")
     if body_type == "raw-json":
         return "raw"
+    if body_type not in {
+        "none",
+        "form-data",
+        "x-www-form-urlencoded",
+        "raw",
+        "graphql",
+        "binary",
+    }:
+        return "none"
     return body_type
 
 
 def _normalize_raw_subtype(value: object) -> str:
     raw_subtype = str(value or "json").lower()
-    if raw_subtype not in {"text", "json", "xml"}:
+    if raw_subtype not in {"text", "json", "xml", "html", "javascript"}:
         return "json"
     return raw_subtype
 
@@ -691,6 +724,16 @@ def _load_request_items(
     ]
 
 
+def _load_body_text_map(payload: object) -> dict[str, str]:
+    if not isinstance(payload, dict):
+        return {}
+    body_texts: dict[str, str] = {}
+    for key, value in payload.items():
+        normalized_key = _normalize_raw_subtype(key)
+        body_texts[normalized_key] = str(value)
+    return body_texts
+
+
 def _load_disabled_auto_headers(item: dict[object, object]) -> list[str]:
     disabled = item.get("disabled_auto_headers")
     if isinstance(disabled, list):
@@ -702,7 +745,14 @@ def _load_disabled_auto_headers(item: dict[object, object]) -> list[str]:
 
 def _normalize_auth_type(value: object) -> str:
     auth_type = str(value or "none").strip().lower()
-    if auth_type in {"basic", "bearer", "api-key"}:
+    if auth_type in {
+        "basic",
+        "bearer",
+        "api-key",
+        "cookie",
+        "custom-header",
+        "oauth2-client-credentials",
+    }:
         return auth_type
     return "none"
 
