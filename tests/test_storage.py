@@ -165,7 +165,16 @@ class StorageTests(unittest.TestCase):
                     auth_oauth_token_url="https://example.com/oauth/token",
                     auth_oauth_client_id="client-id",
                     auth_oauth_client_secret="client-secret",
+                    auth_oauth_client_authentication="body",
+                    auth_oauth_header_prefix="Token",
                     auth_oauth_scope="read:all",
+                ),
+                RequestDefinition(
+                    request_id="bearer-request",
+                    name="Bearer Request",
+                    auth_type="bearer",
+                    auth_bearer_prefix="JWT",
+                    auth_bearer_token="secret-bearer-token",
                 ),
                 RequestDefinition(
                     request_id="graphql-request",
@@ -214,14 +223,19 @@ class StorageTests(unittest.TestCase):
         )
         self.assertEqual(loaded_requests[2].auth_oauth_client_id, "client-id")
         self.assertEqual(loaded_requests[2].auth_oauth_client_secret, "client-secret")
+        self.assertEqual(loaded_requests[2].auth_oauth_client_authentication, "body")
+        self.assertEqual(loaded_requests[2].auth_oauth_header_prefix, "Token")
         self.assertEqual(loaded_requests[2].auth_oauth_scope, "read:all")
-        self.assertEqual(loaded_requests[3].body_type, "graphql")
-        self.assertEqual(loaded_requests[3].body_text, "query Health { health }")
-        self.assertEqual(loaded_requests[4].body_type, "binary")
-        self.assertEqual(loaded_requests[4].body_text, "/tmp/payload.bin")
-        self.assertEqual(loaded_requests[5].raw_subtype, "html")
-        self.assertEqual(loaded_requests[5].raw_body_texts["javascript"], "console.log('hi')")
-        self.assertEqual(loaded_requests[6].raw_subtype, "javascript")
+        self.assertEqual(loaded_requests[3].auth_type, "bearer")
+        self.assertEqual(loaded_requests[3].auth_bearer_prefix, "JWT")
+        self.assertEqual(loaded_requests[3].auth_bearer_token, "secret-bearer-token")
+        self.assertEqual(loaded_requests[4].body_type, "graphql")
+        self.assertEqual(loaded_requests[4].body_text, "query Health { health }")
+        self.assertEqual(loaded_requests[5].body_type, "binary")
+        self.assertEqual(loaded_requests[5].body_text, "/tmp/payload.bin")
+        self.assertEqual(loaded_requests[6].raw_subtype, "html")
+        self.assertEqual(loaded_requests[6].raw_body_texts["javascript"], "console.log('hi')")
+        self.assertEqual(loaded_requests[7].raw_subtype, "javascript")
 
 
 if __name__ == "__main__":

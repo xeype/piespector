@@ -73,6 +73,59 @@ class AppCommandModeTests(unittest.TestCase):
         self.assertTrue(first_tab.stopped)
         self.assertTrue(second_tab.stopped)
 
+    def test_history_response_select_j_cycles_detail_block(self) -> None:
+        app = PiespectorApp()
+        app.state.current_tab = "history"
+        app.state.mode = "HISTORY_RESPONSE_SELECT"
+        app.state.selected_history_detail_block = "request"
+        event = FakeKeyEvent("j")
+
+        with patch.object(app, "_refresh_viewport"):
+            app._handle_history_response_select_key(event)
+
+        self.assertEqual(app.state.selected_history_detail_block, "response")
+        self.assertTrue(event.stopped)
+
+    def test_history_response_select_h_and_l_cycle_tabs(self) -> None:
+        app = PiespectorApp()
+        app.state.current_tab = "history"
+        app.state.mode = "HISTORY_RESPONSE_SELECT"
+        app.state.selected_history_detail_block = "response"
+        app.state.selected_history_response_tab = "body"
+        left_event = FakeKeyEvent("h")
+        right_event = FakeKeyEvent("l")
+
+        with patch.object(app, "_refresh_viewport"):
+            app._handle_history_response_select_key(left_event)
+            left_tab = app.state.selected_history_response_tab
+            app._handle_history_response_select_key(right_event)
+
+        self.assertEqual(left_tab, "headers")
+        self.assertEqual(app.state.selected_history_response_tab, "body")
+        self.assertTrue(left_event.stopped)
+        self.assertTrue(right_event.stopped)
+
+    def test_auth_select_escape_returns_to_auth_type_tabs(self) -> None:
+        app = PiespectorApp()
+        app.state.home_editor_tab = "auth"
+        request = PiespectorApp().state.get_active_request()
+        if request is None:
+            from piespector.state import RequestDefinition
+
+            request = RequestDefinition(auth_type="bearer", auth_bearer_token="token")
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+        app.state.mode = "HOME_AUTH_SELECT"
+        app.state.selected_auth_index = 2
+        event = FakeKeyEvent("escape")
+
+        with patch.object(app, "_refresh_screen"):
+            app._handle_home_auth_select_key(event)
+
+        self.assertEqual(app.state.mode, "HOME_AUTH_TYPE_EDIT")
+        self.assertEqual(app.state.auth_type_label(), "Bearer Token")
+        self.assertTrue(event.stopped)
+
 
 if __name__ == "__main__":
     unittest.main()

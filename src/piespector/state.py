@@ -28,6 +28,10 @@ AUTH_API_KEY_LOCATION_OPTIONS: tuple[tuple[str, str], ...] = (
     ("header", "Header"),
     ("query", "Query"),
 )
+AUTH_OAUTH_CLIENT_AUTHENTICATION_OPTIONS: tuple[tuple[str, str], ...] = (
+    ("basic-header", "Basic Auth header"),
+    ("body", "Send creds in body"),
+)
 BODY_TYPE_OPTIONS: tuple[tuple[str, str], ...] = (
     ("none", "None"),
     ("form-data", "Form-Data"),
@@ -118,6 +122,7 @@ class RequestDefinition:
     auth_type: str = "none"
     auth_basic_username: str = ""
     auth_basic_password: str = ""
+    auth_bearer_prefix: str = "Bearer"
     auth_bearer_token: str = ""
     auth_api_key_name: str = "X-API-Key"
     auth_api_key_value: str = ""
@@ -129,6 +134,8 @@ class RequestDefinition:
     auth_oauth_token_url: str = ""
     auth_oauth_client_id: str = ""
     auth_oauth_client_secret: str = ""
+    auth_oauth_client_authentication: str = "basic-header"
+    auth_oauth_header_prefix: str = "Bearer"
     auth_oauth_scope: str = ""
     transient: bool = False
     body_type: str = "none"
@@ -2099,7 +2106,10 @@ class PiespectorState:
                 ("auth_basic_password", "Password"),
             )
         if current.auth_type == "bearer":
-            return (("auth_bearer_token", "Token"),)
+            return (
+                ("auth_bearer_prefix", "Header Prefix"),
+                ("auth_bearer_token", "Token"),
+            )
         if current.auth_type == "api-key":
             return (
                 ("auth_api_key_location", "Add To"),
@@ -2121,6 +2131,8 @@ class PiespectorState:
                 ("auth_oauth_token_url", "Token URL"),
                 ("auth_oauth_client_id", "Client ID"),
                 ("auth_oauth_client_secret", "Client Secret"),
+                ("auth_oauth_client_authentication", "Client Auth"),
+                ("auth_oauth_header_prefix", "Header Prefix"),
                 ("auth_oauth_scope", "Scope"),
             )
         return ()
@@ -2142,6 +2154,20 @@ class PiespectorState:
             current = request.auth_api_key_location if request is not None else "header"
         for value, label in AUTH_API_KEY_LOCATION_OPTIONS:
             if value == current:
+                return label
+        return current
+
+    def auth_oauth_client_authentication_label(self, value: str | None = None) -> str:
+        current = value
+        if current is None:
+            request = self.get_active_request()
+            current = (
+                request.auth_oauth_client_authentication
+                if request is not None
+                else "basic-header"
+            )
+        for option_value, label in AUTH_OAUTH_CLIENT_AUTHENTICATION_OPTIONS:
+            if option_value == current:
                 return label
         return current
 
@@ -2199,7 +2225,7 @@ class PiespectorState:
             self.message = "Select an auth field to edit."
             return
         field_name, _field_label = field
-        if field_name == "auth_api_key_location":
+        if field_name in {"auth_api_key_location", "auth_oauth_client_authentication"}:
             self.mode = "HOME_AUTH_LOCATION_EDIT"
             self.message = ""
             return
@@ -2208,8 +2234,8 @@ class PiespectorState:
         self.message = ""
 
     def leave_home_auth_edit_mode(self) -> None:
-        self.mode = "HOME_AUTH_TYPE_EDIT"
-        self.selected_auth_index = 0
+        self.mode = "HOME_AUTH_SELECT"
+        self.clamp_selected_auth_index()
         self.clear_edit_buffer()
         self.message = ""
 
@@ -2232,8 +2258,8 @@ class PiespectorState:
         self.message = ""
 
     def leave_home_auth_location_edit_mode(self) -> None:
-        self.mode = "HOME_AUTH_TYPE_EDIT"
-        self.selected_auth_index = 0
+        self.mode = "HOME_AUTH_SELECT"
+        self.clamp_selected_auth_index()
         self.message = ""
 
     def cycle_auth_type(self, step: int) -> str | None:
@@ -2263,6 +2289,21 @@ class PiespectorState:
         )
         return request.auth_api_key_location
 
+    def cycle_auth_oauth_client_authentication(self, step: int) -> str | None:
+        request = self.get_active_request()
+        if request is None:
+            return None
+        values = [value for value, _label in AUTH_OAUTH_CLIENT_AUTHENTICATION_OPTIONS]
+        if request.auth_oauth_client_authentication not in values:
+            request.auth_oauth_client_authentication = values[0]
+        index = values.index(request.auth_oauth_client_authentication)
+        request.auth_oauth_client_authentication = values[(index + step) % len(values)]
+        self.message = (
+            "OAuth client authentication: "
+            f"{self.auth_oauth_client_authentication_label(request.auth_oauth_client_authentication)}."
+        )
+        return request.auth_oauth_client_authentication
+
     def save_selected_auth_field(self) -> str | None:
         request = self.get_active_request()
         field = self.selected_auth_field()
@@ -2270,7 +2311,15 @@ class PiespectorState:
             return None
         field_name, field_label = field
         strip_fields = {"auth_api_key_name", "auth_cookie_name", "auth_custom_header_name"}
-        strip_fields.update({"auth_oauth_token_url", "auth_oauth_client_id", "auth_oauth_scope"})
+        strip_fields.update(
+            {
+                "auth_bearer_prefix",
+                "auth_oauth_token_url",
+                "auth_oauth_client_id",
+                "auth_oauth_header_prefix",
+                "auth_oauth_scope",
+            }
+        )
         value = self.edit_buffer.strip() if field_name in strip_fields else self.edit_buffer
         if field_name == "auth_api_key_name" and not value.strip():
             self.message = "Key cannot be empty."
@@ -2288,8 +2337,8 @@ class PiespectorState:
             self.message = "Client ID cannot be empty."
             return None
         setattr(request, field_name, value)
-        self.mode = "HOME_AUTH_TYPE_EDIT"
-        self.selected_auth_index = 0
+        self.mode = "HOME_AUTH_SELECT"
+        self.clamp_selected_auth_index()
         self.clear_edit_buffer()
         self.message = f"Updated {field_label.lower()}."
         return field_name

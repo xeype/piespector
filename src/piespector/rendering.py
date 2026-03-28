@@ -29,6 +29,7 @@ from piespector.search import (
 )
 from piespector.state import (
     AUTH_API_KEY_LOCATION_OPTIONS,
+    AUTH_OAUTH_CLIENT_AUTHENTICATION_OPTIONS,
     AUTH_TYPE_OPTIONS,
     BODY_TEXT_EDITOR_TYPES,
     BODY_TYPE_OPTIONS,
@@ -763,6 +764,9 @@ def _home_editor_subtitle(state: PiespectorState) -> str:
     if state.mode == "HOME_AUTH_TYPE_EDIT":
         return "h/l type   e open"
     if state.mode == "HOME_AUTH_LOCATION_EDIT":
+        field = state.selected_auth_field()
+        if field is not None and field[0] == "auth_oauth_client_authentication":
+            return "h/l client auth   e open"
         return "h/l location   e open"
     if state.mode in {"HOME_PARAMS_SELECT", "HOME_HEADERS_SELECT"}:
         return "j/k rows   space toggle   e edit   a add   d delete"
@@ -848,6 +852,19 @@ def _render_request_auth_editor(
                 if is_selected:
                     style = "bold #1f2329 on #e5c07b"
                 current_value.append(f" {option_label} ", style=style)
+        elif field_name == "auth_oauth_client_authentication":
+            current_value = Text()
+            for option_index, (value, option_label) in enumerate(
+                AUTH_OAUTH_CLIENT_AUTHENTICATION_OPTIONS
+            ):
+                if option_index:
+                    current_value.append(" ")
+                is_active = request.auth_oauth_client_authentication == value
+                is_selected = state.mode == "HOME_AUTH_LOCATION_EDIT" and is_active
+                style = "bold #1f2329 on #61afef" if is_active else "bold #abb2bf on #343944"
+                if is_selected:
+                    style = "bold #1f2329 on #e5c07b"
+                current_value.append(f" {option_label} ", style=style)
         else:
             raw_value = str(getattr(request, field_name) or "")
             if field_name in {
@@ -864,7 +881,10 @@ def _render_request_auth_editor(
             current_value = Text(display_value, style="#d7dae0")
 
         row_style = None
-        if state.mode == "HOME_AUTH_LOCATION_EDIT" and field_name == "auth_api_key_location":
+        if state.mode == "HOME_AUTH_LOCATION_EDIT" and field_name in {
+            "auth_api_key_location",
+            "auth_oauth_client_authentication",
+        }:
             row_style = "bold #1f2329 on #e5c07b"
         elif state.mode in {"HOME_AUTH_SELECT", "HOME_AUTH_EDIT", "HOME_AUTH_LOCATION_EDIT"} and index == state.selected_auth_index:
             row_style = "bold #1f2329 on #98c379"
@@ -878,8 +898,12 @@ def _render_request_auth_editor(
     elif request.auth_type == "custom-header":
         footer.append("Custom header auth is inferred at send time. Explicit headers override it.", style="#7f848e")
     elif request.auth_type == "oauth2-client-credentials":
+        client_auth_label = state.auth_oauth_client_authentication_label(
+            request.auth_oauth_client_authentication
+        ).lower()
         footer.append(
-            "OAuth 2.0 client credentials fetches a bearer token from the token URL at send time.",
+            "OAuth 2.0 client credentials fetches a bearer token from the token URL "
+            f"at send time using {client_auth_label}.",
             style="#7f848e",
         )
     else:
@@ -2049,8 +2073,10 @@ def _hint_items(state: PiespectorState) -> list[tuple[str, str]]:
         ]
 
     if state.mode == "HOME_AUTH_LOCATION_EDIT":
+        field = state.selected_auth_field()
+        label = "client auth" if field is not None and field[0] == "auth_oauth_client_authentication" else "location"
         return [
-            ("h/l", "location"),
+            ("h/l", label),
             ("e", "open"),
             ("s", "send"),
             ("v", "response"),
@@ -2242,7 +2268,11 @@ def render_command_line(state: PiespectorState) -> Text:
     elif state.mode == "HOME_AUTH_TYPE_EDIT":
         text.append("Auth type: h/l change, e open", style="bold #d7dae0")
     elif state.mode == "HOME_AUTH_LOCATION_EDIT":
-        text.append("API key location: h/l change, e open", style="bold #d7dae0")
+        field = state.selected_auth_field()
+        if field is not None and field[0] == "auth_oauth_client_authentication":
+            text.append("OAuth client auth: h/l change, e open", style="bold #d7dae0")
+        else:
+            text.append("API key location: h/l change, e open", style="bold #d7dae0")
     elif state.mode == "HOME_PARAMS_EDIT":
         if state.params_creating_new:
             text.append("New key=", style="bold #d7dae0")

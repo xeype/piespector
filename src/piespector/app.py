@@ -985,8 +985,7 @@ class PiespectorApp(App[None]):
 
     def _handle_home_auth_select_key(self, event: events.Key) -> None:
         if event.key == "escape":
-            self.state.enter_home_section_select_mode()
-            self.state.edit_buffer = ""
+            self.state.enter_home_auth_type_edit_mode(origin_mode="HOME_SECTION_SELECT")
             self._refresh_screen()
             event.stop()
             return
@@ -1079,14 +1078,24 @@ class PiespectorApp(App[None]):
             return
 
         if event.key in {"left", "h", "up", "k"}:
-            if self.state.cycle_auth_api_key_location(-1) is not None:
+            field = self.state.selected_auth_field()
+            if field is not None and field[0] == "auth_oauth_client_authentication":
+                updated = self.state.cycle_auth_oauth_client_authentication(-1)
+            else:
+                updated = self.state.cycle_auth_api_key_location(-1)
+            if updated is not None:
                 self._persist_requests()
             self._refresh_screen()
             event.stop()
             return
 
         if event.key in {"right", "l", "down", "j"}:
-            if self.state.cycle_auth_api_key_location(1) is not None:
+            field = self.state.selected_auth_field()
+            if field is not None and field[0] == "auth_oauth_client_authentication":
+                updated = self.state.cycle_auth_oauth_client_authentication(1)
+            else:
+                updated = self.state.cycle_auth_api_key_location(1)
+            if updated is not None:
                 self._persist_requests()
             self._refresh_screen()
             event.stop()
@@ -1637,14 +1646,6 @@ class PiespectorApp(App[None]):
             event.stop()
             return
 
-    def _handle_help_view_key(self, event: events.Key) -> bool:
-        if event.key == "escape":
-            self.state.leave_help_tab()
-            self._refresh_screen()
-            event.stop()
-            return True
-        return False
-
         if event.key in {"down", "j"}:
             self.state.cycle_history_detail_block(1)
             self._refresh_viewport()
@@ -1686,6 +1687,14 @@ class PiespectorApp(App[None]):
             self._refresh_viewport()
             event.stop()
             return
+
+    def _handle_help_view_key(self, event: events.Key) -> bool:
+        if event.key == "escape":
+            self.state.leave_help_tab()
+            self._refresh_screen()
+            event.stop()
+            return True
+        return False
 
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
         if self.state.mode in {"CONFIRM", "COMMAND", "SEARCH", "HOME_REQUEST_EDIT", "HOME_REQUEST_METHOD_EDIT", "HOME_AUTH_EDIT", "HOME_AUTH_TYPE_EDIT", "HOME_AUTH_LOCATION_EDIT", "HOME_PARAMS_EDIT", "HOME_HEADERS_EDIT", "HOME_BODY_TYPE_EDIT", "HOME_BODY_RAW_TYPE_EDIT", "HOME_BODY_EDIT", "HOME_BODY_TEXTAREA", "HOME_RESPONSE_TEXTAREA", "HISTORY_RESPONSE_TEXTAREA", "ENV_EDIT"} and action == "enter_command_mode":

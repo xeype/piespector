@@ -95,12 +95,25 @@ class AuthTests(unittest.TestCase):
             auth_oauth_token_url="https://example.com/oauth/token",
             auth_oauth_client_id="client-id",
             auth_oauth_client_secret="client-secret",
+            auth_oauth_client_authentication="basic-header",
+            auth_oauth_header_prefix="Token",
             auth_oauth_scope="read:all",
         )
 
         effective_headers, _auto_headers = preview_effective_headers(request, {})
 
-        self.assertEqual(effective_headers["Authorization"], "Bearer <oauth2-token>")
+        self.assertEqual(effective_headers["Authorization"], "Token <oauth2-token>")
+
+    def test_bearer_auth_uses_custom_header_prefix(self) -> None:
+        request = RequestDefinition(
+            auth_type="bearer",
+            auth_bearer_prefix="JWT",
+            auth_bearer_token="abc123",
+        )
+
+        effective_headers, _auto_headers = preview_effective_headers(request, {})
+
+        self.assertEqual(effective_headers["Authorization"], "JWT abc123")
 
     def test_oauth_client_credentials_fetches_token_before_api_request(self) -> None:
         request = RequestDefinition(
@@ -110,6 +123,8 @@ class AuthTests(unittest.TestCase):
             auth_oauth_token_url="https://example.com/oauth/token",
             auth_oauth_client_id="client-id",
             auth_oauth_client_secret="client-secret",
+            auth_oauth_client_authentication="basic-header",
+            auth_oauth_header_prefix="Token",
             auth_oauth_scope="read:all",
         )
         captured_authorization: list[str | None] = []
@@ -145,7 +160,51 @@ class AuthTests(unittest.TestCase):
             response = perform_request(request, {})
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(captured_authorization, ["Bearer oauth-token"])
+        self.assertEqual(captured_authorization, ["Token oauth-token"])
+
+    def test_oauth_client_credentials_can_send_client_credentials_in_body(self) -> None:
+        request = RequestDefinition(
+            method="GET",
+            url="https://example.com/api/pies",
+            auth_type="oauth2-client-credentials",
+            auth_oauth_token_url="https://example.com/oauth/token",
+            auth_oauth_client_id="client-id",
+            auth_oauth_client_secret="client-secret",
+            auth_oauth_client_authentication="body",
+            auth_oauth_header_prefix="JWT",
+            auth_oauth_scope="read:all",
+        )
+        captured_authorization: list[str | None] = []
+
+        def fake_urlopen(req, timeout=15.0):
+            url = req.full_url
+            if url == "https://example.com/oauth/token":
+                self.assertEqual(req.get_method(), "POST")
+                self.assertIsNone(req.headers.get("Authorization"))
+                self.assertEqual(
+                    req.data,
+                    b"grant_type=client_credentials&client_id=client-id&client_secret=client-secret&scope=read%3Aall",
+                )
+                return FakeResponse(
+                    json.dumps(
+                        {
+                            "access_token": "oauth-token",
+                            "token_type": "Bearer",
+                        }
+                    ),
+                    headers={"Content-Type": "application/json; charset=utf-8"},
+                )
+            captured_authorization.append(req.headers.get("Authorization"))
+            return FakeResponse(
+                '{"ok":true}',
+                headers={"Content-Type": "application/json; charset=utf-8"},
+            )
+
+        with patch("piespector.http_client.request.urlopen", side_effect=fake_urlopen):
+            response = perform_request(request, {})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(captured_authorization, ["JWT oauth-token"])
 
 
 if __name__ == "__main__":

@@ -533,10 +533,11 @@ def _resolve_auth_header_items(
         return [("Authorization", f"Basic {token}")]
 
     if definition.auth_type == "bearer":
+        prefix = resolve_placeholders(definition.auth_bearer_prefix, env_pairs).strip()
         token = resolve_placeholders(definition.auth_bearer_token, env_pairs).strip()
         if not token:
             return []
-        return [("Authorization", f"Bearer {token}")]
+        return [("Authorization", _authorization_header_value(prefix, token))]
 
     if definition.auth_type == "api-key" and definition.auth_api_key_location == "header":
         key = resolve_placeholders(definition.auth_api_key_name, env_pairs).strip()
@@ -563,21 +564,39 @@ def _resolve_auth_header_items(
         token_url = resolve_placeholders(definition.auth_oauth_token_url, env_pairs).strip()
         client_id = resolve_placeholders(definition.auth_oauth_client_id, env_pairs).strip()
         client_secret = resolve_placeholders(definition.auth_oauth_client_secret, env_pairs)
+        client_authentication = (
+            resolve_placeholders(definition.auth_oauth_client_authentication, env_pairs).strip()
+            or "basic-header"
+        )
+        header_prefix = resolve_placeholders(definition.auth_oauth_header_prefix, env_pairs).strip()
         scope = resolve_placeholders(definition.auth_oauth_scope, env_pairs).strip()
         if not token_url or not client_id:
             return []
         if not fetch_oauth_token:
-            return [("Authorization", "Bearer <oauth2-token>")]
+            return [("Authorization", _authorization_header_value(header_prefix, "<oauth2-token>"))]
         token_type, access_token = _fetch_oauth_client_credentials_token(
             token_url=token_url,
             client_id=client_id,
             client_secret=client_secret,
+            client_authentication=client_authentication,
             scope=scope,
             timeout_seconds=timeout_seconds,
         )
-        return [("Authorization", f"{token_type} {access_token}")]
+        return [
+            (
+                "Authorization",
+                _authorization_header_value(header_prefix or token_type, access_token),
+            )
+        ]
 
     return []
+
+
+def _authorization_header_value(prefix: str, token: str) -> str:
+    normalized_prefix = prefix.strip()
+    if not normalized_prefix:
+        return token
+    return f"{normalized_prefix} {token}"
 
 
 def _resolve_auth_query_items(
@@ -687,25 +706,31 @@ def _fetch_oauth_client_credentials_token(
     token_url: str,
     client_id: str,
     client_secret: str,
+    client_authentication: str,
     scope: str,
     timeout_seconds: float,
 ) -> tuple[str, str]:
     payload = {"grant_type": "client_credentials"}
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": DEFAULT_USER_AGENT,
+    }
+    if client_authentication == "body":
+        payload["client_id"] = client_id
+        payload["client_secret"] = client_secret
+    else:
+        basic_token = base64.b64encode(
+            f"{client_id}:{client_secret}".encode("utf-8")
+        ).decode("ascii")
+        headers["Authorization"] = f"Basic {basic_token}"
     if scope:
         payload["scope"] = scope
     data = parse.urlencode(payload).encode("utf-8")
-    basic_token = base64.b64encode(
-        f"{client_id}:{client_secret}".encode("utf-8")
-    ).decode("ascii")
     oauth_request = request.Request(
         token_url,
         data=data,
-        headers={
-            "Authorization": f"Basic {basic_token}",
-            "Accept": "application/json",
-            "Content-Type": "application/x-www-form-urlencoded",
-            "User-Agent": DEFAULT_USER_AGENT,
-        },
+        headers=headers,
         method="POST",
     )
     try:

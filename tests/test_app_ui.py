@@ -56,6 +56,46 @@ class FakeTextArea:
 
 
 class AppUiTests(unittest.TestCase):
+    def test_auth_text_field_save_returns_to_auth_rows(self) -> None:
+        app = PiespectorApp()
+        request = RequestDefinition(
+            auth_type="bearer",
+            auth_bearer_token="old-token",
+        )
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+        app.state.mode = "HOME_AUTH_SELECT"
+        app.state.selected_auth_index = 2
+
+        app.state.enter_home_auth_edit_mode()
+        app.state.set_edit_buffer("new-token", replace_on_next_input=False)
+        app.state.save_selected_auth_field()
+
+        self.assertEqual(app.state.mode, "HOME_AUTH_SELECT")
+        self.assertEqual(app.state.selected_auth_index, 2)
+        self.assertEqual(request.auth_bearer_token, "new-token")
+
+    def test_auth_option_field_close_returns_to_auth_rows(self) -> None:
+        app = PiespectorApp()
+        request = RequestDefinition(
+            auth_type="oauth2-client-credentials",
+            auth_oauth_token_url="https://example.com/oauth/token",
+            auth_oauth_client_id="client-id",
+            auth_oauth_client_secret="client-secret",
+        )
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+        app.state.mode = "HOME_AUTH_SELECT"
+        app.state.selected_auth_index = 4
+
+        app.state.enter_home_auth_edit_mode()
+        self.assertEqual(app.state.mode, "HOME_AUTH_LOCATION_EDIT")
+
+        app.state.leave_home_auth_location_edit_mode()
+
+        self.assertEqual(app.state.mode, "HOME_AUTH_SELECT")
+        self.assertEqual(app.state.selected_auth_index, 4)
+
     def test_binary_body_editor_copy_is_path_oriented(self) -> None:
         app = PiespectorApp()
         request = RequestDefinition(name="Upload", body_type="binary")

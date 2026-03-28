@@ -456,6 +456,7 @@ def _load_requests_payload(payload: object) -> list[RequestDefinition]:
                 auth_type=_normalize_auth_type(item.get("auth_type", "none")),
                 auth_basic_username=str(item.get("auth_basic_username", "")),
                 auth_basic_password=str(item.get("auth_basic_password", "")),
+                auth_bearer_prefix=str(item.get("auth_bearer_prefix", "Bearer")),
                 auth_bearer_token=str(item.get("auth_bearer_token", "")),
                 auth_api_key_name=str(item.get("auth_api_key_name", "X-API-Key")),
                 auth_api_key_value=str(item.get("auth_api_key_value", "")),
@@ -471,6 +472,10 @@ def _load_requests_payload(payload: object) -> list[RequestDefinition]:
                 auth_oauth_token_url=str(item.get("auth_oauth_token_url", "")),
                 auth_oauth_client_id=str(item.get("auth_oauth_client_id", "")),
                 auth_oauth_client_secret=str(item.get("auth_oauth_client_secret", "")),
+                auth_oauth_client_authentication=_normalize_auth_oauth_client_authentication(
+                    item.get("auth_oauth_client_authentication", "basic-header")
+                ),
+                auth_oauth_header_prefix=str(item.get("auth_oauth_header_prefix", "Bearer")),
                 auth_oauth_scope=str(item.get("auth_oauth_scope", "")),
                 disabled_auto_headers=_load_disabled_auto_headers(item),
                 body_type=_normalize_body_type(item.get("body_type", "none")),
@@ -572,6 +577,7 @@ def save_request_workspace(
                 "auth_type": request.auth_type,
                 "auth_basic_username": request.auth_basic_username,
                 "auth_basic_password": request.auth_basic_password,
+                "auth_bearer_prefix": request.auth_bearer_prefix,
                 "auth_bearer_token": request.auth_bearer_token,
                 "auth_api_key_name": request.auth_api_key_name,
                 "auth_api_key_value": request.auth_api_key_value,
@@ -583,6 +589,8 @@ def save_request_workspace(
                 "auth_oauth_token_url": request.auth_oauth_token_url,
                 "auth_oauth_client_id": request.auth_oauth_client_id,
                 "auth_oauth_client_secret": request.auth_oauth_client_secret,
+                "auth_oauth_client_authentication": request.auth_oauth_client_authentication,
+                "auth_oauth_header_prefix": request.auth_oauth_header_prefix,
                 "auth_oauth_scope": request.auth_oauth_scope,
                 "disabled_auto_headers": request.disabled_auto_headers,
                 "body_type": request.body_type,
@@ -762,6 +770,13 @@ def _normalize_auth_api_key_location(value: object) -> str:
     if location == "query":
         return "query"
     return "header"
+
+
+def _normalize_auth_oauth_client_authentication(value: object) -> str:
+    authentication = str(value or "basic-header").strip().lower()
+    if authentication == "body":
+        return "body"
+    return "basic-header"
 
 
 def _load_history_headers(payload: object) -> list[tuple[str, str]]:
