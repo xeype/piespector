@@ -1,15 +1,66 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
 from piespector import storage
-from piespector.state import HistoryEntry, RequestDefinition
+from piespector.state import CollectionDefinition, FolderDefinition, HistoryEntry, RequestDefinition
 
 
 class StorageTests(unittest.TestCase):
+    def test_load_env_pairs_parses_comments_exports_and_quotes(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / ".env"
+            path.write_text(
+                "# comment\n"
+                "export API_URL=https://example.com\n"
+                'TOKEN="line\\nvalue"\n'
+                "RAW=literal\n"
+                "INVALID\n"
+                "EMPTY=\n"
+                "SINGLE='quoted value'\n",
+                encoding="utf-8",
+            )
+
+            env_pairs = storage.load_env_pairs(path)
+
+        self.assertEqual(
+            env_pairs,
+            {
+                "API_URL": "https://example.com",
+                "TOKEN": "line\nvalue",
+                "RAW": "literal",
+                "EMPTY": "",
+                "SINGLE": "quoted value",
+            },
+        )
+
+    def test_save_env_pairs_round_trips_with_load_env_pairs(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / ".env"
+            storage.save_env_pairs(
+                path,
+                {
+                    "TOKEN": 'a"b',
+                    "MULTI": "line1\nline2",
+                    "TAB": "a\tb",
+                },
+            )
+
+            loaded = storage.load_env_pairs(path)
+
+        self.assertEqual(
+            loaded,
+            {
+                "TOKEN": 'a"b',
+                "MULTI": "line1\nline2",
+                "TAB": "a\tb",
+            },
+        )
+
     def test_app_data_dir_defaults_to_macos_application_support(self) -> None:
         with patch.object(storage.Path, "home", return_value=Path("/Users/test")), patch.object(
             storage.sys, "platform", "darwin"
@@ -140,6 +191,43 @@ class StorageTests(unittest.TestCase):
         self.assertEqual(env_sets, {"Default": {"API_URL": "https://example.com"}})
         self.assertEqual(selected_env_name, "Default")
 
+    def test_save_env_workspace_normalizes_missing_selected_env(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "envs.json"
+
+            storage.save_env_workspace(
+                path,
+                ["Prod", "Staging"],
+                {"Prod": {"API_URL": "https://prod.example.com"}},
+                "Missing",
+            )
+            env_names, env_sets, selected_env_name = storage.load_env_workspace(path)
+
+        self.assertEqual(env_names, ["Prod"])
+        self.assertEqual(env_sets, {"Prod": {"API_URL": "https://prod.example.com"}})
+        self.assertEqual(selected_env_name, "Prod")
+
+    def test_import_env_sets_loads_workspace_json(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "envs.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "selected_env_name": "Staging",
+                        "envs": [
+                            {"name": "Prod", "pairs": {"API_URL": "https://prod.example.com"}},
+                            {"name": "Staging", "pairs": {"API_URL": "https://staging.example.com"}},
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            env_names, env_sets = storage.import_env_sets(path)
+
+        self.assertEqual(env_names, ["Prod", "Staging"])
+        self.assertEqual(env_sets["Staging"]["API_URL"], "https://staging.example.com")
+
     def test_request_workspace_round_trips_cookie_and_custom_header_auth(self) -> None:
         with TemporaryDirectory() as tmp_dir:
             path = Path(tmp_dir) / "requests.json"
@@ -236,6 +324,77 @@ class StorageTests(unittest.TestCase):
         self.assertEqual(loaded_requests[6].raw_subtype, "html")
         self.assertEqual(loaded_requests[6].raw_body_texts["javascript"], "console.log('hi')")
         self.assertEqual(loaded_requests[7].raw_subtype, "javascript")
+
+    def test_export_collection_workspace_filters_transient_and_selected_collections(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "collections.json"
+            collection_a = CollectionDefinition(collection_id="c1", name="Alpha")
+            collection_b = CollectionDefinition(collection_id="c2", name="Beta")
+            folder_a = FolderDefinition(
+                folder_id="f1",
+                name="Auth",
+                collection_id=collection_a.collection_id,
+            )
+            requests = [
+                RequestDefinition(
+                    request_id="r1",
+                    name="Keep Me",
+                    collection_id=collection_a.collection_id,
+                    folder_id=folder_a.folder_id,
+                ),
+                RequestDefinition(
+                    request_id="r2",
+                    name="Transient",
+                    collection_id=collection_a.collection_id,
+                    transient=True,
+                ),
+                RequestDefinition(
+                    request_id="r3",
+                    name="Other Collection",
+                    collection_id=collection_b.collection_id,
+                ),
+            ]
+
+            exported_count = storage.export_collection_workspace(
+                path,
+                [collection_a, collection_b],
+                [folder_a],
+                requests,
+                collection_ids={collection_a.collection_id},
+            )
+            collections, folders, loaded_requests, _collapsed_collections, _collapsed_folders = (
+                storage.load_request_workspace(path)
+            )
+
+        self.assertEqual(exported_count, 1)
+        self.assertEqual([collection.name for collection in collections], ["Alpha"])
+        self.assertEqual([folder.name for folder in folders], ["Auth"])
+        self.assertEqual([request.name for request in loaded_requests], ["Keep Me"])
+
+    def test_import_collection_workspace_filters_orphaned_folders_and_requests(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "import.json"
+            payload = {
+                "collections": [
+                    {"collection_id": "c1", "name": "Alpha"},
+                ],
+                "folders": [
+                    {"folder_id": "f1", "name": "Auth", "collection_id": "c1", "parent_folder_id": None},
+                    {"folder_id": "f2", "name": "Ghost", "collection_id": "missing", "parent_folder_id": None},
+                ],
+                "requests": [
+                    {"request_id": "r1", "name": "Keep", "collection_id": "c1", "folder_id": "f1"},
+                    {"request_id": "r2", "name": "Drop Missing Collection", "collection_id": "missing", "folder_id": None},
+                    {"request_id": "r3", "name": "Drop Missing Folder", "collection_id": "c1", "folder_id": "f2"},
+                ],
+            }
+            path.write_text(json.dumps(payload), encoding="utf-8")
+
+            collections, folders, requests = storage.import_collection_workspace(path)
+
+        self.assertEqual([collection.name for collection in collections], ["Alpha"])
+        self.assertEqual([folder.name for folder in folders], ["Auth"])
+        self.assertEqual([request.name for request in requests], ["Keep"])
 
 
 if __name__ == "__main__":
