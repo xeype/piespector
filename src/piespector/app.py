@@ -24,7 +24,12 @@ from piespector.commands import (
 )
 from piespector.formatting import format_bytes
 from piespector.history import build_history_entry
-from piespector.http_client import perform_request, preview_auto_headers, validate_raw_body
+from piespector.http_client import (
+    perform_request,
+    preview_auto_headers,
+    preview_request_url,
+    validate_raw_body,
+)
 from piespector.placeholders import (
     apply_placeholder_completion,
     auto_pair_placeholder,
@@ -2094,6 +2099,23 @@ class PiespectorApp(App[None]):
                 return result.returncode == 0
         except OSError:
             return False
+
+    def action_copy_active_request_url(self) -> None:
+        request = self.state.get_active_request()
+        if request is None:
+            self.state.message = "No active request."
+            self._refresh_command_line()
+            return
+
+        resolved_url = preview_request_url(request, self.state.env_pairs).strip()
+        if not resolved_url:
+            self.state.message = "No URL to copy."
+            self._refresh_command_line()
+            return
+
+        copied = self._copy_text(resolved_url)
+        self.state.message = "Copied resolved URL." if copied else "Copy failed."
+        self._refresh_command_line()
 
         return True
 

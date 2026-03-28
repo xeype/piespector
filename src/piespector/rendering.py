@@ -9,6 +9,7 @@ from rich import box
 from rich.align import Align
 from rich.console import Group, RenderableType
 from rich.panel import Panel
+from rich.style import Style
 from rich.syntax import Syntax
 from rich.table import Table
 from rich.text import Text
@@ -357,71 +358,14 @@ def _render_help_viewport(state: PiespectorState) -> RenderableType:
 
     commands = Text()
     commands.append("Page Commands\n", style="bold #d7dae0")
-    if source_tab == "home":
-        _append_help_command_section(
-            commands,
-            "General",
-            [
-                "new",
-                "new collection/folder NAME",
-                "import PATH",
-                "export PATH",
-                "history",
-                "help",
-                "env",
-                "q",
-            ],
-        )
-        _append_help_command_section(
-            commands,
-            "Request selected",
-            [
-                "edit",
-                "rename NAME",
-                "cp PATH",
-                "mv PATH",
-                "close",
-                "del",
-                "send",
-            ],
-        )
-        _append_help_command_section(
-            commands,
-            "Folder selected",
-            [
-                "rename NAME",
-                "cp PATH",
-                "mv PATH",
-                "del",
-            ],
-        )
-        _append_help_command_section(
-            commands,
-            "Collection selected",
-            [
-                "rename NAME",
-                "cp",
-                "del",
-            ],
-        )
-    else:
-        for label in help_commands(state, source_tab, "NORMAL"):
-            commands.append(f"  {label}\n", style="#d7dae0")
+    command_mode = _help_command_context_mode(source_tab, source_mode)
+    for label in help_commands(state, source_tab, command_mode):
+        commands.append(f"  {label}\n", style="#d7dae0")
 
     navigation = Text()
     navigation.append("Keys\n", style="bold #d7dae0")
-    if source_tab == "home":
-        navigation.append("  Normal: j/k sidebar, h/l opened, s search, e open/edit, : command\n", style="#d7dae0")
-        navigation.append("  Editor: h/l sections or tabs, j/k rows, e edit/open, space toggle, a/d add-delete\n", style="#d7dae0")
-        navigation.append("  Request: s send, v response, ctrl+u/d response scroll\n", style="#d7dae0")
-        navigation.append("  Response: v focus, h/l body-headers, e viewer, Esc back\n", style="#d7dae0")
-    elif source_tab == "env":
-        navigation.append("  h/l envs, j/k rows, e edit, a add, d delete, : command\n", style="#d7dae0")
-        navigation.append("  Import creates new env sets instead of merging into the selected one.\n", style="#d7dae0")
-    elif source_tab == "history":
-        navigation.append("  j/k entries, s filter, e detail mode, : command\n", style="#d7dae0")
-        navigation.append("  Detail mode: j/k request-response blocks, h/l body-headers tabs\n", style="#d7dae0")
-        navigation.append("  ctrl+u/d scrolls the selected block, e opens the viewer\n", style="#d7dae0")
+    for line in _help_key_lines(source_tab, source_mode):
+        navigation.append(f"  {line}\n", style="#d7dae0")
 
     imports = Text()
     imports.append("Import / Export\n", style="bold #d7dae0")
@@ -448,6 +392,130 @@ def _append_help_command_section(
     text.append(f"  {title}\n", style="bold #abb2bf")
     for command in commands:
         text.append(f"    {command}\n", style="#d7dae0")
+
+
+def _help_command_context_mode(source_tab: str, source_mode: str) -> str:
+    if source_tab != "home":
+        return "NORMAL"
+    if source_mode == "HOME_SECTION_SELECT":
+        return source_mode
+    if source_mode.startswith("HOME_"):
+        return source_mode
+    return "NORMAL"
+
+
+def _help_key_lines(source_tab: str, source_mode: str) -> list[str]:
+    if source_tab == "home":
+        if source_mode == "NORMAL":
+            return [
+                "Normal: j/k sidebar, h/l opened, e open request editor or toggle folders/collections, s search, : command, Esc collapse",
+                "PageUp/PageDown scroll the sidebar list.",
+            ]
+        if source_mode == "HOME_SECTION_SELECT":
+            return [
+                "Sections: h/l sections, e or Enter open, s send, v response, ctrl+u/d response scroll, Esc back",
+            ]
+        if source_mode == "HOME_REQUEST_SELECT":
+            return [
+                "Request rows: j/k fields, e or Enter edit, s send, v response, ctrl+u/d response scroll, Esc back",
+            ]
+        if source_mode == "HOME_REQUEST_EDIT":
+            return [
+                "Request edit: Enter save, Esc cancel, Tab placeholder completion, ctrl+c copy, ctrl+v paste",
+            ]
+        if source_mode == "HOME_REQUEST_METHOD_EDIT":
+            return [
+                "Method edit: h/l or j/k cycle methods, Enter save, Esc cancel",
+            ]
+        if source_mode == "HOME_AUTH_SELECT":
+            return [
+                "Auth rows: j/k rows, e or Enter edit, s send, v response, ctrl+u/d response scroll, Esc back",
+            ]
+        if source_mode == "HOME_AUTH_EDIT":
+            return [
+                "Auth edit: Enter save, Esc cancel, Tab path completion for file-path fields, ctrl+c copy, ctrl+v paste",
+            ]
+        if source_mode == "HOME_AUTH_TYPE_EDIT":
+            return [
+                "Auth type: h/l or j/k cycle auth type, e or Enter open rows, s send, v response, ctrl+u/d response scroll, Esc back",
+            ]
+        if source_mode == "HOME_AUTH_LOCATION_EDIT":
+            return [
+                "Auth option: h/l or j/k cycle value, e or Enter close, s send, v response, ctrl+u/d response scroll, Esc back",
+            ]
+        if source_mode == "HOME_PARAMS_SELECT":
+            return [
+                "Params: j/k rows, h/l fields, e or Enter edit, a add, d delete, space toggle, s send, v response, ctrl+u/d response scroll, Esc back",
+            ]
+        if source_mode == "HOME_PARAMS_EDIT":
+            return [
+                "Param edit: Enter save, Esc cancel, Tab placeholder completion, ctrl+c copy, ctrl+v paste",
+            ]
+        if source_mode == "HOME_HEADERS_SELECT":
+            return [
+                "Headers: j/k rows, h/l fields, e or Enter edit, a add, d delete, space toggle explicit or auto headers, s send, v response, ctrl+u/d response scroll, Esc back",
+            ]
+        if source_mode == "HOME_HEADERS_EDIT":
+            return [
+                "Header edit: Enter save, Esc cancel, Tab placeholder completion, ctrl+c copy, ctrl+v paste",
+            ]
+        if source_mode == "HOME_BODY_SELECT":
+            return [
+                "Body: j/k rows, e or Enter open or edit, a add for form bodies, d delete, space toggle, s send, v response, ctrl+u/d response scroll, Esc back",
+            ]
+        if source_mode == "HOME_BODY_TYPE_EDIT":
+            return [
+                "Body type: h/l cycle body types, e or Enter open the active type, Esc back",
+            ]
+        if source_mode == "HOME_BODY_RAW_TYPE_EDIT":
+            return [
+                "Raw subtype: h/l cycle subtypes, e or Enter open the editor, Esc back",
+            ]
+        if source_mode == "HOME_BODY_EDIT":
+            return [
+                "Body edit: Enter save, Esc cancel, Tab placeholder or path completion, ctrl+c copy, ctrl+v paste",
+            ]
+        if source_mode == "HOME_RESPONSE_SELECT":
+            return [
+                "Response: h/l body or headers, e or Enter open the body viewer, ctrl+u/d scroll, Esc back",
+            ]
+        if source_mode == "HOME_RESPONSE_TEXTAREA":
+            return [
+                "Response viewer: copy selection or full body with the shown shortcut, Esc closes",
+            ]
+        return [
+            "Normal: j/k sidebar, h/l opened, e open request editor or toggle folders/collections, s search, : command, Esc collapse",
+        ]
+
+    if source_tab == "env":
+        if source_mode == "ENV_SELECT":
+            return [
+                "Env rows: h/l or j/k key-value fields, e or Enter edit, a add, d delete, Esc back",
+                "Import creates new env sets instead of merging into the selected one.",
+            ]
+        if source_mode == "ENV_EDIT":
+            return [
+                "Env edit: Enter save, Esc cancel, Tab placeholder completion, ctrl+c copy, ctrl+v paste",
+            ]
+        return [
+            "Env: h/l env sets, j/k rows, e or Enter open key-value fields, a add, : command",
+            "Import creates new env sets instead of merging into the selected one.",
+        ]
+
+    if source_tab == "history":
+        if source_mode == "HISTORY_RESPONSE_SELECT":
+            return [
+                "Detail mode: j/k request-response blocks, h/l body-headers tabs, ctrl+u/d scroll the selected block, e opens the viewer, Esc back",
+            ]
+        if source_mode == "HISTORY_RESPONSE_TEXTAREA":
+            return [
+                "Response viewer: copy selection or full body with the shown shortcut, Esc closes",
+            ]
+        return [
+            "History: j/k entries, s filter, e or Enter detail mode, : command",
+        ]
+
+    return ["Esc returns to the previous tab."]
 
 
 def _history_list_visible_rows(viewport_height: int | None) -> int:
@@ -714,18 +782,20 @@ def _render_home_editor(
         style=f"bold #1f2329 on {_method_color(request.method)}",
     )
     method_line.append("  ")
+    request_url_preview = _render_request_url_preview(request, state)
     method_line.append(
-        _render_request_url_preview(request, state) or "No URL set",
-        style="#d7dae0",
+        request_url_preview or "No URL set",
+        style=(
+            Style(color="#61afef", meta={"@click": "app.copy_active_request_url"})
+            if request_url_preview
+            else "#7f848e"
+        ),
     )
-    env_line = Text()
-    env_line.append("Env ", style="bold #abb2bf")
-    env_line.append(state.active_env_label(), style="#98c379")
 
     subtabs = _render_home_editor_tabs(state)
     content = _render_home_editor_content(request, state, viewport_width)
     return Panel(
-        Group(method_line, env_line, subtabs, content),
+        Group(method_line, subtabs, content),
         title=request.name,
         subtitle=_home_editor_subtitle(state),
         subtitle_align="left",
@@ -937,10 +1007,7 @@ def _render_request_overview_fields(
             row_style = "bold #1f2329 on #e5c07b"
         table.add_row(label, value, style=row_style)
 
-    resolved = Text()
-    resolved.append("Resolved URL: ", style="bold #7f848e")
-    resolved.append(_render_request_url_preview(request, state) or "-", style="#61afef")
-    return Group(table, resolved)
+    return table
 
 
 def _render_method_selector_value(

@@ -120,6 +120,24 @@ class AppUiTests(unittest.TestCase):
             "Edit the GraphQL document. Ctrl+S saves, Esc cancels.",
         )
 
+    def test_copy_active_request_url_uses_resolved_url(self) -> None:
+        app = PiespectorApp()
+        request = RequestDefinition(
+            name="Health",
+            url="{{BASE_URL}}/health",
+        )
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+        app.state.env_pairs = {"BASE_URL": "https://example.com"}
+
+        with patch.object(app, "_copy_text", return_value=True), patch.object(
+            app,
+            "_refresh_command_line",
+        ):
+            app.action_copy_active_request_url()
+
+        self.assertEqual(app.state.message, "Copied resolved URL.")
+
     def test_binary_body_uses_inline_edit_buffer_not_textarea_mode(self) -> None:
         app = PiespectorApp()
         request = RequestDefinition(

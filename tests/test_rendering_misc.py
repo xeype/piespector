@@ -4,7 +4,7 @@ import unittest
 
 from rich.console import Console
 
-from piespector.rendering import render_viewport
+from piespector.rendering import _render_home_editor, render_viewport
 from piespector.scrollbars import ThinScrollBarRender
 from piespector.state import (
     CollectionDefinition,
@@ -46,7 +46,37 @@ class RenderingMiscTests(unittest.TestCase):
         rendered = render_plain(render_viewport(state, viewport_height=24, viewport_width=120))
 
         self.assertIn("Context History", rendered)
-        self.assertIn("j/k entries, s filter, e detail mode, : command", rendered)
+        self.assertIn("j/k entries, s filter, e or Enter detail mode, : command", rendered)
+
+    def test_render_help_viewport_home_request_context_uses_real_commands(self) -> None:
+        state = PiespectorState(current_tab="help", help_source_tab="home", help_source_mode="HOME_REQUEST_SELECT")
+        collection = CollectionDefinition(collection_id="c1", name="Desserts")
+        request = RequestDefinition(
+            request_id="r1",
+            name="Health",
+            collection_id=collection.collection_id,
+        )
+        state.collections = [collection]
+        state.requests = [request]
+        state.ensure_request_workspace()
+        state._set_selected_sidebar_by_request_id(request.request_id)
+
+        rendered = render_plain(render_viewport(state, viewport_height=24, viewport_width=140), width=140)
+        commands_section = rendered.split("Keys", 1)[0]
+
+        self.assertIn("Opened from Home Request Select", rendered)
+        self.assertIn("send", rendered)
+        self.assertIn("close", rendered)
+        self.assertNotIn("import PATH", commands_section)
+        self.assertIn("Request rows: j/k fields, e or Enter edit, s send, v response", rendered)
+
+    def test_render_help_viewport_env_select_context_shows_current_keys(self) -> None:
+        state = PiespectorState(current_tab="help", help_source_tab="env", help_source_mode="ENV_SELECT")
+
+        rendered = render_plain(render_viewport(state, viewport_height=24, viewport_width=140), width=140)
+
+        self.assertIn("Context Env", rendered)
+        self.assertIn("h/l or j/k key-value fields, e or Enter edit, a add, d delete, Esc back", rendered)
 
     def test_render_env_viewport_empty_and_populated_states(self) -> None:
         empty_state = PiespectorState(current_tab="env")
@@ -96,6 +126,46 @@ class RenderingMiscTests(unittest.TestCase):
         self.assertIn("Status 200", rendered)
         self.assertIn('"ok": true', rendered)
         self.assertIn("Response", rendered)
+
+    def test_render_home_editor_header_shows_blue_url_without_env_or_resolved_block(self) -> None:
+        request = RequestDefinition(
+            request_id="r1",
+            name="Health",
+            method="GET",
+            url="{{BASE_URL}}/health",
+        )
+        state = PiespectorState(current_tab="home")
+        state.requests = [request]
+        state.active_request_id = request.request_id
+        state.env_pairs = {"BASE_URL": "https://example.com"}
+        state.ensure_request_workspace()
+        state.open_selected_request(pin=True)
+
+        rendered = render_plain(render_viewport(state, viewport_height=24, viewport_width=140), width=140)
+
+        self.assertIn("https://example.com/health", rendered)
+        self.assertNotIn("Env Default", rendered)
+        self.assertNotIn("Resolved URL:", rendered)
+
+    def test_render_home_editor_url_click_targets_app_action(self) -> None:
+        request = RequestDefinition(
+            request_id="r1",
+            name="Health",
+            method="GET",
+            url="{{BASE_URL}}/health",
+        )
+        state = PiespectorState(current_tab="home")
+        state.requests = [request]
+        state.active_request_id = request.request_id
+        state.env_pairs = {"BASE_URL": "https://example.com"}
+
+        panel = _render_home_editor(request, state, viewport_width=140)
+        method_line = panel.renderable.renderables[0]
+
+        self.assertEqual(
+            method_line.spans[1].style.meta["@click"],
+            "app.copy_active_request_url",
+        )
 
     def test_render_history_viewport_shows_selected_entry_detail(self) -> None:
         state = PiespectorState(current_tab="history")
