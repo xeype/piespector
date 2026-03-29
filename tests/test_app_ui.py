@@ -10,12 +10,11 @@ from unittest.mock import patch
 from piespector.app import PiespectorApp
 from piespector.rendering import (
     detect_text_syntax_language,
-    preview_syntax_language,
     render_command_line,
     request_body_syntax_language,
-    syntax_theme_for_language,
     text_area_syntax_language,
 )
+from piespector.ui.rendering_helpers import preview_syntax_language, syntax_theme_for_language
 from piespector.state import RequestDefinition
 from textual.widgets._text_area import LanguageDoesNotExist
 

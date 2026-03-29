@@ -41,7 +41,7 @@ class AppCommandModeTests(unittest.TestCase):
             app,
             "_refresh_command_line",
         ):
-            app._handle_command_key(event)
+            app.interaction_controller.handle_command_key(event)
 
         self.assertEqual(app.state.command_buffer, "import /tmp/My File.json")
         self.assertEqual(app.state.message, "Pasted.")
@@ -62,10 +62,10 @@ class AppCommandModeTests(unittest.TestCase):
                 first_tab = FakeKeyEvent("tab")
                 second_tab = FakeKeyEvent("tab")
 
-                app._handle_command_key(first_tab)
+                app.interaction_controller.handle_command_key(first_tab)
                 first_completion = app.state.command_buffer
 
-                app._handle_command_key(second_tab)
+                app.interaction_controller.handle_command_key(second_tab)
                 second_completion = app.state.command_buffer
 
         self.assertEqual(first_completion, "import alpha.env")
@@ -81,7 +81,7 @@ class AppCommandModeTests(unittest.TestCase):
         event = FakeKeyEvent("j")
 
         with patch.object(app, "_refresh_viewport"):
-            app._handle_history_response_select_key(event)
+            app.history_controller.handle_history_response_select_key(event)
 
         self.assertEqual(app.state.selected_history_detail_block, "response")
         self.assertTrue(event.stopped)
@@ -96,9 +96,9 @@ class AppCommandModeTests(unittest.TestCase):
         right_event = FakeKeyEvent("l")
 
         with patch.object(app, "_refresh_viewport"):
-            app._handle_history_response_select_key(left_event)
+            app.history_controller.handle_history_response_select_key(left_event)
             left_tab = app.state.selected_history_response_tab
-            app._handle_history_response_select_key(right_event)
+            app.history_controller.handle_history_response_select_key(right_event)
 
         self.assertEqual(left_tab, "headers")
         self.assertEqual(app.state.selected_history_response_tab, "body")
@@ -120,7 +120,7 @@ class AppCommandModeTests(unittest.TestCase):
         event = FakeKeyEvent("escape")
 
         with patch.object(app, "_refresh_screen"):
-            app._handle_home_auth_select_key(event)
+            app.home_controller.auth.handle_home_auth_select_key(event)
 
         self.assertEqual(app.state.mode, "HOME_AUTH_TYPE_EDIT")
         self.assertEqual(app.state.auth_type_label(), "Bearer Token")

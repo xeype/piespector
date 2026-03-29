@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from piespector.state import HistoryEntry, PiespectorState
+from piespector.domain.editor import TAB_HOME
+from piespector.domain.history import HistoryEntry
+from piespector.state import PiespectorState
 
 
 @dataclass(frozen=True)
@@ -129,7 +131,7 @@ def resolve_search_target(
 
 
 def activate_search_target(state: PiespectorState, target: SearchTarget) -> bool:
-    state.current_tab = "home"
+    state.current_tab = TAB_HOME
     state.ensure_request_workspace()
 
     if target.kind == "collection":

@@ -4,7 +4,8 @@ import unittest
 
 from rich.console import Console
 
-from piespector.rendering import _render_home_editor, render_viewport
+from piespector.rendering import render_viewport
+from piespector.screens.home.render import render_home_editor as _render_home_editor
 from piespector.scrollbars import ThinScrollBarRender
 from piespector.state import (
     CollectionDefinition,

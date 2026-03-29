@@ -4,6 +4,27 @@ from dataclasses import dataclass
 from pathlib import Path
 import shlex
 
+from piespector.domain.editor import TAB_ENV, TAB_HISTORY, TAB_HOME
+from piespector.domain.modes import (
+    MODE_HOME_AUTH_EDIT,
+    MODE_HOME_AUTH_LOCATION_EDIT,
+    MODE_HOME_AUTH_SELECT,
+    MODE_HOME_AUTH_TYPE_EDIT,
+    MODE_HOME_BODY_EDIT,
+    MODE_HOME_BODY_RAW_TYPE_EDIT,
+    MODE_HOME_BODY_SELECT,
+    MODE_HOME_BODY_TEXTAREA,
+    MODE_HOME_BODY_TYPE_EDIT,
+    MODE_HOME_HEADERS_EDIT,
+    MODE_HOME_HEADERS_SELECT,
+    MODE_HOME_PARAMS_EDIT,
+    MODE_HOME_PARAMS_SELECT,
+    MODE_HOME_REQUEST_EDIT,
+    MODE_HOME_REQUEST_METHOD_EDIT,
+    MODE_HOME_REQUEST_SELECT,
+    MODE_HOME_SECTION_SELECT,
+    MODE_NORMAL,
+)
 from piespector.search import move_destination_matches, resolve_move_destination
 from piespector.state import PiespectorState
 from piespector.storage import (
@@ -37,26 +58,26 @@ class ParsedCommand:
 
 REQUEST_COMMAND_CONTEXT_MODES = frozenset(
     {
-        "HOME_SECTION_SELECT",
-        "HOME_REQUEST_SELECT",
-        "HOME_REQUEST_EDIT",
-        "HOME_REQUEST_METHOD_EDIT",
-        "HOME_AUTH_SELECT",
-        "HOME_AUTH_EDIT",
-        "HOME_AUTH_TYPE_EDIT",
-        "HOME_AUTH_LOCATION_EDIT",
-        "HOME_PARAMS_SELECT",
-        "HOME_PARAMS_EDIT",
-        "HOME_HEADERS_SELECT",
-        "HOME_HEADERS_EDIT",
-        "HOME_BODY_SELECT",
-        "HOME_BODY_TYPE_EDIT",
-        "HOME_BODY_RAW_TYPE_EDIT",
-        "HOME_BODY_EDIT",
-        "HOME_BODY_TEXTAREA",
+        MODE_HOME_SECTION_SELECT,
+        MODE_HOME_REQUEST_SELECT,
+        MODE_HOME_REQUEST_EDIT,
+        MODE_HOME_REQUEST_METHOD_EDIT,
+        MODE_HOME_AUTH_SELECT,
+        MODE_HOME_AUTH_EDIT,
+        MODE_HOME_AUTH_TYPE_EDIT,
+        MODE_HOME_AUTH_LOCATION_EDIT,
+        MODE_HOME_PARAMS_SELECT,
+        MODE_HOME_PARAMS_EDIT,
+        MODE_HOME_HEADERS_SELECT,
+        MODE_HOME_HEADERS_EDIT,
+        MODE_HOME_BODY_SELECT,
+        MODE_HOME_BODY_TYPE_EDIT,
+        MODE_HOME_BODY_RAW_TYPE_EDIT,
+        MODE_HOME_BODY_EDIT,
+        MODE_HOME_BODY_TEXTAREA,
     }
 )
-HOME_PAGE_COMMAND_CONTEXT_MODES = frozenset({"NORMAL"})
+HOME_PAGE_COMMAND_CONTEXT_MODES = frozenset({MODE_NORMAL})
 
 
 def _command_source(
@@ -218,7 +239,7 @@ def _filesystem_path_completions(raw_value: str) -> list[str]:
 
 
 def _command_specs(state: PiespectorState, context_mode: str) -> list[CommandSpec]:
-    if state.current_tab == "env":
+    if state.current_tab == TAB_ENV:
         return [
             CommandSpec(("home",)),
             CommandSpec(("env",)),
@@ -235,7 +256,7 @@ def _command_specs(state: PiespectorState, context_mode: str) -> list[CommandSpe
             CommandSpec(("q",)),
         ]
 
-    if state.current_tab == "history":
+    if state.current_tab == TAB_HISTORY:
         return [
             CommandSpec(("home",)),
             CommandSpec(("env",)),
@@ -247,7 +268,7 @@ def _command_specs(state: PiespectorState, context_mode: str) -> list[CommandSpe
 
     node = state.get_selected_sidebar_node()
 
-    if context_mode == "HOME_SECTION_SELECT":
+    if context_mode == MODE_HOME_SECTION_SELECT:
         return [
             CommandSpec(("send",)),
             CommandSpec(("close",)),
@@ -375,7 +396,7 @@ def help_commands(
             commands.append(display)
 
     if (
-        context_tab == "home"
+        context_tab == TAB_HOME
         and "new collection NAME" in commands
         and "new folder NAME" in commands
     ):
@@ -529,33 +550,33 @@ def run_command(state: PiespectorState, raw_command: str) -> CommandOutcome:
         return CommandOutcome()
 
     if normalized in {"home", "tab home"}:
-        state.switch_tab("home", "Home")
+        state.switch_tab(TAB_HOME, "Home")
         return CommandOutcome()
 
     if normalized in {"env", "tab env"}:
-        state.switch_tab("env", "Env")
+        state.switch_tab(TAB_ENV, "Env")
         return CommandOutcome()
 
     if normalized in {"history", "tab history"}:
-        state.switch_tab("history", "History")
+        state.switch_tab(TAB_HISTORY, "History")
         return CommandOutcome()
 
     if normalized == "replay":
-        if state.current_tab != "history":
+        if state.current_tab != TAB_HISTORY:
             state.message = "Replay is only available on History."
             return CommandOutcome()
         replayed = state.replay_selected_history_entry()
         return CommandOutcome(save_requests=replayed is not None)
 
     if normalized == "new":
-        if state.current_tab != "home":
+        if state.current_tab != TAB_HOME:
             state.message = "New is only available on Home."
             return CommandOutcome()
         state.create_request()
         return CommandOutcome(save_requests=True)
 
     if normalized_tokens[:2] == ("new", "collection"):
-        if state.current_tab != "home":
+        if state.current_tab != TAB_HOME:
             state.message = "New collection is only available on Home."
             return CommandOutcome()
         name = _command_value(tokens, 2)
@@ -566,7 +587,7 @@ def run_command(state: PiespectorState, raw_command: str) -> CommandOutcome:
         return CommandOutcome(save_requests=True)
 
     if normalized_tokens[:2] == ("new", "folder"):
-        if state.current_tab != "home":
+        if state.current_tab != TAB_HOME:
             state.message = "New folder is only available on Home."
             return CommandOutcome()
         name = _command_value(tokens, 2)
@@ -576,7 +597,7 @@ def run_command(state: PiespectorState, raw_command: str) -> CommandOutcome:
         created = state.create_folder(name)
         return CommandOutcome(save_requests=created is not None)
 
-    if normalized_tokens[:1] == ("new",) and state.current_tab == "env":
+    if normalized_tokens[:1] == ("new",) and state.current_tab == TAB_ENV:
         name = _command_value(tokens, 1)
         if not name:
             state.message = "Usage: new NAME"
@@ -585,7 +606,7 @@ def run_command(state: PiespectorState, raw_command: str) -> CommandOutcome:
         return CommandOutcome(save_env_pairs=created)
 
     if normalized_tokens[:1] == ("import",):
-        if state.current_tab == "env":
+        if state.current_tab == TAB_ENV:
             import_path_value = _command_value(tokens, 1)
             if not import_path_value:
                 state.message = "Usage: import PATH"
@@ -602,7 +623,7 @@ def run_command(state: PiespectorState, raw_command: str) -> CommandOutcome:
             imported = state.import_env_sets(env_names, env_sets)
             return CommandOutcome(save_env_pairs=imported > 0)
 
-        if state.current_tab != "home" or previous_mode not in HOME_PAGE_COMMAND_CONTEXT_MODES:
+        if state.current_tab != TAB_HOME or previous_mode not in HOME_PAGE_COMMAND_CONTEXT_MODES:
             state.message = "Import is only available from the Home or Env page."
             return CommandOutcome()
         import_path_value = _command_value(tokens, 1)
@@ -623,7 +644,7 @@ def run_command(state: PiespectorState, raw_command: str) -> CommandOutcome:
         return CommandOutcome(save_requests=imported > 0)
 
     if normalized_tokens[:1] == ("export",):
-        if state.current_tab == "env":
+        if state.current_tab == TAB_ENV:
             export_path_value = _command_value(tokens, 1)
             if not export_path_value:
                 state.message = "Usage: export PATH"
@@ -637,7 +658,7 @@ def run_command(state: PiespectorState, raw_command: str) -> CommandOutcome:
             state.message = f"Exported env to {export_path}."
             return CommandOutcome()
 
-        if state.current_tab != "home" or previous_mode not in HOME_PAGE_COMMAND_CONTEXT_MODES:
+        if state.current_tab != TAB_HOME or previous_mode not in HOME_PAGE_COMMAND_CONTEXT_MODES:
             state.message = "Export is only available from the Home or Env page."
             return CommandOutcome()
         export_path_value = _command_value(tokens, 1)
@@ -672,7 +693,7 @@ def run_command(state: PiespectorState, raw_command: str) -> CommandOutcome:
         return CommandOutcome()
 
     if normalized == "send":
-        if state.current_tab != "home":
+        if state.current_tab != TAB_HOME:
             state.message = "Send is only available on Home."
             return CommandOutcome()
         if state.get_active_request() is None:
@@ -681,14 +702,14 @@ def run_command(state: PiespectorState, raw_command: str) -> CommandOutcome:
         return CommandOutcome(send_request=True)
 
     if normalized_tokens[:1] == ("rename",):
-        if state.current_tab == "env":
+        if state.current_tab == TAB_ENV:
             name = _command_value(tokens, 1)
             if not name:
                 state.message = "Usage: rename NAME"
                 return CommandOutcome()
             renamed = state.rename_selected_env_set(name)
             return CommandOutcome(save_env_pairs=renamed)
-        if state.current_tab != "home" or previous_mode not in HOME_PAGE_COMMAND_CONTEXT_MODES:
+        if state.current_tab != TAB_HOME or previous_mode not in HOME_PAGE_COMMAND_CONTEXT_MODES:
             state.message = "Rename is only available from the Home or Env page."
             return CommandOutcome()
         source = _command_source(state, previous_mode)
@@ -708,7 +729,7 @@ def run_command(state: PiespectorState, raw_command: str) -> CommandOutcome:
         return CommandOutcome(save_requests=renamed)
 
     if normalized == "close":
-        if state.current_tab != "home":
+        if state.current_tab != TAB_HOME:
             state.message = "Close is only available on Home."
             return CommandOutcome()
         closed = state.close_active_request()
@@ -717,7 +738,7 @@ def run_command(state: PiespectorState, raw_command: str) -> CommandOutcome:
         return CommandOutcome()
 
     if normalized_tokens[:1] == ("mv",):
-        if state.current_tab != "home" or previous_mode not in HOME_PAGE_COMMAND_CONTEXT_MODES:
+        if state.current_tab != TAB_HOME or previous_mode not in HOME_PAGE_COMMAND_CONTEXT_MODES:
             state.message = "Move is only available from the Home page."
             return CommandOutcome()
         source = _command_source(state, previous_mode)
@@ -764,7 +785,7 @@ def run_command(state: PiespectorState, raw_command: str) -> CommandOutcome:
         return CommandOutcome(save_requests=moved)
 
     if normalized_tokens[:1] == ("cp",):
-        if state.current_tab != "home" or previous_mode not in HOME_PAGE_COMMAND_CONTEXT_MODES:
+        if state.current_tab != TAB_HOME or previous_mode not in HOME_PAGE_COMMAND_CONTEXT_MODES:
             state.message = "Copy is only available from the Home page."
             return CommandOutcome()
         source = _command_source(state, previous_mode)
@@ -833,13 +854,13 @@ def run_command(state: PiespectorState, raw_command: str) -> CommandOutcome:
 
         state.env_pairs[key] = value
         state.message = f"Saved {key}."
-        state.current_tab = "env"
+        state.current_tab = TAB_ENV
         state.selected_env_index = max(0, len(state.env_pairs) - 1)
         state.edit_buffer = ""
         return CommandOutcome(save_env_pairs=True)
 
     if normalized_tokens[:1] in {("del",), ("delete",)} and len(tokens) > 1:
-        if state.current_tab != "env":
+        if state.current_tab != TAB_ENV:
             state.message = "Usage: del"
             return CommandOutcome()
 
@@ -855,10 +876,10 @@ def run_command(state: PiespectorState, raw_command: str) -> CommandOutcome:
         return CommandOutcome()
 
     if normalized in {"del", "delete"}:
-        if state.current_tab == "env":
+        if state.current_tab == TAB_ENV:
             deleted = state.delete_selected_env_set()
             return CommandOutcome(save_env_pairs=deleted)
-        if state.current_tab != "home":
+        if state.current_tab != TAB_HOME:
             state.message = "Usage: del KEY"
             return CommandOutcome()
         if previous_mode not in HOME_PAGE_COMMAND_CONTEXT_MODES:
@@ -886,13 +907,13 @@ def run_command(state: PiespectorState, raw_command: str) -> CommandOutcome:
         return CommandOutcome(save_requests=True)
 
     if normalized == "edit":
-        if state.current_tab == "home":
+        if state.current_tab == TAB_HOME:
             if state.get_selected_request() is None:
                 state.message = "Select a request first."
                 return CommandOutcome()
             state.enter_home_section_select_mode()
             return CommandOutcome()
-        if state.current_tab == "env":
+        if state.current_tab == TAB_ENV:
             if not state.env_pairs:
                 state.message = "Nothing to edit."
                 return CommandOutcome()

@@ -6,14 +6,16 @@ from pathlib import Path
 import sys
 from uuid import uuid4
 
-from piespector.state import (
-    CollectionDefinition,
-    FolderDefinition,
-    HistoryEntry,
+from piespector.domain.history import HistoryEntry
+from piespector.domain.requests import (
     RequestDefinition,
     RequestKeyValue,
     parse_headers_text,
     parse_query_text,
+)
+from piespector.domain.workspace import (
+    CollectionDefinition,
+    FolderDefinition,
 )
 
 

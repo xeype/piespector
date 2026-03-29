@@ -13,7 +13,7 @@ from urllib import error, parse, request
 from xml.etree import ElementTree
 
 from piespector import __version__
-from piespector.state import RequestDefinition, ResponseSummary
+from piespector.domain.requests import RequestDefinition, ResponseSummary
 
 PLACEHOLDER_RE = re.compile(r"\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}")
 DEFAULT_ACCEPT = "*/*"
