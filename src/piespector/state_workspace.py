@@ -14,21 +14,47 @@ class WorkspaceStateMixin:
     def get_request_items(self) -> list[RequestDefinition]:
         return self.requests
 
+    def _append_collection(self, collection: CollectionDefinition) -> None:
+        self.collections.append(collection)
+        self._collections_by_id[collection.collection_id] = collection
+
+    def _extend_collections(self, collections: list[CollectionDefinition]) -> None:
+        self.collections.extend(collections)
+        for collection in collections:
+            self._collections_by_id[collection.collection_id] = collection
+
+    def _append_folder(self, folder: FolderDefinition) -> None:
+        self.folders.append(folder)
+        self._folders_by_id[folder.folder_id] = folder
+
+    def _extend_folders(self, folders: list[FolderDefinition]) -> None:
+        self.folders.extend(folders)
+        for folder in folders:
+            self._folders_by_id[folder.folder_id] = folder
+
+    def _append_request(self, request: RequestDefinition) -> None:
+        self.requests.append(request)
+        self._requests_by_id[request.request_id] = request
+
+    def _extend_requests(self, requests: list[RequestDefinition]) -> None:
+        self.requests.extend(requests)
+        for request in requests:
+            self._requests_by_id[request.request_id] = request
+
+    def _pop_request(self, index: int) -> RequestDefinition:
+        request = self.requests.pop(index)
+        self._requests_by_id.pop(request.request_id, None)
+        return request
+
     def get_collection_by_id(self, collection_id: str | None) -> CollectionDefinition | None:
         if collection_id is None:
             return None
-        for collection in self.collections:
-            if collection.collection_id == collection_id:
-                return collection
-        return None
+        return self._collections_by_id.get(collection_id)
 
     def get_folder_by_id(self, folder_id: str | None) -> FolderDefinition | None:
         if folder_id is None:
             return None
-        for folder in self.folders:
-            if folder.folder_id == folder_id:
-                return folder
-        return None
+        return self._folders_by_id.get(folder_id)
 
     def folder_chain(self, folder_id: str | None) -> list[FolderDefinition]:
         chain: list[FolderDefinition] = []
@@ -61,11 +87,10 @@ class WorkspaceStateMixin:
                     return (request.collection_id, request.folder_id)
         return (None, None)
 
-    def get_request_by_id(self, request_id: str) -> RequestDefinition | None:
-        for request in self.requests:
-            if request.request_id == request_id:
-                return request
-        return None
+    def get_request_by_id(self, request_id: str | None) -> RequestDefinition | None:
+        if request_id is None:
+            return None
+        return self._requests_by_id.get(request_id)
 
     def get_sidebar_nodes(self) -> list[SidebarNode]:
         nodes: list[SidebarNode] = []
@@ -650,7 +675,7 @@ class WorkspaceStateMixin:
             collection_id=collection_id,
             folder_id=folder_id,
         )
-        self.requests.append(request)
+        self._append_request(request)
         self._expand_request_ancestors(request)
         self.current_tab = TAB_HOME
         self.home_editor_tab = HOME_EDITOR_TAB_REQUEST
@@ -778,7 +803,7 @@ class WorkspaceStateMixin:
             body_form_items=body_form_items,
             body_urlencoded_items=body_urlencoded_items,
         )
-        self.requests.append(replay)
+        self._append_request(replay)
         self.current_tab = TAB_HOME
         self.home_editor_tab = HOME_EDITOR_TAB_REQUEST
         self.selected_request_field_index = 0
@@ -794,7 +819,7 @@ class WorkspaceStateMixin:
 
     def create_collection(self, name: str) -> CollectionDefinition:
         collection = CollectionDefinition(name=name)
-        self.collections.append(collection)
+        self._append_collection(collection)
         self.current_tab = TAB_HOME
         self.collapsed_collection_ids.add(collection.collection_id)
         self._set_selected_sidebar_node("collection", collection.collection_id)
@@ -815,7 +840,7 @@ class WorkspaceStateMixin:
             collection_id=collection_id,
             parent_folder_id=parent_folder_id,
         )
-        self.folders.append(folder)
+        self._append_folder(folder)
         self.current_tab = TAB_HOME
         self.collapsed_collection_ids.discard(collection_id)
         if parent_folder_id is not None:
@@ -930,7 +955,7 @@ class WorkspaceStateMixin:
         )
         copied.collection_id = collection_id
         copied.folder_id = folder_id
-        self.requests.append(copied)
+        self._append_request(copied)
         self.current_tab = TAB_HOME
         self.home_editor_tab = HOME_EDITOR_TAB_REQUEST
         self.selected_request_field_index = 0
@@ -985,8 +1010,8 @@ class WorkspaceStateMixin:
             copied.folder_id = folder_id_map.get(request.folder_id)
             copied_requests.append(copied)
 
-        self.folders.extend(copied_folders)
-        self.requests.extend(copied_requests)
+        self._extend_folders(copied_folders)
+        self._extend_requests(copied_requests)
         copied_root = copied_folders[0]
         self.current_tab = TAB_HOME
         self.collapsed_collection_ids.discard(collection_id)
@@ -1009,7 +1034,7 @@ class WorkspaceStateMixin:
             return None
 
         copied_collection = CollectionDefinition(name=f"{collection.name} Copy")
-        self.collections.append(copied_collection)
+        self._append_collection(copied_collection)
 
         source_folders = [
             folder
@@ -1045,8 +1070,8 @@ class WorkspaceStateMixin:
             )
             copied_requests.append(copied)
 
-        self.folders.extend(copied_folders)
-        self.requests.extend(copied_requests)
+        self._extend_folders(copied_folders)
+        self._extend_requests(copied_requests)
         self.current_tab = TAB_HOME
         self.collapsed_collection_ids.add(copied_collection.collection_id)
         self._set_selected_sidebar_node("collection", copied_collection.collection_id)
@@ -1115,9 +1140,9 @@ class WorkspaceStateMixin:
             copied.transient = False
             imported_requests.append(copied)
 
-        self.collections.extend(imported_collections)
-        self.folders.extend(imported_folders)
-        self.requests.extend(imported_requests)
+        self._extend_collections(imported_collections)
+        self._extend_folders(imported_folders)
+        self._extend_requests(imported_requests)
         first_collection = imported_collections[0]
         self.current_tab = TAB_HOME
         self.collapsed_collection_ids.discard(first_collection.collection_id)
@@ -1223,7 +1248,7 @@ class WorkspaceStateMixin:
         if request is None:
             return None
 
-        deleted = self.requests.pop(self.selected_request_index)
+        deleted = self._pop_request(self.selected_request_index)
         self.open_request_ids = [
             request_id
             for request_id in self.open_request_ids

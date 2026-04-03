@@ -50,6 +50,27 @@ class PiespectorState(
     selected_env_name: str = "Default"
     history_entries: list[HistoryEntry] = field(default_factory=list)
     session: UISessionState = field(default_factory=UISessionState, repr=False)
+    _collections_by_id: dict[str, CollectionDefinition]
+    _folders_by_id: dict[str, FolderDefinition]
+    _requests_by_id: dict[str, RequestDefinition]
+
+    def __setattr__(self, name: str, value) -> None:
+        super().__setattr__(name, value)
+        if name == "collections":
+            super().__setattr__(
+                "_collections_by_id",
+                {item.collection_id: item for item in value},
+            )
+        elif name == "folders":
+            super().__setattr__(
+                "_folders_by_id",
+                {item.folder_id: item for item in value},
+            )
+        elif name == "requests":
+            super().__setattr__(
+                "_requests_by_id",
+                {item.request_id: item for item in value},
+            )
 
     def __init__(self, **kwargs) -> None:
         session = kwargs.pop("session", None)
