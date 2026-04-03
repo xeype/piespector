@@ -9,13 +9,30 @@ from piespector.app import PiespectorApp
 from piespector.commands import command_palette_commands
 from piespector.domain.editor import TAB_HOME
 from piespector.domain.modes import (
+    MODE_HOME_AUTH_EDIT,
+    MODE_HOME_AUTH_LOCATION_EDIT,
+    MODE_HOME_AUTH_SELECT,
+    MODE_HOME_AUTH_TYPE_EDIT,
+    MODE_HOME_BODY_EDIT,
+    MODE_HOME_BODY_RAW_TYPE_EDIT,
+    MODE_HOME_BODY_SELECT,
+    MODE_HOME_BODY_TYPE_EDIT,
     MODE_ENV_SELECT,
+    MODE_HOME_HEADERS_EDIT,
     MODE_NORMAL,
     MODE_HOME_HEADERS_SELECT,
+    MODE_HOME_PARAMS_EDIT,
+    MODE_HOME_PARAMS_SELECT,
+    MODE_HOME_REQUEST_EDIT,
+    MODE_HOME_REQUEST_METHOD_EDIT,
+    MODE_HOME_REQUEST_METHOD_SELECT,
     MODE_HOME_REQUEST_SELECT,
     MODE_HOME_RESPONSE_SELECT,
+    MODE_HOME_SECTION_SELECT,
+    MODE_HOME_URL_EDIT,
     MODE_JUMP,
 )
+from piespector.screens.home.controller import HomeController
 from piespector.domain.workspace import CollectionDefinition, FolderDefinition
 from piespector.screens.home.screen import SidebarTree
 from piespector.state import PiespectorState, RequestDefinition
@@ -34,6 +51,107 @@ class FakeKeyEvent:
 
 
 class AppCommandModeTests(unittest.TestCase):
+    def assertBoundMethod(self, actual, expected) -> None:
+        self.assertIs(actual.__self__, expected.__self__)
+        self.assertIs(actual.__func__, expected.__func__)
+
+    def test_home_controller_builds_dispatch_from_section_registrations(self) -> None:
+        app = PiespectorApp()
+
+        self.assertBoundMethod(
+            app.home_controller._dispatch[MODE_HOME_SECTION_SELECT],
+            app.home_controller.navigation.handle_home_section_select_key,
+        )
+        self.assertBoundMethod(
+            app.home_controller._dispatch[MODE_HOME_REQUEST_SELECT],
+            app.home_controller.request.handle_home_request_select_key,
+        )
+        self.assertBoundMethod(
+            app.home_controller._dispatch[MODE_HOME_REQUEST_EDIT],
+            app.home_controller.request.handle_home_request_edit_key,
+        )
+        self.assertBoundMethod(
+            app.home_controller._dispatch[MODE_HOME_REQUEST_METHOD_SELECT],
+            app.home_controller.request.handle_home_request_method_select_key,
+        )
+        self.assertBoundMethod(
+            app.home_controller._dispatch[MODE_HOME_URL_EDIT],
+            app.home_controller.request.handle_home_url_edit_key,
+        )
+        self.assertBoundMethod(
+            app.home_controller._dispatch[MODE_HOME_AUTH_SELECT],
+            app.home_controller.auth.handle_home_auth_select_key,
+        )
+        self.assertBoundMethod(
+            app.home_controller._dispatch[MODE_HOME_AUTH_EDIT],
+            app.home_controller.auth.handle_home_auth_edit_key,
+        )
+        self.assertBoundMethod(
+            app.home_controller._dispatch[MODE_HOME_AUTH_TYPE_EDIT],
+            app.home_controller.auth.handle_home_auth_type_edit_key,
+        )
+        self.assertBoundMethod(
+            app.home_controller._dispatch[MODE_HOME_AUTH_LOCATION_EDIT],
+            app.home_controller.auth.handle_home_auth_location_edit_key,
+        )
+        self.assertBoundMethod(
+            app.home_controller._dispatch[MODE_HOME_PARAMS_SELECT],
+            app.home_controller.params.handle_home_params_select_key,
+        )
+        self.assertBoundMethod(
+            app.home_controller._dispatch[MODE_HOME_PARAMS_EDIT],
+            app.home_controller.params.handle_home_params_edit_key,
+        )
+        self.assertBoundMethod(
+            app.home_controller._dispatch[MODE_HOME_HEADERS_SELECT],
+            app.home_controller.headers.handle_home_headers_select_key,
+        )
+        self.assertBoundMethod(
+            app.home_controller._dispatch[MODE_HOME_HEADERS_EDIT],
+            app.home_controller.headers.handle_home_headers_edit_key,
+        )
+        self.assertBoundMethod(
+            app.home_controller._dispatch[MODE_HOME_BODY_SELECT],
+            app.home_controller.body.handle_home_body_select_key,
+        )
+        self.assertBoundMethod(
+            app.home_controller._dispatch[MODE_HOME_BODY_TYPE_EDIT],
+            app.home_controller.body.handle_home_body_type_edit_key,
+        )
+        self.assertBoundMethod(
+            app.home_controller._dispatch[MODE_HOME_BODY_RAW_TYPE_EDIT],
+            app.home_controller.body.handle_home_body_raw_type_edit_key,
+        )
+        self.assertBoundMethod(
+            app.home_controller._dispatch[MODE_HOME_BODY_EDIT],
+            app.home_controller.body.handle_home_body_edit_key,
+        )
+        self.assertBoundMethod(
+            app.home_controller._dispatch[MODE_HOME_RESPONSE_SELECT],
+            app.home_controller.response.handle_home_response_select_key,
+        )
+
+    def test_home_controller_rejects_duplicate_mode_registrations(self) -> None:
+        app = PiespectorApp()
+
+        class DuplicateModeController:
+            def __init__(self, handler):
+                self._handler = handler
+
+            def mode_handlers(self) -> dict[str, object]:
+                return {MODE_HOME_REQUEST_SELECT: self._handler}
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "Duplicate home mode handler registration for HOME_REQUEST_SELECT",
+        ):
+            HomeController._build_dispatch(
+                (
+                    app.home_controller.request,
+                    DuplicateModeController(app.home_controller.auth.handle_home_auth_select_key),
+                )
+            )
+
     def test_session_moves_screen_local_fields_out_of_session_root(self) -> None:
         state = PiespectorState(
             home_editor_tab="auth",

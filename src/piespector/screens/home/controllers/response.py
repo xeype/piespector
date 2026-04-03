@@ -16,10 +16,15 @@ from piespector.interactions.keys import (
     UP_KEYS,
 )
 from piespector.screens.home import messages
-from piespector.screens.home.controllers.base import HomeControllerBase
+from piespector.screens.home.controllers.base import HomeControllerBase, HomeModeHandler
 
 
 class HomeResponseController(HomeControllerBase):
+    def mode_handlers(self) -> dict[str, HomeModeHandler]:
+        return {
+            MODE_HOME_RESPONSE_SELECT: self.handle_home_response_select_key,
+        }
+
     def handle_request_response_shortcuts(self, event: events.Key) -> bool:
         if self.state.mode in REQUEST_RESPONSE_SHORTCUT_MODES and event.key == KEY_VIEW:
             if self.state.enter_home_response_select_mode():

@@ -23,10 +23,15 @@ from piespector.interactions.keys import (
     UP_KEYS,
 )
 from piespector.screens.home import messages
-from piespector.screens.home.controllers.base import HomeControllerBase
+from piespector.screens.home.controllers.base import HomeControllerBase, HomeModeHandler
 
 
 class HomeNavigationController(HomeControllerBase):
+    def mode_handlers(self) -> dict[str, HomeModeHandler]:
+        return {
+            MODE_HOME_SECTION_SELECT: self.handle_home_section_select_key,
+        }
+
     def browse_sidebar(self, step: int) -> None:
         tree = self.sidebar_tree()
         if tree is None:

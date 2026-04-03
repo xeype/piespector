@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
+from textual import events
 from textual.app import ScreenStackError
 from textual.widgets import Input, Select, Tree
 
@@ -9,6 +10,8 @@ from piespector.domain.modes import MODE_HOME_SECTION_SELECT
 
 if TYPE_CHECKING:
     from piespector.app import PiespectorApp
+
+HomeModeHandler = Callable[[events.Key], None]
 
 
 class HomeControllerBase:
@@ -18,6 +21,9 @@ class HomeControllerBase:
     @property
     def state(self):
         return self.app.state
+
+    def mode_handlers(self) -> dict[str, HomeModeHandler]:
+        return {}
 
     def move_request_block(self, step: int) -> None:
         self.state.cycle_home_editor_tab(step)

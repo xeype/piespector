@@ -9,9 +9,14 @@ from piespector.domain.editor import (
     HOME_EDITOR_TAB_PARAMS,
 )
 from piespector.domain.modes import (
+    MODE_HOME_REQUEST_EDIT,
+    MODE_HOME_REQUEST_METHOD_EDIT,
+    MODE_HOME_REQUEST_METHOD_SELECT,
     MODE_HOME_AUTH_SELECT,
     MODE_HOME_BODY_SELECT,
+    MODE_HOME_REQUEST_SELECT,
     MODE_HOME_SECTION_SELECT,
+    MODE_HOME_URL_EDIT,
 )
 from piespector.interactions.keys import (
     KEY_ENTER,
@@ -23,10 +28,19 @@ from piespector.interactions.keys import (
     UP_KEYS,
     DOWN_KEYS,
 )
-from piespector.screens.home.controllers.base import HomeControllerBase
+from piespector.screens.home.controllers.base import HomeControllerBase, HomeModeHandler
 
 
 class HomeRequestController(HomeControllerBase):
+    def mode_handlers(self) -> dict[str, HomeModeHandler]:
+        return {
+            MODE_HOME_REQUEST_SELECT: self.handle_home_request_select_key,
+            MODE_HOME_REQUEST_EDIT: self.handle_home_request_edit_key,
+            MODE_HOME_REQUEST_METHOD_SELECT: self.handle_home_request_method_select_key,
+            MODE_HOME_REQUEST_METHOD_EDIT: self.handle_home_request_method_edit_key,
+            MODE_HOME_URL_EDIT: self.handle_home_url_edit_key,
+        }
+
     def _start_current_home_edit(self) -> None:
         if self.state.home_editor_tab == HOME_EDITOR_TAB_PARAMS:
             self.state.enter_home_params_edit_mode()

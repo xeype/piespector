@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from textual import events
 
+from piespector.domain.modes import MODE_HOME_PARAMS_EDIT, MODE_HOME_PARAMS_SELECT
 from piespector.interactions.keys import (
     ARROW_LEFT_KEYS,
     ARROW_RIGHT_KEYS,
@@ -17,10 +18,16 @@ from piespector.interactions.keys import (
     TAB_PREVIOUS_KEYS,
     UP_KEYS,
 )
-from piespector.screens.home.controllers.base import HomeControllerBase
+from piespector.screens.home.controllers.base import HomeControllerBase, HomeModeHandler
 
 
 class HomeParamsController(HomeControllerBase):
+    def mode_handlers(self) -> dict[str, HomeModeHandler]:
+        return {
+            MODE_HOME_PARAMS_SELECT: self.handle_home_params_select_key,
+            MODE_HOME_PARAMS_EDIT: self.handle_home_params_edit_key,
+        }
+
     def handle_home_params_select_key(self, event: events.Key) -> None:
         if event.key == KEY_ESCAPE:
             self.state.enter_home_section_select_mode()
