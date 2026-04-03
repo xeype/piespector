@@ -18,7 +18,13 @@ from piespector.state_env import EnvStateMixin
 from piespector.state_history import HistoryStateMixin
 from piespector.state_home import HomeStateMixin
 from piespector.state_workspace import WorkspaceStateMixin
-from piespector.ui.session_state import SESSION_FIELD_NAMES, UISessionState
+from piespector.ui.session_state import (
+    ENV_SCREEN_FIELD_NAMES,
+    HISTORY_SCREEN_FIELD_NAMES,
+    HOME_SCREEN_FIELD_NAMES,
+    SESSION_ROOT_FIELD_NAMES,
+    UISessionState,
+)
 
 
 @dataclass(init=False)
@@ -44,12 +50,26 @@ class PiespectorState(
 
     def __init__(self, **kwargs) -> None:
         session = kwargs.pop("session", None)
-        session_kwargs = {
+        session_root_kwargs = {
             name: kwargs.pop(name)
             for name in list(kwargs)
-            if name in SESSION_FIELD_NAMES
+            if name in SESSION_ROOT_FIELD_NAMES
         }
-
+        home_kwargs = {
+            name: kwargs.pop(name)
+            for name in list(kwargs)
+            if name in HOME_SCREEN_FIELD_NAMES
+        }
+        env_kwargs = {
+            name: kwargs.pop(name)
+            for name in list(kwargs)
+            if name in ENV_SCREEN_FIELD_NAMES
+        }
+        history_kwargs = {
+            name: kwargs.pop(name)
+            for name in list(kwargs)
+            if name in HISTORY_SCREEN_FIELD_NAMES
+        }
         self.collections = kwargs.pop("collections", [])
         self.folders = kwargs.pop("folders", [])
         self.collapsed_collection_ids = kwargs.pop("collapsed_collection_ids", set())
@@ -64,14 +84,38 @@ class PiespectorState(
             unexpected = ", ".join(sorted(kwargs))
             raise TypeError(f"Unexpected state argument(s): {unexpected}")
 
-        if session is not None and session_kwargs:
-            conflicting = ", ".join(sorted(session_kwargs))
+        session_override_kwargs = (
+            session_root_kwargs | home_kwargs | env_kwargs | history_kwargs
+        )
+        if session is not None and session_override_kwargs:
+            conflicting = ", ".join(sorted(session_override_kwargs))
             raise TypeError(
                 f"Cannot pass both session and session fields: {conflicting}"
             )
 
-        self.session = session or UISessionState(**session_kwargs)
+        self.session = session or UISessionState(**session_root_kwargs)
+        for field_name, value in home_kwargs.items():
+            setattr(self.session.home, field_name, value)
+        for field_name, value in env_kwargs.items():
+            setattr(self.session.env, field_name, value)
+        for field_name, value in history_kwargs.items():
+            setattr(self.session.history, field_name, value)
+        self._app = None
 
+    def attach_app(self, app) -> None:
+        self._app = app
+
+    def _screen_owner(self, group_name: str):
+        app = getattr(self, "_app", None)
+        if app is None:
+            return None
+        if group_name == "home":
+            return getattr(app, "_home_screen", None)
+        if group_name == "env":
+            return getattr(app, "_env_screen", None)
+        if group_name == "history":
+            return getattr(app, "_history_screen", None)
+        return None
 
 def _session_field_property(field_name: str) -> property:
     def getter(self: PiespectorState):
@@ -83,7 +127,36 @@ def _session_field_property(field_name: str) -> property:
     return property(getter, setter)
 
 
-for _session_field_name in SESSION_FIELD_NAMES:
+def _screen_state_field_property(group_name: str, field_name: str) -> property:
+    def getter(self: PiespectorState):
+        owner = self._screen_owner(group_name)
+        if owner is not None and hasattr(owner, field_name):
+            return getattr(owner, field_name)
+        return getattr(getattr(self.session, group_name), field_name)
+
+    def setter(self: PiespectorState, value) -> None:
+        setattr(getattr(self.session, group_name), field_name, value)
+        owner = self._screen_owner(group_name)
+        if owner is not None and hasattr(owner, field_name):
+            setattr(owner, field_name, value)
+
+    return property(getter, setter)
+
+
+for _session_field_name in SESSION_ROOT_FIELD_NAMES:
     setattr(PiespectorState, _session_field_name, _session_field_property(_session_field_name))
+for _home_field_name in HOME_SCREEN_FIELD_NAMES:
+    setattr(PiespectorState, _home_field_name, _screen_state_field_property("home", _home_field_name))
+for _env_field_name in ENV_SCREEN_FIELD_NAMES:
+    setattr(PiespectorState, _env_field_name, _screen_state_field_property("env", _env_field_name))
+for _history_field_name in HISTORY_SCREEN_FIELD_NAMES:
+    setattr(
+        PiespectorState,
+        _history_field_name,
+        _screen_state_field_property("history", _history_field_name),
+    )
 
 del _session_field_name
+del _home_field_name
+del _env_field_name
+del _history_field_name

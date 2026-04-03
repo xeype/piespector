@@ -2,16 +2,17 @@ from __future__ import annotations
 
 from textual import events
 
-from piespector.domain.modes import MODE_HOME_AUTH_SELECT, MODE_HOME_SECTION_SELECT
+from piespector.domain.modes import MODE_HOME_AUTH_SELECT
 from piespector.interactions.keys import (
+    ARROW_LEFT_KEYS,
+    ARROW_RIGHT_KEYS,
     DOWN_KEYS,
     KEY_ENTER,
     KEY_ESCAPE,
     KEY_SEND,
-    LEFT_KEYS,
     OPEN_KEYS,
-    PREVIOUS_KEYS,
-    NEXT_KEYS,
+    TAB_NEXT_KEYS,
+    TAB_PREVIOUS_KEYS,
     UP_KEYS,
 )
 from piespector.screens.home.controllers.base import HomeControllerBase
@@ -20,19 +21,31 @@ from piespector.screens.home.controllers.base import HomeControllerBase
 class HomeAuthController(HomeControllerBase):
     def handle_home_auth_select_key(self, event: events.Key) -> None:
         if event.key == KEY_ESCAPE:
-            self.state.enter_home_auth_type_edit_mode(origin_mode=MODE_HOME_SECTION_SELECT)
+            self.state.enter_home_section_select_mode()
             self.app._refresh_screen()
             event.stop()
             return
 
         if event.key in UP_KEYS:
             self.state.select_auth_row(-1)
-            self.app._refresh_screen()
+            self.app._refresh_home_request_panel()
             event.stop()
             return
 
         if event.key in DOWN_KEYS:
             self.state.select_auth_row(1)
+            self.app._refresh_home_request_panel()
+            event.stop()
+            return
+
+        if event.key in TAB_PREVIOUS_KEYS:
+            self.move_request_block(-1)
+            self.app._refresh_screen()
+            event.stop()
+            return
+
+        if event.key in TAB_NEXT_KEYS:
+            self.move_request_block(1)
             self.app._refresh_screen()
             event.stop()
             return
@@ -51,6 +64,14 @@ class HomeAuthController(HomeControllerBase):
             event.stop()
 
     def handle_home_auth_edit_key(self, event: events.Key) -> None:
+        auth_input = self.live_input("#auth-field-input")
+        if auth_input is not None and auth_input.display:
+            if event.key == KEY_ESCAPE:
+                self.state.leave_home_auth_edit_mode()
+                self.app._refresh_screen()
+                event.stop()
+            return
+
         if event.key == KEY_ESCAPE:
             self.state.leave_home_auth_edit_mode()
             self.app._refresh_screen()
@@ -63,9 +84,6 @@ class HomeAuthController(HomeControllerBase):
                 self.app._persist_requests()
             self.app._refresh_screen()
             event.stop()
-            return
-
-        self.app._handle_inline_edit_key(event)
 
     def handle_home_auth_type_edit_key(self, event: events.Key) -> None:
         if event.key == KEY_ESCAPE:
@@ -74,14 +92,27 @@ class HomeAuthController(HomeControllerBase):
             event.stop()
             return
 
-        if event.key in PREVIOUS_KEYS:
+        auth_type_select = self.live_select("#auth-type-select")
+        if auth_type_select is not None:
+            if event.key in OPEN_KEYS:
+                auth_type_select.focus()
+                if not auth_type_select.expanded:
+                    auth_type_select.action_show_overlay()
+                event.stop()
+                return
+            if event.key == KEY_SEND:
+                self.app._send_selected_request()
+                event.stop()
+            return
+
+        if event.key in UP_KEYS | ARROW_LEFT_KEYS:
             if self.state.cycle_auth_type(-1) is not None:
                 self.app._persist_requests()
             self.app._refresh_screen()
             event.stop()
             return
 
-        if event.key in NEXT_KEYS:
+        if event.key in DOWN_KEYS | ARROW_RIGHT_KEYS:
             if self.state.cycle_auth_type(1) is not None:
                 self.app._persist_requests()
             self.app._refresh_screen()
@@ -89,12 +120,7 @@ class HomeAuthController(HomeControllerBase):
             return
 
         if event.key in OPEN_KEYS:
-            if self.state.auth_fields():
-                self.state.selected_auth_index = 1
-            else:
-                self.state.selected_auth_index = 0
-            self.state.mode = MODE_HOME_AUTH_SELECT
-            self.state.message = ""
+            self.state.leave_home_auth_type_edit_mode()
             self.app._refresh_screen()
             event.stop()
             return
@@ -110,7 +136,20 @@ class HomeAuthController(HomeControllerBase):
             event.stop()
             return
 
-        if event.key in PREVIOUS_KEYS:
+        auth_option_select = self.live_select("#auth-option-select")
+        if auth_option_select is not None and auth_option_select.display:
+            if event.key in OPEN_KEYS:
+                auth_option_select.focus()
+                if not auth_option_select.expanded:
+                    auth_option_select.action_show_overlay()
+                event.stop()
+                return
+            if event.key == KEY_SEND:
+                self.app._send_selected_request()
+                event.stop()
+            return
+
+        if event.key in UP_KEYS | ARROW_LEFT_KEYS:
             field = self.state.selected_auth_field()
             if field is not None and field[0] == "auth_oauth_client_authentication":
                 updated = self.state.cycle_auth_oauth_client_authentication(-1)
@@ -122,7 +161,7 @@ class HomeAuthController(HomeControllerBase):
             event.stop()
             return
 
-        if event.key in NEXT_KEYS:
+        if event.key in DOWN_KEYS | ARROW_RIGHT_KEYS:
             field = self.state.selected_auth_field()
             if field is not None and field[0] == "auth_oauth_client_authentication":
                 updated = self.state.cycle_auth_oauth_client_authentication(1)

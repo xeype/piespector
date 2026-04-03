@@ -6,8 +6,13 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-from piespector.screens.home import messages, styles
+from piespector.domain.editor import HOME_SIDEBAR_LABEL
+from piespector.screens.home import messages
+from piespector.screens.home.jump_titles import render_panel_title
+from piespector.screens.home.selection import home_selection
+from piespector.screens.home.request.method_selection import method_color
 from piespector.state import PiespectorState
+from piespector.ui.selection import selected_element_style
 
 
 def render_home_sidebar(
@@ -29,41 +34,33 @@ def render_home_sidebar(
     table.add_column("Name", ratio=1, no_wrap=True)
 
     for index, item in enumerate(visible_items, start=start):
-        style = None
-        kind_style_override = None
-        name_style_override = None
-        if index == state.selected_sidebar_index:
-            style = styles.pill_style(styles.TEXT_SUCCESS)
-            kind_style_override = f"bold {styles.TEXT_INVERSE}"
-            name_style_override = f"bold {styles.TEXT_INVERSE}"
+        style = selected_element_style(
+            state,
+            selected=index == state.selected_sidebar_index,
+        )
         if item.kind == "request":
-            kind_cell = Text(
-                item.method,
-                style=kind_style_override or styles.method_style(item.method),
-            )
-            name_style = f"bold {styles.TEXT_PRIMARY}"
-            label = item.label
+            kind_cell = Text(item.method, style=method_color(item.method))
+            name_cell = Text(item.label)
         elif item.kind == "collection":
-            if style is None:
-                style = styles.ROW_COLLECTION
-            kind_cell = Text("COLL", style=kind_style_override or f"bold {styles.TEXT_WARNING}")
-            name_style = f"bold {styles.TEXT_COLLECTION}"
+            kind_cell = Text("COLL")
             marker = "[+]" if item.node_id in state.collapsed_collection_ids else "[-]"
-            label = f"{marker} {item.label}"
+            name_cell = Text.assemble(
+                (f"{marker} "),
+                (item.label),
+            )
         else:
-            if style is None:
-                style = styles.ROW_FOLDER
-            kind_cell = Text("DIR", style=kind_style_override or f"bold {styles.TEXT_URL}")
-            name_style = f"bold {styles.TEXT_FOLDER}"
+            kind_cell = Text("DIR")
             marker = "[+]" if item.node_id in state.collapsed_folder_ids else "[-]"
-            label = f"{marker} {item.label}"
+            name_cell = Text.assemble(
+                (f"{marker} "),
+                (item.label),
+            )
         tree_prefix = _sidebar_tree_prefix(items, index)
+        name_with_tree = Text(tree_prefix)
+        name_with_tree.append_text(name_cell)
         table.add_row(
             kind_cell,
-            Text.assemble(
-                (tree_prefix, styles.TEXT_TREE_GUIDE),
-                (label, name_style_override or name_style),
-            ),
+            name_with_tree,
             style=style,
         )
 
@@ -72,13 +69,14 @@ def render_home_sidebar(
         table.add_row("", "")
 
     caption = messages.home_sidebar_caption(state, start, end, len(items))
+    selected = home_selection(state).panel == "sidebar"
+    title = render_panel_title(HOME_SIDEBAR_LABEL, selected=selected)
     return Panel(
         table,
-        title="Collections",
+        title=title,
+        title_align="right",
         subtitle=caption,
         subtitle_align="left",
-        border_style=styles.BORDER,
-        box=box.ROUNDED,
     )
 
 
@@ -113,4 +111,3 @@ def _sidebar_is_last_sibling(items: list, index: int) -> bool:
         if later.depth == depth:
             return False
     return True
-

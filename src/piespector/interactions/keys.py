@@ -5,6 +5,10 @@ import platform
 KEY_ESCAPE = "escape"
 KEY_ENTER = "enter"
 KEY_TAB = "tab"
+KEY_LEFT = "left"
+KEY_RIGHT = "right"
+KEY_UP = "up"
+KEY_DOWN = "down"
 KEY_BACKSPACE = "backspace"
 KEY_DELETE = "delete"
 KEY_HOME = "home"
@@ -14,14 +18,22 @@ KEY_PAGE_UP = "pageup"
 KEY_PAGE_DOWN = "pagedown"
 
 KEY_ADD = "a"
+KEY_CLOSE = "c"
 KEY_DELETE_ROW = "d"
 KEY_EDIT = "e"
 KEY_HELP = "?"
 KEY_NO = "n"
-KEY_SEARCH = "s"
 KEY_SEND = "s"
 KEY_VIEW = "v"
 KEY_YES = "y"
+KEY_VIM_LEFT = "h"
+KEY_VIM_RIGHT = "l"
+KEY_VIM_UP = "k"
+KEY_VIM_DOWN = "j"
+
+KEY_JUMP = "ctrl+o"
+KEY_COMMAND_PALETTE = "ctrl+p"
+KEY_WORKSPACE_SEARCH = "/"
 
 KEY_COPY = "ctrl+c"
 KEY_COPY_ALT = "ctrl+insert"
@@ -33,10 +45,16 @@ KEY_SAVE = "ctrl+s"
 KEY_SCROLL_DOWN = "ctrl+d"
 KEY_SCROLL_UP = "ctrl+u"
 
-LEFT_KEYS = frozenset({"left", "h"})
-RIGHT_KEYS = frozenset({"right", "l"})
-UP_KEYS = frozenset({"up", "k"})
-DOWN_KEYS = frozenset({"down", "j"})
+ARROW_LEFT_KEYS = frozenset({KEY_LEFT})
+ARROW_RIGHT_KEYS = frozenset({KEY_RIGHT})
+ARROW_UP_KEYS = frozenset({KEY_UP})
+ARROW_DOWN_KEYS = frozenset({KEY_DOWN})
+TAB_PREVIOUS_KEYS = frozenset({KEY_VIM_LEFT})
+TAB_NEXT_KEYS = frozenset({KEY_VIM_RIGHT})
+LEFT_KEYS = frozenset({KEY_LEFT, KEY_VIM_LEFT})
+RIGHT_KEYS = frozenset({KEY_RIGHT, KEY_VIM_RIGHT})
+UP_KEYS = frozenset({KEY_UP, KEY_VIM_UP})
+DOWN_KEYS = frozenset({KEY_DOWN, KEY_VIM_DOWN})
 PREVIOUS_KEYS = frozenset({"left", "h", "up", "k"})
 NEXT_KEYS = frozenset({"right", "l", "down", "j"})
 OPEN_KEYS = frozenset({KEY_EDIT, KEY_ENTER})

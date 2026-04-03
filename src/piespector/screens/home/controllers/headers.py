@@ -4,6 +4,8 @@ from textual import events
 
 from piespector.http_client import preview_auto_headers
 from piespector.interactions.keys import (
+    ARROW_LEFT_KEYS,
+    ARROW_RIGHT_KEYS,
     DOWN_KEYS,
     KEY_ADD,
     KEY_DELETE_ROW,
@@ -11,9 +13,9 @@ from piespector.interactions.keys import (
     KEY_ESCAPE,
     KEY_SEND,
     KEY_SPACE,
-    LEFT_KEYS,
     OPEN_KEYS,
-    RIGHT_KEYS,
+    TAB_NEXT_KEYS,
+    TAB_PREVIOUS_KEYS,
     UP_KEYS,
 )
 from piespector.screens.home import messages
@@ -50,32 +52,43 @@ class HomeHeadersController(HomeControllerBase):
 
         if event.key == KEY_ESCAPE:
             self.state.enter_home_section_select_mode()
-            self.state.edit_buffer = ""
             self.app._refresh_screen()
             event.stop()
             return
 
         if event.key in UP_KEYS:
             self.state.select_header_row(-1, total_rows)
-            self.app._refresh_screen()
+            self.app._refresh_home_request_panel()
             event.stop()
             return
 
         if event.key in DOWN_KEYS:
             self.state.select_header_row(1, total_rows)
+            self.app._refresh_home_request_panel()
+            event.stop()
+            return
+
+        if event.key in TAB_PREVIOUS_KEYS:
+            self.move_request_block(-1)
             self.app._refresh_screen()
             event.stop()
             return
 
-        if event.key in LEFT_KEYS:
+        if event.key in TAB_NEXT_KEYS:
+            self.move_request_block(1)
+            self.app._refresh_screen()
+            event.stop()
+            return
+
+        if event.key in ARROW_LEFT_KEYS:
             self.state.cycle_header_field(-1)
-            self.app._refresh_screen()
+            self.app._refresh_home_request_panel()
             event.stop()
             return
 
-        if event.key in RIGHT_KEYS:
+        if event.key in ARROW_RIGHT_KEYS:
             self.state.cycle_header_field(1)
-            self.app._refresh_screen()
+            self.app._refresh_home_request_panel()
             event.stop()
             return
 
@@ -131,6 +144,14 @@ class HomeHeadersController(HomeControllerBase):
             event.stop()
 
     def handle_home_headers_edit_key(self, event: events.Key) -> None:
+        headers_input = self.live_input("#request-headers-input")
+        if headers_input is not None and headers_input.display:
+            if event.key == KEY_ESCAPE:
+                self.state.leave_home_headers_edit_mode()
+                self.app._refresh_screen()
+                event.stop()
+            return
+
         if event.key == KEY_ESCAPE:
             self.state.leave_home_headers_edit_mode()
             self.app._refresh_screen()
@@ -143,6 +164,3 @@ class HomeHeadersController(HomeControllerBase):
                 self.app._persist_requests()
             self.app._refresh_screen()
             event.stop()
-            return
-
-        self.app._handle_inline_edit_key(event)

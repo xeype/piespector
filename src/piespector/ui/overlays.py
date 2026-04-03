@@ -1,18 +1,23 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from textual import events
 from textual._tree_sitter import get_language
+from textual.app import ComposeResult
 from textual.binding import Binding
+from textual.containers import Vertical
+from textual.screen import ModalScreen
 from textual.widgets import Static, TextArea
 from textual.widgets._text_area import LanguageDoesNotExist
 
-from piespector.domain.editor import HISTORY_DETAIL_BLOCK_REQUEST, RESPONSE_TAB_HEADERS
+from piespector.domain.editor import (
+    HISTORY_DETAIL_BLOCK_REQUEST,
+    RESPONSE_TAB_HEADERS,
+)
 from piespector.domain.modes import (
-    MODE_HISTORY_RESPONSE_TEXTAREA,
     MODE_HOME_BODY_TEXTAREA,
-    MODE_HOME_RESPONSE_TEXTAREA,
 )
 from piespector.http_client import validate_raw_body
 from piespector.interactions.keys import KEY_ESCAPE, KEY_SAVE, KEY_TAB
@@ -23,11 +28,10 @@ from piespector.rendering import (
     request_body_syntax_language,
     text_area_syntax_language,
 )
-from piespector.scrollbars import ThinScrollBarRender
+from piespector.ui.help_panel import PiespectorHelpPanel
 
 if TYPE_CHECKING:
     from piespector.app import PiespectorApp
-
 
 GRAPHQL_TEXTAREA_LANGUAGE = "piespector-graphql"
 GRAPHQL_TEXTAREA_HIGHLIGHT_QUERY = """
@@ -46,7 +50,6 @@ GRAPHQL_TEXTAREA_HIGHLIGHT_QUERY = """
  (#match? @function "^[a-z_][A-Za-z0-9_]*$"))
 """
 
-
 class BodyTextEditor(TextArea):
     BINDINGS = [
         Binding(KEY_SAVE, "save_body", "Save", show=False),
@@ -62,6 +65,9 @@ class BodyTextEditor(TextArea):
         app = self.app
         if app is not None:
             app._close_body_text_editor(save=False)
+
+    def on_mount(self) -> None:
+        self.theme = "css"
 
     def on_key(self, event: events.Key) -> None:
         app = self.app
@@ -83,7 +89,29 @@ class BodyTextEditor(TextArea):
             app.call_after_refresh(app._refresh_overlay_editors)
 
 
-class ResponseViewer(TextArea):
+def register_graphql_text_area_language(editor: TextArea) -> None:
+    try:
+        javascript_language = get_language("javascript")
+    except Exception:
+        return
+    if javascript_language is None:
+        return
+    editor.register_language(
+        GRAPHQL_TEXTAREA_LANGUAGE,
+        javascript_language,
+        GRAPHQL_TEXTAREA_HIGHLIGHT_QUERY,
+    )
+
+
+@dataclass(frozen=True)
+class ResponseModalContent:
+    title: str
+    footer: str
+    body: str
+    language: str | None
+
+
+class ResponseModalEditor(TextArea):
     BINDINGS = [
         Binding(KEY_ESCAPE, "close_response", "Close", show=False),
     ]
@@ -92,10 +120,6 @@ class ResponseViewer(TextArea):
         kwargs.setdefault("read_only", True)
         super().__init__(*args, **kwargs)
 
-    def on_mount(self) -> None:
-        self.vertical_scrollbar.renderer = ThinScrollBarRender
-        self.horizontal_scrollbar.renderer = ThinScrollBarRender
-
     def action_close_response(self) -> None:
         app = self.app
         if app is not None:
@@ -103,18 +127,18 @@ class ResponseViewer(TextArea):
 
     def action_copy_response(self) -> None:
         app = self.app
-        if app is not None:
-            content = self.selected_text or self.text
-            copied = app._copy_text(content)
-            if copied:
-                app.state.message = (
-                    "Copied selection."
-                    if self.selected_text
-                    else "Copied full response."
-                )
-            else:
-                app.state.message = "Copy failed."
-            app._refresh_command_line()
+        if app is None:
+            return
+        content = self.selected_text or self.text
+        copied = app._copy_text(content)
+        if copied:
+            app.state.message = (
+                "Copied selection."
+                if self.selected_text
+                else "Copied full response."
+            )
+        else:
+            app.state.message = "Copy failed."
 
     def on_key(self, event: events.Key) -> None:
         app = self.app
@@ -128,14 +152,53 @@ class ResponseViewer(TextArea):
             return
 
 
+class ResponseModal(ModalScreen[None]):
+    BINDINGS = [
+        Binding(KEY_ESCAPE, "close_response", "Close", show=False),
+    ]
+
+    def __init__(self, content: ResponseModalContent) -> None:
+        super().__init__()
+        self._content = content
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="response-modal"):
+            yield Static(self._content.title, id="response-modal-header")
+            yield ResponseModalEditor(
+                self._content.body,
+                id="response-modal-editor",
+                language=None,
+                theme="css",
+                soft_wrap=False,
+                show_line_numbers=True,
+            )
+            yield Static(self._content.footer, id="response-modal-footer")
+
+    def on_mount(self) -> None:
+        editor = self.query_one("#response-modal-editor", TextArea)
+        editor.theme = "css"
+        register_graphql_text_area_language(editor)
+        app = self.app
+        if app is not None:
+            app._set_text_area_language(editor, self._content.language)
+        editor.load_text(self._content.body)
+        editor.move_cursor((0, 0))
+        editor.focus()
+
+    def action_close_response(self) -> None:
+        app = self.app
+        if app is not None:
+            app._close_response_viewer()
+
+
 def build_overlay_widgets() -> tuple[Static | TextArea, ...]:
-    return (
+    widgets: list[Static | TextArea] = [
         Static("", id="body-editor-header", classes="hidden"),
         BodyTextEditor(
             "",
             id="body-editor",
             language="json",
-            theme="monokai",
+            theme="css",
             soft_wrap=False,
             show_line_numbers=True,
             tab_behavior="indent",
@@ -143,18 +206,8 @@ def build_overlay_widgets() -> tuple[Static | TextArea, ...]:
         ),
         Static("", id="body-editor-hint", classes="hidden"),
         Static("", id="body-editor-footer", classes="hidden"),
-        Static("", id="response-viewer-header", classes="hidden"),
-        ResponseViewer(
-            "",
-            id="response-viewer",
-            language=None,
-            theme="monokai",
-            soft_wrap=False,
-            show_line_numbers=True,
-            classes="hidden",
-        ),
-        Static("", id="response-viewer-footer", classes="hidden"),
-    )
+    ]
+    return tuple(widgets)
 
 
 class OverlayController:
@@ -165,20 +218,17 @@ class OverlayController:
     def state(self):
         return self.app.state
 
-    def register_text_area_languages(self) -> None:
-        try:
-            javascript_language = get_language("javascript")
-        except Exception:
-            return
-        if javascript_language is None:
-            return
-        for editor_id in ("#body-editor", "#response-viewer"):
-            editor = self.app.query_one(editor_id, TextArea)
-            editor.register_language(
-                GRAPHQL_TEXTAREA_LANGUAGE,
-                javascript_language,
-                GRAPHQL_TEXTAREA_HIGHLIGHT_QUERY,
-            )
+    def _query_current(self, selector: str, expect_type=None):
+        return self.app._query_current(selector, expect_type)
+
+    def register_text_area_languages(self, query_root=None) -> None:
+        query_one = query_root.query_one if query_root is not None else self.app.query_one
+        for editor_id in ("#body-editor",):
+            try:
+                editor = query_one(editor_id, TextArea)
+            except Exception:
+                continue
+            register_graphql_text_area_language(editor)
 
     def set_text_area_language(
         self,
@@ -191,7 +241,7 @@ class OverlayController:
             editor.language = None
 
     def body_editor_cursor_index(self) -> int:
-        editor = self.app.query_one("#body-editor", TextArea)
+        editor = self._query_current("#body-editor", TextArea)
         row, column = editor.cursor_location
         lines = editor.text.splitlines(keepends=True)
         if editor.text.endswith("\n"):
@@ -218,7 +268,7 @@ class OverlayController:
         return (row, index - current)
 
     def autocomplete_body_editor_placeholder(self) -> bool:
-        editor = self.app.query_one("#body-editor", TextArea)
+        editor = self._query_current("#body-editor", TextArea)
         cursor_index = self.body_editor_cursor_index()
         completed = apply_placeholder_completion(
             editor.text,
@@ -234,7 +284,7 @@ class OverlayController:
         return True
 
     def auto_pair_body_editor_placeholder(self) -> bool:
-        editor = self.app.query_one("#body-editor", TextArea)
+        editor = self._query_current("#body-editor", TextArea)
         cursor_index = self.body_editor_cursor_index()
         text = editor.text
         cursor_index = max(0, min(cursor_index, len(text)))
@@ -272,21 +322,28 @@ class OverlayController:
         return "Paste and edit freely. Ctrl+S saves, Esc cancels."
 
     def refresh(self) -> None:
-        viewport = self.app.query_one("#viewport", Static)
-        body_header = self.app.query_one("#body-editor-header", Static)
-        body_editor = self.app.query_one("#body-editor", TextArea)
-        body_hint = self.app.query_one("#body-editor-hint", Static)
-        body_footer = self.app.query_one("#body-editor-footer", Static)
-        response_header = self.app.query_one("#response-viewer-header", Static)
-        response_editor = self.app.query_one("#response-viewer", TextArea)
-        response_footer = self.app.query_one("#response-viewer-footer", Static)
+        body_header = self._query_current("#body-editor-header", Static)
+        body_editor = self._query_current("#body-editor", TextArea)
+        body_hint = self._query_current("#body-editor-hint", Static)
+        body_footer = self._query_current("#body-editor-footer", Static)
+
+        # Screen widgets to hide when overlays are active
+        screen_ids = ("home-screen", "env-screen", "history-screen")
 
         if self.state.mode == MODE_HOME_BODY_TEXTAREA:
             body_header.update(self.body_editor_header_text())
             cursor_index = self.body_editor_cursor_index()
             match = placeholder_match(body_editor.text, cursor_index, sorted(self.state.env_pairs))
             body_footer.update(self.body_editor_footer_text())
-            viewport.add_class("hidden")
+            for sid in screen_ids:
+                try:
+                    self._query_current(f"#{sid}").add_class("hidden")
+                except Exception:
+                    pass
+            try:
+                self._query_current(PiespectorHelpPanel).add_class("hidden")
+            except Exception:
+                pass
             body_header.remove_class("hidden")
             body_editor.remove_class("hidden")
             if match is not None and match.suggestion != match.prefix:
@@ -300,74 +357,22 @@ class OverlayController:
             else:
                 body_hint.add_class("hidden")
             body_footer.remove_class("hidden")
-            response_header.add_class("hidden")
-            response_editor.add_class("hidden")
-            response_footer.add_class("hidden")
             body_editor.disabled = False
-            response_editor.disabled = True
             if not body_editor.has_focus:
                 body_editor.focus()
             return
 
-        if self.state.mode == MODE_HOME_RESPONSE_TEXTAREA:
-            request = self.state.get_active_request()
-            response = request.last_response if request is not None else None
-            request_name = request.name if request is not None else "Request"
-            status = response.status_code if response is not None else "-"
-            elapsed = f"{response.elapsed_ms or 0:.1f} ms" if response is not None else "-"
-            response_header.update(f"Response Viewer  [{request_name}]")
-            response_footer.update(
-                f"Status {status}   Time {elapsed}   {self.app.response_copy_hint} copies selection/all   Esc closes"
-            )
-            viewport.add_class("hidden")
-            body_header.add_class("hidden")
-            body_editor.add_class("hidden")
-            body_hint.add_class("hidden")
-            body_footer.add_class("hidden")
-            response_header.remove_class("hidden")
-            response_editor.remove_class("hidden")
-            response_footer.remove_class("hidden")
-            body_editor.disabled = True
-            response_editor.disabled = False
-            if not response_editor.has_focus:
-                response_editor.focus()
-            return
-
-        if self.state.mode == MODE_HISTORY_RESPONSE_TEXTAREA:
-            entry = self.state.get_selected_history_entry()
-            entry_name = (
-                entry.source_request_name.strip()
-                or entry.source_request_path.strip()
-                or "History"
-            ) if entry is not None else "History"
-            response_header.update(f"History Viewer  [{entry_name}]")
-            response_footer.update(
-                f"{self.app.response_copy_hint} copies selection/all   Esc closes"
-            )
-            viewport.add_class("hidden")
-            body_header.add_class("hidden")
-            body_editor.add_class("hidden")
-            body_hint.add_class("hidden")
-            body_footer.add_class("hidden")
-            response_header.remove_class("hidden")
-            response_editor.remove_class("hidden")
-            response_footer.remove_class("hidden")
-            body_editor.disabled = True
-            response_editor.disabled = False
-            if not response_editor.has_focus:
-                response_editor.focus()
-            return
-
-        viewport.remove_class("hidden")
+        # Normal mode - show the active screen, hide editors
+        self.app._switch_screen_visibility()
+        try:
+            self._query_current(PiespectorHelpPanel).remove_class("hidden")
+        except Exception:
+            pass
         body_header.add_class("hidden")
         body_editor.add_class("hidden")
         body_hint.add_class("hidden")
         body_footer.add_class("hidden")
-        response_header.add_class("hidden")
-        response_editor.add_class("hidden")
-        response_footer.add_class("hidden")
         body_editor.disabled = True
-        response_editor.disabled = True
 
     def open_body_text_editor(self, origin_mode: str | None = None) -> None:
         request = self.state.get_active_request()
@@ -376,7 +381,7 @@ class OverlayController:
             self.app._refresh_screen()
             return
         self.state.enter_home_body_text_editor_mode(origin_mode=origin_mode)
-        editor = self.app.query_one("#body-editor", TextArea)
+        editor = self._query_current("#body-editor", TextArea)
         self.set_text_area_language(
             editor,
             text_area_syntax_language(request_body_syntax_language(request)),
@@ -386,7 +391,7 @@ class OverlayController:
         self.app._refresh_screen()
 
     def close_body_text_editor(self, save: bool) -> None:
-        editor = self.app.query_one("#body-editor", TextArea)
+        editor = self._query_current("#body-editor", TextArea)
         if save:
             request = self.state.get_active_request()
             validation_error = (
@@ -411,18 +416,26 @@ class OverlayController:
             self.state.message = "No response to view."
             self.app._refresh_screen()
             return
-        if not self.state.enter_home_response_view_mode(origin_mode or self.state.mode):
-            self.app._refresh_screen()
-            return
-        editor = self.app.query_one("#response-viewer", TextArea)
         body_text = format_response_body(request.last_response.body_text)
-        self.set_text_area_language(
-            editor,
-            text_area_syntax_language(detect_text_syntax_language(body_text)),
+        response = request.last_response
+        request_name = request.name if request.name else "Request"
+        status = response.status_code if response is not None else "-"
+        elapsed = f"{response.elapsed_ms or 0:.1f} ms" if response is not None else "-"
+        self.app.push_screen(
+            ResponseModal(
+                ResponseModalContent(
+                    title=f"Response Viewer  [{request_name}]",
+                    footer=(
+                        f"Status {status}   Time {elapsed}   "
+                        f"{self.app.response_copy_hint} copies selection/all   Esc closes"
+                    ),
+                    body=body_text or request.last_response.body_text or "",
+                    language=text_area_syntax_language(
+                        detect_text_syntax_language(body_text)
+                    ),
+                )
+            )
         )
-        editor.load_text(body_text or request.last_response.body_text or "")
-        editor.move_cursor((0, 0))
-        self.app._refresh_screen()
 
     def open_history_response_viewer(self, origin_mode: str | None = None) -> None:
         entry = self.state.get_selected_history_entry()
@@ -430,44 +443,53 @@ class OverlayController:
             self.state.message = "No history entry selected."
             self.app._refresh_screen()
             return
-        if not self.state.enter_history_response_view_mode(origin_mode or self.state.mode):
-            self.app._refresh_screen()
-            return
-        editor = self.app.query_one("#response-viewer", TextArea)
         if self.state.selected_history_detail_block == HISTORY_DETAIL_BLOCK_REQUEST:
             if self.state.selected_history_request_tab == RESPONSE_TAB_HEADERS:
-                self.set_text_area_language(editor, None)
+                language = None
                 content = "\n".join(
                     f"{key}: {value}" for key, value in entry.request_headers
                 ) or "-"
             else:
                 body_text = format_response_body(entry.request_body)
-                self.set_text_area_language(
-                    editor,
-                    text_area_syntax_language(detect_text_syntax_language(body_text)),
+                language = text_area_syntax_language(
+                    detect_text_syntax_language(body_text)
                 )
                 content = body_text or entry.request_body or ""
         elif self.state.selected_history_response_tab == RESPONSE_TAB_HEADERS:
-            self.set_text_area_language(editor, None)
+            language = None
             content = "\n".join(
                 f"{key}: {value}" for key, value in entry.response_headers
             ) or "-"
         else:
             body_text = format_response_body(entry.response_body)
-            self.set_text_area_language(
-                editor,
-                text_area_syntax_language(detect_text_syntax_language(body_text)),
+            language = text_area_syntax_language(
+                detect_text_syntax_language(body_text)
             )
             content = body_text or entry.response_body or ""
-        editor.load_text(content)
-        editor.move_cursor((0, 0))
-        self.app._refresh_screen()
+        entry_name = (
+            entry.source_request_name.strip()
+            or entry.source_request_path.strip()
+            or "History"
+        )
+        self.app.push_screen(
+            ResponseModal(
+                ResponseModalContent(
+                    title=f"History Viewer  [{entry_name}]",
+                    footer=(
+                        f"{self.app.response_copy_hint} copies selection/all   Esc closes"
+                    ),
+                    body=content,
+                    language=language,
+                )
+            )
+        )
 
     def close_response_viewer(self) -> None:
-        if self.state.mode == MODE_HISTORY_RESPONSE_TEXTAREA:
-            self.state.leave_history_response_view_mode()
-        else:
-            self.state.leave_home_response_view_mode()
+        if (
+            self.app.screen_stack
+            and self.app.screen.is_modal
+            and isinstance(self.app.screen, ResponseModal)
+        ):
+            self.app.pop_screen()
         self.app.set_focus(None)
         self.app._refresh_screen()
-        self.app.call_after_refresh(self.app._refresh_screen)

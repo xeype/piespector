@@ -203,6 +203,58 @@ class CommandTests(unittest.TestCase):
         commands = help_commands(state, "home", "NORMAL")
 
         self.assertIn("mv PATH", commands)
+        self.assertNotIn("close", commands)
+        self.assertNotIn("send", commands)
+
+    def test_send_is_not_a_command_on_home(self) -> None:
+        state = PiespectorState(current_tab="home")
+        request = RequestDefinition(name="Health")
+        state.requests = [request]
+        state.ensure_request_workspace()
+        state.active_request_id = request.request_id
+
+        outcome = run_command(state, "send")
+
+        self.assertFalse(outcome.send_request)
+        self.assertEqual(state.message, "Unknown command: send")
+
+    def test_help_is_not_a_supported_command(self) -> None:
+        state = PiespectorState(current_tab="home")
+
+        outcome = run_command(state, "help")
+
+        self.assertFalse(outcome.should_exit)
+        self.assertEqual(state.message, "Unknown command: help")
+
+    def test_question_mark_is_not_a_supported_help_alias(self) -> None:
+        state = PiespectorState(current_tab="home")
+
+        outcome = run_command(state, "?")
+
+        self.assertFalse(outcome.should_exit)
+        self.assertEqual(state.message, "Unknown command: ?")
+
+    def test_q_is_not_a_supported_quit_alias(self) -> None:
+        state = PiespectorState(current_tab="home")
+
+        outcome = run_command(state, "q")
+
+        self.assertFalse(outcome.should_exit)
+        self.assertEqual(state.message, "Unknown command: q")
+
+    def test_close_is_not_a_supported_command(self) -> None:
+        state = PiespectorState(current_tab="home")
+
+        outcome = run_command(state, "close")
+
+        self.assertFalse(outcome.should_exit)
+        self.assertEqual(state.message, "Unknown command: close")
+
+    def test_quit_and_exit_still_exit(self) -> None:
+        state = PiespectorState(current_tab="home")
+
+        self.assertTrue(run_command(state, "quit").should_exit)
+        self.assertTrue(run_command(state, "exit").should_exit)
 
     def test_unclosed_quote_reports_parse_error(self) -> None:
         state = PiespectorState(current_tab="home")

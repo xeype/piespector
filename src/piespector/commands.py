@@ -6,6 +6,7 @@ import shlex
 
 from piespector.domain.editor import TAB_ENV, TAB_HISTORY, TAB_HOME
 from piespector.domain.modes import (
+    MODE_COMMAND,
     MODE_HOME_AUTH_EDIT,
     MODE_HOME_AUTH_LOCATION_EDIT,
     MODE_HOME_AUTH_SELECT,
@@ -19,6 +20,7 @@ from piespector.domain.modes import (
     MODE_HOME_HEADERS_SELECT,
     MODE_HOME_PARAMS_EDIT,
     MODE_HOME_PARAMS_SELECT,
+    MODE_HOME_REQUEST_METHOD_SELECT,
     MODE_HOME_REQUEST_EDIT,
     MODE_HOME_REQUEST_METHOD_EDIT,
     MODE_HOME_REQUEST_SELECT,
@@ -56,10 +58,19 @@ class ParsedCommand:
     error: str = ""
 
 
+@dataclass(frozen=True)
+class PaletteCommand:
+    label: str
+    text: str
+    help: str
+    runnable: bool
+
+
 REQUEST_COMMAND_CONTEXT_MODES = frozenset(
     {
         MODE_HOME_SECTION_SELECT,
         MODE_HOME_REQUEST_SELECT,
+        MODE_HOME_REQUEST_METHOD_SELECT,
         MODE_HOME_REQUEST_EDIT,
         MODE_HOME_REQUEST_METHOD_EDIT,
         MODE_HOME_AUTH_SELECT,
@@ -78,6 +89,12 @@ REQUEST_COMMAND_CONTEXT_MODES = frozenset(
     }
 )
 HOME_PAGE_COMMAND_CONTEXT_MODES = frozenset({MODE_NORMAL})
+
+
+def command_context_mode(state: PiespectorState) -> str:
+    if state.mode == MODE_COMMAND:
+        return state.command_context_mode or MODE_NORMAL
+    return state.mode
 
 
 def _command_source(
@@ -252,8 +269,6 @@ def _command_specs(state: PiespectorState, context_mode: str) -> list[CommandSpe
             CommandSpec(("del",)),
             CommandSpec(("del",), takes_value=True),
             CommandSpec(("edit",)),
-            CommandSpec(("help",)),
-            CommandSpec(("q",)),
         ]
 
     if state.current_tab == TAB_HISTORY:
@@ -262,30 +277,20 @@ def _command_specs(state: PiespectorState, context_mode: str) -> list[CommandSpe
             CommandSpec(("env",)),
             CommandSpec(("history",)),
             CommandSpec(("replay",)),
-            CommandSpec(("help",)),
-            CommandSpec(("q",)),
         ]
 
     node = state.get_selected_sidebar_node()
 
     if context_mode == MODE_HOME_SECTION_SELECT:
         return [
-            CommandSpec(("send",)),
-            CommandSpec(("close",)),
             CommandSpec(("history",)),
-            CommandSpec(("help",)),
             CommandSpec(("env",)),
-            CommandSpec(("q",)),
         ]
 
     if context_mode in REQUEST_COMMAND_CONTEXT_MODES:
         return [
-            CommandSpec(("send",)),
-            CommandSpec(("close",)),
             CommandSpec(("history",)),
-            CommandSpec(("help",)),
             CommandSpec(("env",)),
-            CommandSpec(("q",)),
         ]
 
     if node is not None and node.kind == "request":
@@ -299,13 +304,9 @@ def _command_specs(state: PiespectorState, context_mode: str) -> list[CommandSpe
             CommandSpec(("rename",), takes_value=True),
             CommandSpec(("cp",), takes_value=True),
             CommandSpec(("mv",), takes_value=True),
-            CommandSpec(("close",)),
             CommandSpec(("del",)),
-            CommandSpec(("send",)),
             CommandSpec(("history",)),
-            CommandSpec(("help",)),
             CommandSpec(("env",)),
-            CommandSpec(("q",)),
         ]
 
     if node is not None and node.kind == "folder":
@@ -320,9 +321,7 @@ def _command_specs(state: PiespectorState, context_mode: str) -> list[CommandSpe
             CommandSpec(("mv",), takes_value=True),
             CommandSpec(("del",)),
             CommandSpec(("history",)),
-            CommandSpec(("help",)),
             CommandSpec(("env",)),
-            CommandSpec(("q",)),
         ]
 
     if node is not None and node.kind == "collection":
@@ -336,9 +335,7 @@ def _command_specs(state: PiespectorState, context_mode: str) -> list[CommandSpe
             CommandSpec(("cp",)),
             CommandSpec(("del",)),
             CommandSpec(("history",)),
-            CommandSpec(("help",)),
             CommandSpec(("env",)),
-            CommandSpec(("q",)),
         ]
 
     return [
@@ -347,9 +344,7 @@ def _command_specs(state: PiespectorState, context_mode: str) -> list[CommandSpe
         CommandSpec(("import",), takes_value=True),
         CommandSpec(("export",), takes_value=True),
         CommandSpec(("history",)),
-        CommandSpec(("help",)),
         CommandSpec(("env",)),
-        CommandSpec(("q",)),
     ]
 
 
@@ -375,6 +370,73 @@ def _spec_display(spec: CommandSpec) -> str:
 def _help_message(state: PiespectorState, context_mode: str) -> str:
     commands = help_commands(state, state.current_tab, context_mode)
     return f"Commands: {', '.join(commands)}"
+
+
+def _command_text(spec: CommandSpec) -> str:
+    command = " ".join(spec.tokens)
+    if spec.takes_value:
+        return f"{command} "
+    return command
+
+
+def _command_help(spec: CommandSpec, current_tab: str) -> str:
+    if spec.tokens == ("home",):
+        return "Switch to Home."
+    if spec.tokens == ("env",):
+        return "Switch to Env."
+    if spec.tokens == ("history",):
+        return "Switch to History."
+    if spec.tokens == ("replay",):
+        return "Replay the selected history entry."
+    if spec.tokens == ("edit",):
+        return "Edit the selected item."
+    if spec.tokens == ("new",):
+        if spec.takes_value and current_tab == TAB_ENV:
+            return "Continue typing the new env set name."
+        return "Create a new request."
+    if spec.tokens == ("new", "collection"):
+        return "Continue typing the collection name."
+    if spec.tokens == ("new", "folder"):
+        return "Continue typing the folder name."
+    if spec.tokens == ("import",):
+        return "Continue typing the import path."
+    if spec.tokens == ("export",):
+        return "Continue typing the export path."
+    if spec.tokens == ("rename",):
+        return "Continue typing the new name."
+    if spec.tokens == ("cp",):
+        return "Continue typing the copy destination."
+    if spec.tokens == ("mv",):
+        return "Continue typing the move destination."
+    if spec.tokens == ("set",):
+        return "Continue typing KEY=value."
+    if spec.tokens == ("del",):
+        if spec.takes_value:
+            return "Continue typing the env key to delete."
+        return "Delete the selected item."
+    return "Run command."
+
+
+def command_palette_commands(
+    state: PiespectorState,
+    context_mode: str | None = None,
+) -> list[PaletteCommand]:
+    active_context_mode = context_mode or command_context_mode(state)
+    commands: list[PaletteCommand] = []
+    seen: set[tuple[str, str, bool]] = set()
+    for spec in _command_specs(state, active_context_mode):
+        entry = PaletteCommand(
+            label=_spec_display(spec),
+            text=_command_text(spec),
+            help=_command_help(spec, state.current_tab),
+            runnable=not spec.takes_value,
+        )
+        key = (entry.label, entry.text, entry.runnable)
+        if key in seen:
+            continue
+        seen.add(key)
+        commands.append(entry)
+    return commands
 
 
 def help_commands(
@@ -415,7 +477,7 @@ def command_completion(state: PiespectorState, raw_buffer: str) -> str | None:
 
 
 def command_completion_matches(state: PiespectorState, raw_buffer: str) -> list[str]:
-    context_mode = state.command_context_mode or state.mode
+    context_mode = command_context_mode(state)
     specs = _command_specs(state, context_mode)
     path_completions = _path_value_completions(state, raw_buffer, context_mode, specs)
     if path_completions:
@@ -521,8 +583,9 @@ def _quote_command_value(
 
 
 def run_command(state: PiespectorState, raw_command: str) -> CommandOutcome:
-    previous_mode = state.command_context_mode or state.mode
-    state.leave_command_mode()
+    previous_mode = command_context_mode(state)
+    if state.mode == MODE_COMMAND:
+        state.leave_command_mode()
 
     parsed = _parse_command(raw_command)
     if parsed.error:
@@ -542,12 +605,8 @@ def run_command(state: PiespectorState, raw_command: str) -> CommandOutcome:
     normalized_tokens = tuple(token.lower() for token in tokens)
     normalized = " ".join(normalized_tokens)
 
-    if normalized in {"q", "quit", "exit"}:
+    if normalized in {"quit", "exit"}:
         return CommandOutcome(should_exit=True)
-
-    if normalized in {"help", "?"}:
-        state.open_help_tab(source_mode=previous_mode)
-        return CommandOutcome()
 
     if normalized in {"home", "tab home"}:
         state.switch_tab(TAB_HOME, "Home")
@@ -692,15 +751,6 @@ def run_command(state: PiespectorState, raw_command: str) -> CommandOutcome:
         )
         return CommandOutcome()
 
-    if normalized == "send":
-        if state.current_tab != TAB_HOME:
-            state.message = "Send is only available on Home."
-            return CommandOutcome()
-        if state.get_active_request() is None:
-            state.message = "No request selected."
-            return CommandOutcome()
-        return CommandOutcome(send_request=True)
-
     if normalized_tokens[:1] == ("rename",):
         if state.current_tab == TAB_ENV:
             name = _command_value(tokens, 1)
@@ -727,15 +777,6 @@ def run_command(state: PiespectorState, raw_command: str) -> CommandOutcome:
         else:
             renamed = state.rename_collection(source[1], name)
         return CommandOutcome(save_requests=renamed)
-
-    if normalized == "close":
-        if state.current_tab != TAB_HOME:
-            state.message = "Close is only available on Home."
-            return CommandOutcome()
-        closed = state.close_active_request()
-        if closed is None:
-            state.message = "No opened request selected."
-        return CommandOutcome()
 
     if normalized_tokens[:1] == ("mv",):
         if state.current_tab != TAB_HOME or previous_mode not in HOME_PAGE_COMMAND_CONTEXT_MODES:
@@ -856,7 +897,6 @@ def run_command(state: PiespectorState, raw_command: str) -> CommandOutcome:
         state.message = f"Saved {key}."
         state.current_tab = TAB_ENV
         state.selected_env_index = max(0, len(state.env_pairs) - 1)
-        state.edit_buffer = ""
         return CommandOutcome(save_env_pairs=True)
 
     if normalized_tokens[:1] in {("del",), ("delete",)} and len(tokens) > 1:

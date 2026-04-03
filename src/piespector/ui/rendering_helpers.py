@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import textwrap
 
-from pygments.style import Style as PygmentsStyle
 from rich import box
 from rich.console import RenderableType
 from rich.syntax import Syntax
@@ -11,29 +10,6 @@ from rich.table import Table
 from rich.text import Text
 
 from piespector.domain.requests import RequestDefinition
-from piespector.ui import rich_styles as ui_styles
-from piespector.ui.syntax_theme import (
-    GRAPHQL_TOKEN_STYLE_OVERRIDES,
-    MONOKAI_TOKEN_STYLES,
-    SYNTAX_BACKGROUND,
-)
-
-
-class PiespectorMonokaiStyle(PygmentsStyle):
-    background_color = SYNTAX_BACKGROUND
-    default_style = ""
-    styles = MONOKAI_TOKEN_STYLES
-
-
-class PiespectorGraphQLStyle(PiespectorMonokaiStyle):
-    styles = {
-        **PiespectorMonokaiStyle.styles,
-        **GRAPHQL_TOKEN_STYLE_OVERRIDES,
-    }
-
-
-SYNTAX_THEME = PiespectorMonokaiStyle
-GRAPHQL_SYNTAX_THEME = PiespectorGraphQLStyle
 
 
 def request_body_syntax_language(request: RequestDefinition | None) -> str | None:
@@ -52,13 +28,6 @@ def text_area_syntax_language(language: str | None) -> str | None:
     if language == "graphql":
         return "piespector-graphql"
     return language
-
-
-def syntax_theme_for_language(language: str | None) -> type[PygmentsStyle]:
-    if language == "graphql":
-        return GRAPHQL_SYNTAX_THEME
-    return SYNTAX_THEME
-
 
 def preview_syntax_language(language: str | None) -> str | None:
     if language == "xml":
@@ -133,14 +102,13 @@ def render_response_body(
 ) -> RenderableType:
     formatted = format_response_body(body_text)
     if not formatted:
-        return Text("-", style=ui_styles.TEXT_PRIMARY)
+        return Text("-")
 
     language = detect_text_syntax_language(formatted)
     if language is not None:
         return Syntax(
             formatted,
             preview_syntax_language(language) or language,
-            theme=syntax_theme_for_language(language),
             line_numbers=False,
             line_range=(start + 1, end),
             word_wrap=True,
@@ -148,10 +116,7 @@ def render_response_body(
             indent_guides=True,
         )
 
-    return Text(
-        "\n".join(response_body_lines(body_text, viewport_width)[start:end]),
-        style=ui_styles.TEXT_PRIMARY,
-    )
+    return Text("\n".join(response_body_lines(body_text, viewport_width)[start:end]))
 
 
 def render_response_headers(
@@ -161,15 +126,12 @@ def render_response_headers(
 ) -> RenderableType:
     table = Table(
         expand=True,
-        box=box.SIMPLE_HEAVY,
+        box=box.SIMPLE,
         show_header=True,
-        header_style=ui_styles.secondary_style(bold=True),
-        border_style=ui_styles.BORDER,
-        row_styles=[ui_styles.ROW_ALT_ONE, ui_styles.ROW_ALT_TWO],
         padding=(0, 1),
     )
-    table.add_column("Header", width=22, style=ui_styles.warning_style(bold=True), no_wrap=True)
-    table.add_column("Value", ratio=1, style=ui_styles.TEXT_PRIMARY)
+    table.add_column("Header", width=22, no_wrap=True)
+    table.add_column("Value", ratio=1)
 
     visible_headers = headers[start:end]
     if not visible_headers:

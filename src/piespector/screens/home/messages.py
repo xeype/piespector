@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from piespector.domain.editor import BODY_KEY_VALUE_TYPES, RESPONSE_TAB_BODY
 from piespector.domain.modes import (
-    HOME_MODES,
     MODE_HOME_AUTH_LOCATION_EDIT,
     MODE_HOME_AUTH_SELECT,
     MODE_HOME_AUTH_TYPE_EDIT,
@@ -11,19 +10,20 @@ from piespector.domain.modes import (
     MODE_HOME_BODY_TYPE_EDIT,
     MODE_HOME_HEADERS_SELECT,
     MODE_HOME_PARAMS_SELECT,
+    MODE_HOME_REQUEST_METHOD_SELECT,
     MODE_HOME_REQUEST_METHOD_EDIT,
     MODE_HOME_REQUEST_SELECT,
     MODE_HOME_SECTION_SELECT,
-    MODE_NORMAL,
 )
 from piespector.domain.requests import RequestDefinition
 from piespector.state import PiespectorState
+from piespector.ui.selection import effective_mode
 
 HOME_EMPTY_MESSAGE = "No collections or requests yet."
-HOME_EMPTY_CREATE_COLLECTION = ":new collection NAME"
-HOME_EMPTY_CREATE_REQUEST = ":new"
+HOME_EMPTY_CREATE_COLLECTION = "new collection NAME"
+HOME_EMPTY_CREATE_REQUEST = "new"
 HOME_NO_ACTIVE_REQUEST = "No active request."
-HOME_NO_RESPONSE = "No response yet. Use :send."
+HOME_NO_RESPONSE = "No response yet. Press s to send the active request."
 HOME_SENDING_REQUEST = "Sending request..."
 HOME_REQUEST_IN_PROGRESS = "Request in progress"
 HOME_NO_AUTH = "No authorization configured."
@@ -43,49 +43,48 @@ HOME_HEADERS_FOOTER = (
 )
 
 
+def home_render_mode(state: PiespectorState) -> str:
+    return effective_mode(state)
+
+
 def home_editor_subtitle(state: PiespectorState) -> str:
-    if state.mode == MODE_HOME_SECTION_SELECT:
-        return "h/l sections   e open"
-    if state.mode == MODE_HOME_REQUEST_SELECT:
-        return "j/k fields   e edit"
-    if state.mode == MODE_HOME_AUTH_SELECT:
-        return "j/k rows   e edit"
-    if state.mode == MODE_HOME_AUTH_TYPE_EDIT:
-        return "h/l type   e open"
-    if state.mode == MODE_HOME_AUTH_LOCATION_EDIT:
+    mode = home_render_mode(state)
+    if mode == MODE_HOME_SECTION_SELECT:
+        return "h/l sections   j/k enter   e open"
+    if mode == MODE_HOME_REQUEST_SELECT:
+        return "h/l tabs   j/k fields   e edit"
+    if mode == MODE_HOME_AUTH_SELECT:
+        return "h/l tabs   j/k rows   e edit"
+    if mode == MODE_HOME_AUTH_TYPE_EDIT:
+        return "up/down type   e/enter confirm   esc back"
+    if mode == MODE_HOME_AUTH_LOCATION_EDIT:
         field = state.selected_auth_field()
         if field is not None and field[0] == "auth_oauth_client_authentication":
-            return "h/l client auth   e open"
-        return "h/l location   e open"
-    if state.mode in {MODE_HOME_PARAMS_SELECT, MODE_HOME_HEADERS_SELECT}:
-        return "j/k rows   space toggle   e edit   a add   d delete"
-    if state.mode == MODE_HOME_BODY_SELECT:
+            return "up/down client auth   e/enter confirm   esc back"
+        return "up/down location   e/enter confirm   esc back"
+    if mode in {MODE_HOME_PARAMS_SELECT, MODE_HOME_HEADERS_SELECT}:
+        return "h/l tabs   j/k rows   left/right field   space toggle   e edit   a add   d delete"
+    if mode == MODE_HOME_BODY_SELECT:
         request = state.get_active_request()
         if request is not None and request.body_type in BODY_KEY_VALUE_TYPES:
-            return "j/k rows   space toggle   e edit   a add   d delete"
-        return "e edit"
-    if state.mode == MODE_HOME_BODY_TYPE_EDIT:
-        return "h/l type   e open"
-    if state.mode == MODE_HOME_BODY_RAW_TYPE_EDIT:
-        return "h/l raw   e open"
-    if state.mode == MODE_HOME_REQUEST_METHOD_EDIT:
-        return "h/l method"
+            return "h/l tabs   j/k rows   space toggle   e edit   a add   d delete"
+        return "h/l tabs   j/k rows   e edit"
+    if mode == MODE_HOME_BODY_TYPE_EDIT:
+        return "up/down type   e/enter confirm   esc back"
+    if mode == MODE_HOME_BODY_RAW_TYPE_EDIT:
+        return "up/down raw   e/enter confirm   esc back"
+    if mode == MODE_HOME_REQUEST_METHOD_SELECT:
+        return "e open   esc back"
+    if mode == MODE_HOME_REQUEST_METHOD_EDIT:
+        return "up/down method   e/enter confirm   esc back"
     return ""
 
 
 def home_sidebar_caption(state: PiespectorState, start: int, end: int, total: int) -> str:
-    parts = [f"Rows {start + 1}-{end} of {total}"]
-    if total > end or start > 0:
-        parts.append("PageUp/PageDown")
-    parts.append("j/k browse")
-    parts.append("h/l opened")
-    parts.append(":new")
-    parts.append(":new collection NAME")
-    parts.append(":new folder NAME")
-    parts.append(":del")
-    if state.mode in HOME_MODES and state.mode != MODE_NORMAL:
-        parts.append("edit mode")
-    return "  |  ".join(parts)
+    del state
+    if total <= 0:
+        return "Rows 0-0 of 0"
+    return f"Rows {start + 1}-{end} of {total}"
 
 
 def response_caption(
@@ -96,10 +95,14 @@ def response_caption(
     response_tab: str = RESPONSE_TAB_BODY,
     response_selected: bool = False,
     unit_label: str = "Lines",
+    error: str | None = None,
 ) -> str:
     parts = [response_tab.title(), f"{unit_label} {start + 1}-{end} of {total}"]
+    if error:
+        parts.append(f"Error: {error}")
     if response_selected:
         parts.append("h/l tabs")
+        parts.append("j/k scroll")
         if response_tab == RESPONSE_TAB_BODY:
             parts.append("e viewer")
     if shortcuts_enabled and (total > end or start > 0):

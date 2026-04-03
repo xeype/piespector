@@ -13,6 +13,9 @@ TAB_LABELS = {
     TAB_HELP: "Help",
 }
 
+HOME_SIDEBAR_LABEL = "Collections"
+HOME_SIDEBAR_JUMP_KEY = "tab"
+
 HOME_EDITOR_TAB_REQUEST = "request"
 HOME_EDITOR_TAB_AUTH = "auth"
 HOME_EDITOR_TAB_PARAMS = "params"
@@ -27,6 +30,17 @@ REQUEST_EDITOR_TABS: tuple[tuple[str, str], ...] = (
     (HOME_EDITOR_TAB_BODY, "Body"),
 )
 REQUEST_EDITOR_TAB_LABELS = dict(REQUEST_EDITOR_TABS)
+REQUEST_EDITOR_JUMP_BINDINGS: tuple[tuple[str, str], ...] = (
+    (HOME_EDITOR_TAB_REQUEST, "q"),
+    (HOME_EDITOR_TAB_AUTH, "w"),
+    (HOME_EDITOR_TAB_PARAMS, "e"),
+    (HOME_EDITOR_TAB_HEADERS, "r"),
+    (HOME_EDITOR_TAB_BODY, "t"),
+)
+REQUEST_EDITOR_TAB_TO_JUMP_KEY = dict(REQUEST_EDITOR_JUMP_BINDINGS)
+REQUEST_EDITOR_JUMP_KEY_TO_TAB = {
+    key: tab_id for tab_id, key in REQUEST_EDITOR_JUMP_BINDINGS
+}
 
 AUTH_TYPE_OPTIONS: tuple[tuple[str, str], ...] = (
     ("none", "No Auth"),
@@ -68,9 +82,28 @@ RAW_SUBTYPE_OPTIONS: tuple[tuple[str, str], ...] = (
 BODY_TEXT_EDITOR_TYPES = frozenset({"raw", "graphql"})
 BODY_KEY_VALUE_TYPES = frozenset({"form-data", "x-www-form-urlencoded"})
 
+TOP_BAR_METHOD_JUMP_KEY = "1"
+TOP_BAR_URL_JUMP_KEY = "2"
+TOP_BAR_JUMP_KEY_TO_TARGET = {
+    TOP_BAR_METHOD_JUMP_KEY: "method",
+    TOP_BAR_URL_JUMP_KEY: "url",
+}
+
 RESPONSE_TAB_BODY = "body"
 RESPONSE_TAB_HEADERS = "headers"
-RESPONSE_TABS = (RESPONSE_TAB_BODY, RESPONSE_TAB_HEADERS)
+RESPONSE_TABS: tuple[tuple[str, str], ...] = (
+    (RESPONSE_TAB_BODY, "Body"),
+    (RESPONSE_TAB_HEADERS, "Headers"),
+)
+RESPONSE_TAB_LABELS = dict(RESPONSE_TABS)
+RESPONSE_JUMP_BINDINGS: tuple[tuple[str, str], ...] = (
+    (RESPONSE_TAB_BODY, "a"),
+    (RESPONSE_TAB_HEADERS, "s"),
+)
+RESPONSE_TAB_TO_JUMP_KEY = dict(RESPONSE_JUMP_BINDINGS)
+RESPONSE_JUMP_KEY_TO_TAB = {
+    key: tab_id for tab_id, key in RESPONSE_JUMP_BINDINGS
+}
 
 HISTORY_DETAIL_BLOCK_REQUEST = "request"
 HISTORY_DETAIL_BLOCK_RESPONSE = "response"
@@ -82,8 +115,6 @@ HISTORY_DETAIL_BLOCKS = (
 REQUEST_FIELDS_BY_EDITOR_TAB: dict[str, tuple[tuple[str, str], ...]] = {
     HOME_EDITOR_TAB_REQUEST: (
         ("name", "Name"),
-        ("method", "Method"),
-        ("url", "URL"),
     ),
     HOME_EDITOR_TAB_AUTH: (("auth_type", "Type"),),
     HOME_EDITOR_TAB_PARAMS: (("query_text", "Params"),),

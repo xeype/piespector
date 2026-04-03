@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from rich import box
 from rich.console import Group, RenderableType
 from rich.panel import Panel
 from rich.syntax import Syntax
-from rich.table import Table
 from rich.text import Text
 
-from piespector.domain.editor import BODY_KEY_VALUE_TYPES, BODY_TYPE_OPTIONS, RAW_SUBTYPE_OPTIONS
+from textual.widgets import DataTable
+
+from piespector.domain.editor import BODY_KEY_VALUE_TYPES
 from piespector.domain.modes import (
     MODE_HOME_BODY_EDIT,
     MODE_HOME_BODY_RAW_TYPE_EDIT,
@@ -15,23 +15,25 @@ from piespector.domain.modes import (
     MODE_HOME_BODY_TYPE_EDIT,
 )
 from piespector.domain.requests import RequestDefinition
-from piespector.screens.home import messages, styles
+from piespector.screens.home import messages
+from piespector.screens.home.request.dropdown import render_dropdown_value
 from piespector.screens.home.request.request_metadata import request_label
 from piespector.ui.rendering_helpers import (
     preview_syntax_language,
     request_body_syntax_language,
-    syntax_theme_for_language,
 )
 from piespector.state import PiespectorState
+from piespector.ui.selection import effective_mode
 
 
 def body_context_label(state: PiespectorState) -> str:
+    mode = effective_mode(state)
     request = state.get_active_request()
     request_name = request_label(request)
     if request is None:
         return "Body"
 
-    if state.mode == MODE_HOME_BODY_TYPE_EDIT:
+    if mode == MODE_HOME_BODY_TYPE_EDIT:
         return f"{request_name} / Body / {state.body_type_label(request.body_type)}"
 
     if request.body_type == "raw":
@@ -46,104 +48,128 @@ def body_context_label(state: PiespectorState) -> str:
     return f"{request_name} / Body / {state.body_type_label(request.body_type)}"
 
 
+def render_request_body_selector(request: RequestDefinition, state: PiespectorState) -> Text:
+    mode = effective_mode(state)
+    return render_dropdown_value(
+        state.body_type_label(request.body_type),
+        selected=(
+            mode == MODE_HOME_BODY_TYPE_EDIT
+            or (
+                mode in {MODE_HOME_BODY_SELECT, MODE_HOME_BODY_EDIT}
+                and state.selected_body_index == 0
+            )
+        ),
+        subject=state,
+    )
+
+
 def render_request_body_editor(
     request: RequestDefinition,
     state: PiespectorState,
     viewport_width: int | None,
 ) -> RenderableType:
-    selector = Text()
-    for index, (value, label) in enumerate(BODY_TYPE_OPTIONS):
-        if index:
-            selector.append(" ")
-        is_active = request.body_type == value
-        is_selected = (
-            state.mode == MODE_HOME_BODY_TYPE_EDIT
-            and state.selected_body_index == 0
-            and is_active
-        )
-        style = (
-            styles.pill_style(styles.TEXT_WARNING)
-            if is_selected
-            else styles.pill_style(styles.TEXT_URL)
-            if is_active
-            else styles.pill_style(styles.PILL_INACTIVE, foreground=styles.TEXT_SECONDARY)
-        )
-        selector.append(f" {label} ", style=style)
-    if request.body_type == "none":
-        empty = Text()
-        empty.append(messages.HOME_NO_BODY, style=f"bold {styles.TEXT_PRIMARY}")
-        return Group(selector, Panel(empty, border_style=styles.SUB_BORDER, box=box.SIMPLE_HEAVY))
-
+    selector = render_request_body_selector(request, state)
     if request.body_type in BODY_KEY_VALUE_TYPES:
-        return Group(selector, render_body_key_value_table(request, state))
+        return Group(selector, render_body_items_fallback(request, state))
+    return Group(selector, render_request_body_preview(request, state, viewport_width))
 
-    return Group(selector, render_body_text_editor(request, state, viewport_width))
+
+def refresh_request_body_table(
+    table: DataTable,
+    request: RequestDefinition,
+    state: PiespectorState,
+) -> None:
+    items = state.get_active_request_body_items()
+    add_label = "Add field" if request.body_type == "form-data" else "Add parameter"
+    state.clamp_selected_body_index()
+
+    table.clear(columns=True)
+    table.add_columns("#", "On", "Key", "Value")
+
+    for index, item in enumerate(items, start=1):
+        table.add_row(
+            str(index),
+            Text("[x]" if item.enabled else "[ ]"),
+            Text(item.key),
+            Text(item.value or "-"),
+        )
+
+    table.add_row("+", "", Text(add_label), "")
+
+    if state.selected_body_index == 0:
+        table.cursor_type = "none"
+        return
+
+    table.cursor_type = "row"
+    row_index = max(0, min(state.selected_body_index - 1, table.row_count - 1))
+    table.move_cursor(row=row_index, column=0, animate=False)
 
 
-def render_body_key_value_table(
+def render_body_items_fallback(
     request: RequestDefinition,
     state: PiespectorState,
 ) -> RenderableType:
     items = state.get_active_request_body_items()
     add_label = "Add field" if request.body_type == "form-data" else "Add parameter"
+    rendered = Text()
 
-    table = Table(
-        expand=True,
-        box=box.SIMPLE_HEAVY,
-        show_header=True,
-        header_style=f"bold {styles.TEXT_SECONDARY}",
-        border_style=styles.SUB_BORDER,
-        row_styles=[styles.ROW_ALT_ONE, styles.ROW_ALT_TWO],
-        padding=(0, 1),
-    )
-    table.add_column("#", width=4, justify="right", style=f"bold {styles.TEXT_MUTED}")
-    table.add_column("On", width=6, justify="center", style=f"bold {styles.TEXT_SECONDARY}")
-    table.add_column("Key", ratio=2, style=f"bold {styles.TEXT_WARNING}")
-    table.add_column("Value", ratio=3, style=styles.TEXT_PRIMARY)
+    if not items:
+        rendered.append(add_label)
+        return rendered
 
     for index, item in enumerate(items, start=1):
-        row_style = None
-        if state.mode in {MODE_HOME_BODY_SELECT, MODE_HOME_BODY_EDIT} and state.selected_body_index == index:
-            row_style = styles.pill_style(styles.TEXT_SUCCESS)
-        key_style = f"bold {styles.TEXT_WARNING}" if item.enabled else styles.TEXT_MUTED
-        value_style = styles.TEXT_PRIMARY if item.enabled else styles.TEXT_MUTED
-        table.add_row(
-            str(index),
-            Text("[x]" if item.enabled else "[ ]", style=f"bold {styles.TEXT_PRIMARY}"),
-            Text(item.key, style=key_style),
-            Text(item.value or "-", style=value_style),
-            style=row_style,
-        )
-
-    add_style = None
-    if state.mode in {MODE_HOME_BODY_SELECT, MODE_HOME_BODY_EDIT} and state.selected_body_index == len(items) + 1:
-        add_style = styles.pill_style(styles.TEXT_WARNING)
-    table.add_row("+", "", add_label, "", style=add_style)
-
-    return table
+        status = "[x]" if item.enabled else "[ ]"
+        rendered.append(f"{index:>2} {status} {item.key}")
+        rendered.append(f" = {item.value or '-'}")
+        if index < len(items):
+            rendered.append("\n")
+    return rendered
 
 
-def render_body_text_editor(
+def render_request_body_preview(
     request: RequestDefinition,
     state: PiespectorState,
     viewport_width: int | None,
+    *,
+    include_raw_selector: bool = True,
 ) -> RenderableType:
-    subtype_selector: RenderableType = Text()
-    if request.body_type == "raw":
-        subtype_selector = Text()
-        for index, (value, label) in enumerate(RAW_SUBTYPE_OPTIONS):
-            if index:
-                subtype_selector.append(" ")
-            is_active = request.raw_subtype == value
-            is_selected = state.mode == MODE_HOME_BODY_RAW_TYPE_EDIT and is_active
-            style = (
-                styles.pill_style(styles.TEXT_WARNING)
-                if is_selected
-                else styles.pill_style(styles.TEXT_URL)
-                if is_active
-                else styles.pill_style(styles.PILL_INACTIVE, foreground=styles.TEXT_SECONDARY)
+    if request.body_type == "none":
+        empty = Text()
+        empty.append(messages.HOME_NO_BODY)
+        return Panel(empty)
+
+    return render_body_text_preview(
+        request,
+        state,
+        viewport_width,
+        include_raw_selector=include_raw_selector,
+    )
+
+
+def render_body_text_preview(
+    request: RequestDefinition,
+    state: PiespectorState,
+    viewport_width: int | None,
+    *,
+    include_raw_selector: bool = True,
+) -> RenderableType:
+    mode = effective_mode(state)
+    content: list[RenderableType] = []
+    if request.body_type == "raw" and include_raw_selector:
+        content.append(
+            render_dropdown_value(
+                state.raw_subtype_label(request.raw_subtype),
+                selected=(
+                    mode == MODE_HOME_BODY_RAW_TYPE_EDIT
+                    or (
+                        mode in {MODE_HOME_BODY_SELECT, MODE_HOME_BODY_EDIT}
+                        and state.selected_body_index == 1
+                    )
+                ),
+                subject=state,
             )
-            subtype_selector.append(f" {label} ", style=style)
+        )
+
     value = request.body_text
     preview = value or ""
     line_limit = 8
@@ -151,12 +177,6 @@ def render_body_text_editor(
     visible_preview = "\n".join(preview_lines[:line_limit])
     if len(preview_lines) > line_limit:
         visible_preview += "\n..."
-
-    border_style = (
-        styles.TEXT_WARNING
-        if state.mode in {MODE_HOME_BODY_SELECT, MODE_HOME_BODY_EDIT} and state.selected_body_index == 1
-        else styles.SUB_BORDER
-    )
 
     renderable: RenderableType
     stripped = value.strip()
@@ -166,7 +186,6 @@ def render_body_text_editor(
         renderable = Syntax(
             visible_preview,
             preview_language or language,
-            theme=syntax_theme_for_language(language),
             line_numbers=False,
             word_wrap=True,
             code_width=max((viewport_width or 100) - 10, 24),
@@ -177,7 +196,7 @@ def render_body_text_editor(
             empty_label = messages.HOME_NO_BINARY_PATH
         else:
             empty_label = messages.HOME_NO_BODY_TEXT
-        renderable = Text(visible_preview or empty_label, style=styles.TEXT_PRIMARY)
+        renderable = Text(visible_preview or empty_label)
 
     if request.body_type == "graphql":
         title = "GraphQL"
@@ -186,12 +205,5 @@ def render_body_text_editor(
     else:
         title = f"Raw {request.raw_subtype.upper()}"
 
-    return Group(
-        subtype_selector,
-        Panel(
-            renderable,
-            title=title,
-            border_style=border_style,
-            box=box.SIMPLE_HEAVY,
-        ),
-    )
+    content.append(Panel(renderable, title=title))
+    return Group(*content)

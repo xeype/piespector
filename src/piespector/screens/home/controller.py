@@ -18,10 +18,12 @@ from piespector.domain.modes import (
     MODE_HOME_PARAMS_EDIT,
     MODE_HOME_PARAMS_SELECT,
     MODE_HOME_REQUEST_EDIT,
+    MODE_HOME_REQUEST_METHOD_SELECT,
     MODE_HOME_REQUEST_METHOD_EDIT,
     MODE_HOME_REQUEST_SELECT,
     MODE_HOME_RESPONSE_SELECT,
     MODE_HOME_SECTION_SELECT,
+    MODE_HOME_URL_EDIT,
 )
 from piespector.screens.home.controllers.auth import HomeAuthController
 from piespector.screens.home.controllers.body import HomeBodyController
@@ -49,7 +51,9 @@ class HomeController:
             MODE_HOME_SECTION_SELECT: self.navigation.handle_home_section_select_key,
             MODE_HOME_REQUEST_SELECT: self.request.handle_home_request_select_key,
             MODE_HOME_REQUEST_EDIT: self.request.handle_home_request_edit_key,
+            MODE_HOME_REQUEST_METHOD_SELECT: self.request.handle_home_request_method_select_key,
             MODE_HOME_REQUEST_METHOD_EDIT: self.request.handle_home_request_method_edit_key,
+            MODE_HOME_URL_EDIT: self.request.handle_home_url_edit_key,
             MODE_HOME_AUTH_SELECT: self.auth.handle_home_auth_select_key,
             MODE_HOME_AUTH_EDIT: self.auth.handle_home_auth_edit_key,
             MODE_HOME_AUTH_TYPE_EDIT: self.auth.handle_home_auth_type_edit_key,

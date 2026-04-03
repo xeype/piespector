@@ -7,7 +7,6 @@ from piespector.domain.modes import (
     MODE_CONFIRM,
     MODE_ENV_SELECT,
     MODE_HISTORY_RESPONSE_SELECT,
-    MODE_HISTORY_RESPONSE_TEXTAREA,
     MODE_HOME_AUTH_LOCATION_EDIT,
     MODE_HOME_AUTH_SELECT,
     MODE_HOME_AUTH_TYPE_EDIT,
@@ -17,14 +16,15 @@ from piespector.domain.modes import (
     MODE_HOME_BODY_TYPE_EDIT,
     MODE_HOME_HEADERS_SELECT,
     MODE_HOME_PARAMS_SELECT,
+    MODE_HOME_REQUEST_METHOD_SELECT,
     MODE_HOME_REQUEST_METHOD_EDIT,
     MODE_HOME_REQUEST_SELECT,
     MODE_HOME_RESPONSE_SELECT,
-    MODE_HOME_RESPONSE_TEXTAREA,
     MODE_HOME_SECTION_SELECT,
-    MODE_SEARCH,
+    MODE_HOME_URL_EDIT,
+    MODE_JUMP,
 )
-from piespector.interactions.keys import response_copy_hint_items
+from piespector.interactions.keys import KEY_COMMAND_PALETTE, KEY_WORKSPACE_SEARCH
 from piespector.state import PiespectorState
 
 HintItem = tuple[str, str]
@@ -34,34 +34,38 @@ MODE_HINTS: dict[str, tuple[HintItem, ...]] = {
     MODE_COMMAND: (("enter", "run"), ("esc", "cancel")),
     MODE_HOME_SECTION_SELECT: (
         ("h/l", "sections"),
+        ("j/k", "enter"),
         ("e", "open"),
         ("s", "send"),
         ("v", "response"),
         ("ctrl+u/d", "response"),
         ("esc", "back"),
-        (":", "command"),
+        (KEY_COMMAND_PALETTE, "commands"),
     ),
     MODE_HOME_REQUEST_SELECT: (
+        ("h/l", "tabs"),
         ("j/k", "fields"),
         ("e", "edit"),
         ("s", "send"),
         ("v", "response"),
         ("ctrl+u/d", "response"),
         ("esc", "back"),
-        (":", "command"),
+        (KEY_COMMAND_PALETTE, "commands"),
     ),
     MODE_HOME_AUTH_SELECT: (
+        ("h/l", "tabs"),
         ("j/k", "rows"),
         ("e", "edit"),
         ("s", "send"),
         ("v", "response"),
         ("ctrl+u/d", "response"),
         ("esc", "back"),
-        (":", "command"),
+        (KEY_COMMAND_PALETTE, "commands"),
     ),
     MODE_HOME_PARAMS_SELECT: (
+        ("h/l", "tabs"),
         ("j/k", "rows"),
-        ("h/l", "fields"),
+        ("left/right", "fields"),
         ("space", "toggle"),
         ("e", "edit"),
         ("a", "add"),
@@ -70,11 +74,12 @@ MODE_HINTS: dict[str, tuple[HintItem, ...]] = {
         ("v", "response"),
         ("ctrl+u/d", "response"),
         ("esc", "back"),
-        (":", "command"),
+        (KEY_COMMAND_PALETTE, "commands"),
     ),
     MODE_HOME_HEADERS_SELECT: (
+        ("h/l", "tabs"),
         ("j/k", "rows"),
-        ("h/l", "fields"),
+        ("left/right", "fields"),
         ("space", "toggle"),
         ("e", "edit"),
         ("a", "add"),
@@ -83,33 +88,40 @@ MODE_HINTS: dict[str, tuple[HintItem, ...]] = {
         ("v", "response"),
         ("ctrl+u/d", "response"),
         ("esc", "back"),
-        (":", "command"),
+        (KEY_COMMAND_PALETTE, "commands"),
     ),
     MODE_HOME_BODY_TYPE_EDIT: (
-        ("h/l", "type"),
-        ("e", "open"),
+        ("up/down", "type"),
+        ("enter", "confirm"),
         ("v", "response"),
         ("ctrl+u/d", "response"),
         ("esc", "back"),
     ),
     MODE_HOME_BODY_RAW_TYPE_EDIT: (
-        ("h/l", "raw"),
-        ("e", "open"),
+        ("up/down", "raw"),
+        ("enter", "confirm"),
         ("v", "response"),
         ("ctrl+u/d", "response"),
         ("esc", "back"),
     ),
     MODE_HOME_BODY_TEXTAREA: (("ctrl+s", "save"), ("esc", "cancel")),
+    MODE_HOME_REQUEST_METHOD_SELECT: (
+        ("e", "open"),
+        ("s", "send"),
+        ("v", "response"),
+        ("ctrl+u/d", "response"),
+        ("esc", "back"),
+    ),
     MODE_HOME_REQUEST_METHOD_EDIT: (
-        ("h/l", "method"),
-        ("enter", "save"),
+        ("up/down", "method"),
+        ("enter", "confirm"),
         ("v", "response"),
         ("ctrl+u/d", "response"),
         ("esc", "cancel"),
     ),
     MODE_HOME_AUTH_TYPE_EDIT: (
-        ("h/l", "type"),
-        ("e", "open"),
+        ("up/down", "type"),
+        ("enter", "confirm"),
         ("s", "send"),
         ("v", "response"),
         ("ctrl+u/d", "response"),
@@ -117,10 +129,11 @@ MODE_HINTS: dict[str, tuple[HintItem, ...]] = {
     ),
     MODE_HOME_RESPONSE_SELECT: (
         ("h/l", "tabs"),
+        ("j/k", "scroll"),
         ("e", "viewer"),
         ("ctrl+u/d", "scroll"),
         ("esc", "back"),
-        (":", "command"),
+        (KEY_COMMAND_PALETTE, "commands"),
     ),
     MODE_ENV_SELECT: (
         ("h/l", "fields"),
@@ -128,7 +141,7 @@ MODE_HINTS: dict[str, tuple[HintItem, ...]] = {
         ("a", "add"),
         ("d", "delete"),
         ("esc", "back"),
-        (":", "command"),
+        (KEY_COMMAND_PALETTE, "commands"),
     ),
     MODE_HISTORY_RESPONSE_SELECT: (
         ("j/k", "blocks"),
@@ -136,49 +149,50 @@ MODE_HINTS: dict[str, tuple[HintItem, ...]] = {
         ("e", "viewer"),
         ("ctrl+u/d", "scroll"),
         ("esc", "back"),
-        (":", "command"),
+        (KEY_COMMAND_PALETTE, "commands"),
     ),
 }
 
 TAB_HINTS: dict[str, tuple[HintItem, ...]] = {
     TAB_HOME: (
-        ("j/k", "sidebar"),
-        ("h/l", "opened"),
-        ("s", "search"),
-        ("e", "open/edit"),
+        ("j/k", "browse"),
+        ("J/K", "folders"),
+        ("ctrl+j/k", "collections"),
+        ("h/l", "pinned"),
+        ("c", "close"),
+        (KEY_WORKSPACE_SEARCH, "search"),
+        ("s", "send"),
+        ("e", "pin/expand"),
         ("esc", "collapse"),
-        (":", "command"),
+        (KEY_COMMAND_PALETTE, "commands"),
     ),
     TAB_ENV: (
         ("h/l", "envs"),
         ("j/k", "rows"),
         ("a", "add"),
         ("e", "edit"),
-        (":", "command"),
+        (KEY_COMMAND_PALETTE, "commands"),
     ),
     TAB_HISTORY: (
         ("j/k", "entries"),
-        ("s", "search"),
+        (KEY_WORKSPACE_SEARCH, "search"),
         ("e", "response"),
-        (":", "command"),
+        (KEY_COMMAND_PALETTE, "commands"),
     ),
     TAB_HELP: (
         ("esc", "back"),
-        (":", "command"),
+        (KEY_COMMAND_PALETTE, "commands"),
     ),
 }
 
 
 def status_hint_items(state: PiespectorState) -> list[HintItem]:
-    if state.mode == MODE_SEARCH:
-        return [
-            ("tab", "complete"),
-            ("enter", "filter" if state.current_tab == TAB_HISTORY else "open"),
-            ("esc", "cancel"),
-        ]
+    if state.mode == MODE_JUMP:
+        return []
 
     if state.mode == MODE_HOME_BODY_SELECT:
         hints: list[HintItem] = [
+            ("h/l", "tabs"),
             ("j/k", "rows"),
             ("space", "toggle"),
             ("e", "edit"),
@@ -186,7 +200,7 @@ def status_hint_items(state: PiespectorState) -> list[HintItem]:
             ("v", "response"),
             ("ctrl+u/d", "response"),
             ("esc", "back"),
-            (":", "command"),
+            (KEY_COMMAND_PALETTE, "commands"),
         ]
         request = state.get_active_request()
         if request is not None and request.body_type in BODY_KEY_VALUE_TYPES:
@@ -204,19 +218,20 @@ def status_hint_items(state: PiespectorState) -> list[HintItem]:
             else "location"
         )
         return [
-            ("h/l", label),
-            ("e", "open"),
+            ("j/k", label),
+            ("left/right", label),
+            ("e", "close"),
             ("s", "send"),
             ("v", "response"),
             ("ctrl+u/d", "response"),
             ("esc", "back"),
         ]
 
-    if state.mode in {MODE_HOME_RESPONSE_TEXTAREA, MODE_HISTORY_RESPONSE_TEXTAREA}:
-        return response_copy_hint_items()
+    if state.mode == MODE_HOME_URL_EDIT:
+        return [("enter", "save"), ("tab", "complete"), ("ctrl+v", "paste")]
 
     if state.mode in INLINE_EDIT_MODES:
-        return [("enter", "save"), ("ctrl+c/v", "copy/paste"), ("esc", "cancel")]
+        return [("enter", "save"), ("ctrl+v", "paste"), ("esc", "cancel")]
 
     if state.mode in MODE_HINTS:
         return list(MODE_HINTS[state.mode])

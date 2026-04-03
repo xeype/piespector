@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from textual import events
+from textual.widgets import Input
 from piespector.interactions.keys import (
     KEY_ADD,
     KEY_DELETE_ROW,
@@ -107,7 +108,21 @@ class EnvController:
             event.stop()
             return
 
+    def _env_input(self) -> Input | None:
+        try:
+            return self.app._query_current("#env-field-input", Input)
+        except Exception:
+            return None
+
     def handle_env_edit_key(self, event: events.Key) -> None:
+        env_input = self._env_input()
+        if env_input is not None and env_input.display:
+            if event.key == KEY_ESCAPE:
+                self.state.leave_env_edit_mode()
+                self.app._refresh_screen()
+                event.stop()
+            return
+
         if event.key == KEY_ESCAPE:
             self.state.leave_env_edit_mode()
             self.app._refresh_screen()
@@ -120,6 +135,3 @@ class EnvController:
                 self.app._persist_env_pairs()
             self.app._refresh_screen()
             event.stop()
-            return
-
-        self.app._handle_inline_edit_key(event)

@@ -38,6 +38,10 @@ def search_matches(state: PiespectorState, raw_buffer: str) -> list[SearchTarget
     return _matching_targets(state, raw_buffer)
 
 
+def search_targets(state: PiespectorState) -> list[SearchTarget]:
+    return _search_targets(state)
+
+
 def move_destination_matches(
     state: PiespectorState,
     raw_buffer: str,

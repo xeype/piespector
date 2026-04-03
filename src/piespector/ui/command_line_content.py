@@ -1,8 +1,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
 
+from rich.text import Text
+
+from piespector.domain.editor import (
+    HOME_SIDEBAR_JUMP_KEY,
+    HOME_SIDEBAR_LABEL,
+    REQUEST_EDITOR_JUMP_BINDINGS,
+    REQUEST_EDITOR_TAB_LABELS,
+    RESPONSE_JUMP_BINDINGS,
+    RESPONSE_TAB_LABELS,
+    TAB_HOME,
+    TAB_HISTORY,
+)
 from piespector.domain.modes import (
     MODE_COMMAND,
     MODE_CONFIRM,
@@ -14,94 +25,96 @@ from piespector.domain.modes import (
     MODE_HOME_BODY_RAW_TYPE_EDIT,
     MODE_HOME_BODY_TEXTAREA,
     MODE_HOME_BODY_TYPE_EDIT,
+    MODE_HOME_REQUEST_METHOD_SELECT,
     MODE_HOME_HEADERS_EDIT,
     MODE_HOME_PARAMS_EDIT,
     MODE_HOME_REQUEST_EDIT,
     MODE_HOME_REQUEST_METHOD_EDIT,
-    MODE_SEARCH,
+    MODE_HOME_URL_EDIT,
+    MODE_JUMP,
 )
 from piespector.state import PiespectorState
-
-CommandLineTone = Literal["primary", "warning", "danger"]
-CompletionKind = Literal["command", "search", "path"]
-
 
 @dataclass(frozen=True)
 class CommandLineContent:
     text: str
-    tone: CommandLineTone = "primary"
-    use_edit_buffer: bool = False
-    completion_kind: CompletionKind | None = None
+    tone: str = "primary"
 
 
 def command_line_content(state: PiespectorState) -> CommandLineContent | None:
+    if state.mode == MODE_JUMP:
+        if state.current_tab == TAB_HOME:
+            return CommandLineContent("Press a key to jump", tone="primary")
+        collections_target = f"{HOME_SIDEBAR_JUMP_KEY} {HOME_SIDEBAR_LABEL}"
+        request_targets = "  ".join(
+            f"{key} {REQUEST_EDITOR_TAB_LABELS[tab_id]}"
+            for tab_id, key in REQUEST_EDITOR_JUMP_BINDINGS
+        )
+        response_targets = "  ".join(
+            f"{key} {RESPONSE_TAB_LABELS[tab_id]}"
+            for tab_id, key in RESPONSE_JUMP_BINDINGS
+        )
+        return CommandLineContent(
+            (
+                f"Jump: {collections_target}  |  Request: {request_targets}  |  "
+                f"Response: {response_targets}  |  Esc cancel"
+            ),
+            tone="primary",
+        )
+
     if state.mode == MODE_CONFIRM:
         return CommandLineContent(state.confirm_prompt, tone="warning")
 
-    if state.mode == MODE_COMMAND:
-        return CommandLineContent(
-            f":{state.command_buffer}",
-            completion_kind="command",
-        )
-
-    if state.mode == MODE_SEARCH:
-        return CommandLineContent(
-            f"Search {state.command_buffer}",
-            completion_kind="search",
-        )
-
     if state.mode == MODE_HOME_REQUEST_EDIT:
         _field_name, label = state.selected_request_field()
-        return CommandLineContent(f"Edit {label}=", use_edit_buffer=True)
+        return CommandLineContent(f"Editing {label}. Enter saves, Esc cancels.")
+
+    if state.mode == MODE_HOME_REQUEST_METHOD_SELECT:
+        return CommandLineContent("Method selector: e or Enter open, Esc back")
 
     if state.mode == MODE_HOME_REQUEST_METHOD_EDIT:
-        return CommandLineContent(f"Method {state.edit_buffer or 'GET'}  h/l change, Enter save")
+        return CommandLineContent(
+            "Method: up/down choose, e or Enter confirm, Esc back"
+        )
+
+    if state.mode == MODE_HOME_URL_EDIT:
+        return CommandLineContent("Editing URL. Enter saves.")
 
     if state.mode == MODE_HOME_AUTH_EDIT:
         field = state.selected_auth_field()
         label = field[1] if field is not None else "Auth"
-        return CommandLineContent(f"Edit {label}=", use_edit_buffer=True)
+        return CommandLineContent(f"Editing {label}. Enter saves, Esc cancels.")
 
     if state.mode == MODE_HOME_AUTH_TYPE_EDIT:
-        return CommandLineContent("Auth type: h/l change, e open")
+        return CommandLineContent("Auth type: up/down choose, e or Enter confirm, Esc back")
 
     if state.mode == MODE_HOME_AUTH_LOCATION_EDIT:
         field = state.selected_auth_field()
         if field is not None and field[0] == "auth_oauth_client_authentication":
-            return CommandLineContent("OAuth client auth: h/l change, e open")
-        return CommandLineContent("API key location: h/l change, e open")
+            return CommandLineContent("OAuth client auth: up/down choose, e or Enter confirm, Esc back")
+        return CommandLineContent("API key location: up/down choose, e or Enter confirm, Esc back")
 
     if state.mode == MODE_HOME_PARAMS_EDIT:
         if state.params_creating_new:
-            return CommandLineContent("New key=", use_edit_buffer=True)
-        item = state.get_active_request_params()
-        selected_key = (
-            item[state.selected_param_index].key
-            if item and state.selected_param_index < len(item)
-            else ""
+            return CommandLineContent("New param key. Enter saves, Esc cancels.")
+        _field_name, field_label = state.selected_param_field()
+        return CommandLineContent(
+            f"Editing param {field_label.lower()}. Enter saves, Esc cancels."
         )
-        field_name, _field_label = state.selected_param_field()
-        label = "Edit key=" if field_name == "key" else f"Edit {selected_key}="
-        return CommandLineContent(label, use_edit_buffer=True)
 
     if state.mode == MODE_HOME_HEADERS_EDIT:
         if state.headers_creating_new:
-            return CommandLineContent("New key=", use_edit_buffer=True)
-        item = state.get_active_request_headers()
-        selected_key = (
-            item[state.selected_header_index].key
-            if item and state.selected_header_index < len(item)
-            else ""
+            return CommandLineContent("New header key. Enter saves, Esc cancels.")
+        _field_name, field_label = state.selected_header_field()
+        return CommandLineContent(
+            f"Editing header {field_label.lower()}. Enter saves, Esc cancels."
         )
-        field_name, _field_label = state.selected_header_field()
-        label = "Edit key=" if field_name == "key" else f"Edit {selected_key}="
-        return CommandLineContent(label, use_edit_buffer=True)
 
     if state.mode == MODE_HOME_BODY_TYPE_EDIT:
-        return CommandLineContent("Body type: h/l change, e open")
+        return CommandLineContent("Body type: up/down choose, e or Enter confirm, Esc back")
 
     if state.mode == MODE_HOME_BODY_RAW_TYPE_EDIT:
-        return CommandLineContent("Raw type: h/l change, e open")
+        return CommandLineContent("Raw type: up/down choose, e or Enter confirm, Esc back")
 
     if state.mode == MODE_HOME_BODY_TEXTAREA:
         if state.message:
@@ -111,23 +124,31 @@ def command_line_content(state: PiespectorState) -> CommandLineContent | None:
     if state.mode == MODE_HOME_BODY_EDIT:
         request = state.get_active_request()
         return CommandLineContent(
-            "Path " if request is not None and request.body_type == "binary" else "Body ",
-            use_edit_buffer=True,
-            completion_kind="path"
+            "Editing path. Enter saves, Esc cancels."
             if request is not None and request.body_type == "binary"
-            else None,
+            else "Editing body. Enter saves, Esc cancels."
         )
 
     if state.mode == MODE_ENV_EDIT:
         if state.env_creating_new:
-            return CommandLineContent("New key=", use_edit_buffer=True)
+            return CommandLineContent("New env key. Enter saves, Esc cancels.")
         item = state.get_selected_env_item()
         key = item[0] if item is not None else ""
         field_name, _field_label = state.selected_env_field()
-        label = "Edit key=" if field_name == "key" else f"Edit {key}="
-        return CommandLineContent(label, use_edit_buffer=True)
+        label = "Editing key. Enter saves, Esc cancels." if field_name == "key" else f"Editing {key}. Enter saves, Esc cancels."
+        return CommandLineContent(label)
 
     if state.message:
         return CommandLineContent(state.message)
 
     return None
+
+
+def build_command_line_text(state: PiespectorState) -> Text:
+    text = Text()
+    content = command_line_content(state)
+    if content is None:
+        return text
+
+    text.append(content.text)
+    return text

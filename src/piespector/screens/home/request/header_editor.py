@@ -1,71 +1,98 @@
 from __future__ import annotations
 
-from rich import box
 from rich.console import Group, RenderableType
-from rich.table import Table
 from rich.text import Text
+
+from textual.widgets import DataTable
 
 from piespector.domain.modes import MODE_HOME_HEADERS_EDIT, MODE_HOME_HEADERS_SELECT
 from piespector.domain.requests import RequestDefinition
 from piespector.http_client import preview_auto_headers
-from piespector.screens.home import messages, styles
+from piespector.screens.home import messages
 from piespector.state import PiespectorState
+from piespector.ui.selection import effective_mode, selected_element_style
 
 
-def render_request_headers_table(
+def refresh_request_headers_table(
+    table: DataTable,
+    request: RequestDefinition,
+    state: PiespectorState,
+) -> None:
+    mode = effective_mode(state)
+    headers = request.header_items
+    auto_headers = preview_auto_headers(request, state.env_pairs)
+    total_count = len(headers) + len(auto_headers)
+    state.clamp_selected_header_index(total_count)
+
+    header_selected = mode in {MODE_HOME_HEADERS_SELECT, MODE_HOME_HEADERS_EDIT}
+    key_header = Text(
+        "Key",
+        style=selected_element_style(
+            state,
+            selected=header_selected and state.selected_header_field_index == 0,
+        ),
+    )
+    value_header = Text(
+        "Value",
+        style=selected_element_style(
+            state,
+            selected=header_selected and state.selected_header_field_index == 1,
+        ),
+    )
+
+    table.clear(columns=True)
+    table.add_columns("#", "On", key_header, value_header)
+
+    for index, item in enumerate(headers):
+        table.add_row(
+            str(index + 1),
+            Text("[x]" if item.enabled else "[ ]"),
+            Text(item.key),
+            Text(item.value or "-"),
+        )
+
+    for key, value, enabled in auto_headers:
+        table.add_row(
+            "auto",
+            Text("[x]" if enabled else "[ ]"),
+            Text(key),
+            Text(value or "-"),
+        )
+
+    table.cursor_type = "row" if total_count else "none"
+    if total_count:
+        table.move_cursor(row=state.selected_header_index, column=0, animate=False)
+
+
+def render_request_headers_fallback(
     request: RequestDefinition,
     state: PiespectorState,
 ) -> RenderableType:
+    rendered = Text()
     headers = request.header_items
     auto_headers = preview_auto_headers(request, state.env_pairs)
-    state.clamp_selected_header_index(len(headers) + len(auto_headers))
 
-    table = Table(
-        expand=True,
-        box=box.SIMPLE_HEAVY,
-        show_header=True,
-        header_style=f"bold {styles.TEXT_SECONDARY}",
-        border_style=styles.SUB_BORDER,
-        row_styles=[styles.ROW_ALT_ONE, styles.ROW_ALT_TWO],
-        padding=(0, 1),
-    )
-    key_header = Text("Key", style=f"bold {styles.TEXT_WARNING}")
-    value_header = Text("Value", style=f"bold {styles.TEXT_PRIMARY}")
-    if state.mode in {MODE_HOME_HEADERS_SELECT, MODE_HOME_HEADERS_EDIT}:
-        if state.selected_header_field_index == 0:
-            key_header = Text("Key", style=styles.pill_style(styles.TEXT_URL))
-        else:
-            value_header = Text("Value", style=styles.pill_style(styles.TEXT_URL))
-    table.add_column("#", width=4, justify="right", style=f"bold {styles.TEXT_MUTED}")
-    table.add_column("On", width=6, justify="center", style=f"bold {styles.TEXT_SECONDARY}")
-    table.add_column(key_header, ratio=2, style=f"bold {styles.TEXT_WARNING}")
-    table.add_column(value_header, ratio=3, style=styles.TEXT_PRIMARY)
+    if not headers and not auto_headers:
+        rendered.append("No headers.")
+    else:
+        rows: list[Text] = []
+        for index, item in enumerate(headers, start=1):
+            status = "[x]" if item.enabled else "[ ]"
+            row = Text()
+            row.append(f"{index:>2} {status} {item.key}")
+            row.append(f" = {item.value or '-'}")
+            rows.append(row)
+        for key, value, enabled in auto_headers:
+            row = Text()
+            row.append("auto ")
+            row.append("[x]" if enabled else "[ ]")
+            row.append(f" {key}")
+            row.append(f" = {value or '-'}")
+            rows.append(row)
+        for index, row in enumerate(rows):
+            rendered.append_text(row)
+            if index < len(rows) - 1:
+                rendered.append("\n")
 
-    for index, item in enumerate(headers):
-        row_style = None
-        if state.mode in {MODE_HOME_HEADERS_SELECT, MODE_HOME_HEADERS_EDIT} and index == state.selected_header_index:
-            row_style = styles.pill_style(styles.TEXT_SUCCESS)
-        key_style = f"bold {styles.TEXT_WARNING}" if item.enabled else styles.TEXT_MUTED
-        value_style = styles.TEXT_PRIMARY if item.enabled else styles.TEXT_MUTED
-        table.add_row(
-            str(index + 1),
-            Text("[x]" if item.enabled else "[ ]", style=f"bold {styles.TEXT_PRIMARY}"),
-            Text(item.key, style=key_style),
-            Text(item.value or "-", style=value_style),
-            style=row_style,
-        )
-
-    for auto_index, (key, value, enabled) in enumerate(auto_headers, start=len(headers)):
-        row_style = None
-        if state.mode in {MODE_HOME_HEADERS_SELECT, MODE_HOME_HEADERS_EDIT} and auto_index == state.selected_header_index:
-            row_style = styles.pill_style(styles.TEXT_WARNING)
-        table.add_row(
-            "auto",
-            Text("[x]" if enabled else "[ ]", style=f"bold {styles.TEXT_WARNING}"),
-            Text(key, style=f"bold {styles.TEXT_AUTO_HEADER_KEY}"),
-            Text(value or "-", style=styles.TEXT_AUTO_HEADER_VALUE),
-            style=row_style or styles.ROW_AUTO_HEADER,
-        )
-
-    footer = Text(messages.HOME_HEADERS_FOOTER, style=styles.TEXT_MUTED)
-    return Group(table, footer)
+    footer = Text(messages.HOME_HEADERS_FOOTER)
+    return Group(rendered, footer)

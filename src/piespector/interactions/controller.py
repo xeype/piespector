@@ -4,32 +4,33 @@ from typing import TYPE_CHECKING
 
 from textual import events
 
-from piespector.commands import command_completion_matches, filesystem_path_completions, run_command
-from piespector.domain.editor import TAB_HISTORY
+from piespector.commands import run_command
+from piespector.domain.editor import (
+    HOME_EDITOR_TAB_AUTH,
+    HOME_EDITOR_TAB_BODY,
+    HOME_EDITOR_TAB_HEADERS,
+    HOME_EDITOR_TAB_PARAMS,
+    HOME_EDITOR_TAB_REQUEST,
+    REQUEST_EDITOR_JUMP_KEY_TO_TAB,
+    RESPONSE_JUMP_KEY_TO_TAB,
+    TAB_LABELS,
+    TAB_HOME,
+    TOP_BAR_JUMP_KEY_TO_TARGET,
+)
+from piespector.domain.modes import MODE_HOME_SECTION_SELECT, MODE_NORMAL
 from piespector.interactions.keys import (
     CONFIRM_ACCEPT_KEYS,
     CONFIRM_CANCEL_KEYS,
-    COPY_KEYS,
-    KEY_BACKSPACE,
-    KEY_DELETE,
-    KEY_END,
-    KEY_ENTER,
     KEY_ESCAPE,
-    KEY_HOME,
     KEY_TAB,
     LEFT_KEYS,
-    PASTE_KEYS,
     RIGHT_KEYS,
 )
-from piespector.search import (
-    activate_search_target,
-    history_search_matches,
-    resolve_search_target,
-    search_matches,
-)
+from piespector.search import activate_search_target
 
 if TYPE_CHECKING:
     from piespector.app import PiespectorApp
+    from piespector.search import SearchTarget
 
 
 class InteractionController:
@@ -45,224 +46,8 @@ class InteractionController:
     def handle_command_key(self, event: events.Key) -> None:
         if event.key == KEY_ESCAPE:
             self.state.leave_command_mode()
-            self.app._reset_command_completion()
             self.app._refresh_screen()
             event.stop()
-            return
-
-        if event.key == KEY_TAB:
-            anchor = self.app._command_completion_anchor or self.state.command_buffer
-            matches = command_completion_matches(self.state, anchor)
-            if matches:
-                if self.app._command_completion_anchor != anchor:
-                    self.app._command_completion_anchor = anchor
-                    self.app._command_completion_index = 0
-                else:
-                    self.app._command_completion_index = (
-                        self.app._command_completion_index + 1
-                    ) % len(matches)
-                self.state.command_buffer = matches[self.app._command_completion_index]
-                self.app._refresh_command_line()
-            event.stop()
-            return
-
-        if event.key == KEY_ENTER:
-            self.app._reset_command_completion()
-            self.run_command(self.state.command_buffer)
-            event.stop()
-            return
-
-        if event.key == KEY_BACKSPACE:
-            self.state.command_buffer = self.state.command_buffer[:-1]
-            self.app._reset_command_completion()
-            self.app._refresh_command_line()
-            event.stop()
-            return
-
-        if event.key in PASTE_KEYS or event.character == "\x16":
-            pasted = self.app._paste_text()
-            if pasted is not None:
-                self.state.command_buffer += self.app._normalize_pasted_inline_text(pasted)
-                self.state.message = "Pasted."
-            else:
-                self.state.message = "Paste failed."
-            self.app._reset_command_completion()
-            self.app._refresh_command_line()
-            event.stop()
-            return
-
-        if event.character and ord(event.character) < 32:
-            event.stop()
-            return
-
-        if event.character:
-            self.state.command_buffer += event.character
-            self.app._reset_command_completion()
-            self.app._refresh_command_line()
-            event.stop()
-
-    def handle_search_key(self, event: events.Key) -> None:
-        if event.key == KEY_ESCAPE:
-            self.state.leave_search_mode()
-            self.app._refresh_screen()
-            event.stop()
-            return
-
-        if event.key == KEY_TAB:
-            anchor = self.state.search_anchor_buffer or self.state.command_buffer.strip()
-            matches = (
-                history_search_matches(self.state, anchor)
-                if self.state.current_tab == TAB_HISTORY
-                else search_matches(self.state, anchor)
-            )
-            if matches:
-                if self.state.search_anchor_buffer != anchor:
-                    self.state.search_anchor_buffer = anchor
-                    self.state.search_completion_index = 0
-                else:
-                    self.state.search_completion_index = (
-                        self.state.search_completion_index + 1
-                    ) % len(matches)
-                match = matches[self.state.search_completion_index]
-                if self.state.current_tab == TAB_HISTORY:
-                    parts = [match.method]
-                    if match.status_code is not None:
-                        parts.append(str(match.status_code))
-                    elif match.error:
-                        parts.append("ERR")
-                    name = (
-                        match.source_request_name.strip()
-                        or match.source_request_path.strip()
-                        or match.url.strip()
-                    )
-                    if name:
-                        parts.append(name)
-                    self.state.command_buffer = " ".join(parts)
-                else:
-                    self.state.command_buffer = match.display
-                self.app._refresh_command_line()
-            event.stop()
-            return
-
-        if event.key == KEY_ENTER:
-            self.run_search(self.state.command_buffer)
-            event.stop()
-            return
-
-        if event.key == KEY_BACKSPACE:
-            self.state.command_buffer = self.state.command_buffer[:-1]
-            self.state.search_anchor_buffer = ""
-            self.state.search_completion_index = -1
-            self.app._refresh_command_line()
-            event.stop()
-            return
-
-        if event.character:
-            self.state.command_buffer += event.character
-            self.state.search_anchor_buffer = ""
-            self.state.search_completion_index = -1
-            self.app._refresh_command_line()
-            event.stop()
-
-    def handle_inline_edit_key(self, event: events.Key) -> bool:
-        if event.key == KEY_TAB:
-            if self.app._binary_path_edit_active():
-                anchor = self.app._edit_path_completion_anchor or self.state.edit_buffer
-                matches = filesystem_path_completions(anchor)
-                if matches:
-                    if self.app._edit_path_completion_anchor != anchor:
-                        self.app._edit_path_completion_anchor = anchor
-                        self.app._edit_path_completion_index = 0
-                    else:
-                        self.app._edit_path_completion_index = (
-                            self.app._edit_path_completion_index + 1
-                        ) % len(matches)
-                    self.state.set_edit_buffer(
-                        matches[self.app._edit_path_completion_index],
-                        replace_on_next_input=False,
-                    )
-                    self.app._refresh_screen()
-                event.stop()
-                return True
-            if self.state.autocomplete_edit_placeholder():
-                self.app._refresh_screen()
-            event.stop()
-            return True
-
-        if event.key in COPY_KEYS or event.character == "\x03":
-            copied = self.app._copy_text(self.state.edit_buffer)
-            self.state.message = "Copied field." if copied else "Copy failed."
-            self.app._refresh_screen()
-            event.stop()
-            return True
-
-        if event.key in PASTE_KEYS or event.character == "\x16":
-            pasted = self.app._paste_text()
-            if pasted is not None:
-                inline_value = self.app._normalize_pasted_inline_text(pasted)
-                self.state.insert_edit_text(inline_value)
-                self.state.message = "Pasted."
-            else:
-                self.state.message = "Paste failed."
-            self.app._reset_edit_path_completion()
-            self.app._refresh_screen()
-            event.stop()
-            return True
-
-        if event.character and ord(event.character) < 32:
-            event.stop()
-            return True
-
-        if event.key == "left":
-            self.state.move_edit_cursor(-1)
-            self.app._reset_edit_path_completion()
-            self.app._refresh_screen()
-            event.stop()
-            return True
-
-        if event.key == "right":
-            self.state.move_edit_cursor(1)
-            self.app._reset_edit_path_completion()
-            self.app._refresh_screen()
-            event.stop()
-            return True
-
-        if event.key == KEY_HOME:
-            self.state.move_edit_cursor_to_start()
-            self.app._reset_edit_path_completion()
-            self.app._refresh_screen()
-            event.stop()
-            return True
-
-        if event.key == KEY_END:
-            self.state.move_edit_cursor_to_end()
-            self.app._reset_edit_path_completion()
-            self.app._refresh_screen()
-            event.stop()
-            return True
-
-        if event.key == KEY_BACKSPACE:
-            self.state.backspace_edit_character()
-            self.app._reset_edit_path_completion()
-            self.app._refresh_screen()
-            event.stop()
-            return True
-
-        if event.key == KEY_DELETE:
-            self.state.delete_edit_character()
-            self.app._reset_edit_path_completion()
-            self.app._refresh_screen()
-            event.stop()
-            return True
-
-        if event.character:
-            self.state.insert_edit_character(event.character)
-            self.app._reset_edit_path_completion()
-            self.app._refresh_screen()
-            event.stop()
-            return True
-
-        return False
 
     def handle_confirm_key(self, event: events.Key) -> None:
         if event.key in CONFIRM_CANCEL_KEYS:
@@ -287,13 +72,92 @@ class InteractionController:
         self.app._refresh_screen()
         event.stop()
 
-    def handle_help_view_key(self, event: events.Key) -> bool:
+    def handle_jump_key(self, event: events.Key) -> None:
         if event.key == KEY_ESCAPE:
-            self.state.leave_help_tab()
+            self.state.leave_jump_mode()
+            self.app._refresh_jump_state()
+            event.stop()
+            return
+
+        if event.key == KEY_TAB:
+            self.state.leave_jump_mode()
+            self.activate_jump_target("collections")
             self.app._refresh_screen()
             event.stop()
+            return
+
+        jump_key = (event.character or event.key or "").lower()
+        target = self.jump_target_for_key(jump_key)
+        if target is not None:
+            self.state.leave_jump_mode()
+            self.activate_jump_target(target)
+            self.app._refresh_screen()
+            event.stop()
+            return
+
+        event.stop()
+
+    def jump_target_for_key(self, jump_key: str) -> str | None:
+        if jump_key in REQUEST_EDITOR_JUMP_KEY_TO_TAB:
+            return f"request:{REQUEST_EDITOR_JUMP_KEY_TO_TAB[jump_key]}"
+        if jump_key in RESPONSE_JUMP_KEY_TO_TAB:
+            return f"response:{RESPONSE_JUMP_KEY_TO_TAB[jump_key]}"
+        if jump_key in TOP_BAR_JUMP_KEY_TO_TARGET:
+            return f"topbar:{TOP_BAR_JUMP_KEY_TO_TARGET[jump_key]}"
+        return None
+
+    def activate_jump_target(self, target: str) -> bool:
+        if target == "collections":
+            self._open_home_collections_jump_target()
+            return True
+        if target.startswith("request:"):
+            self._open_home_jump_target(target.split(":", 1)[1])
+            return True
+        if target.startswith("response:"):
+            self._open_home_response_jump_target(target.split(":", 1)[1])
+            return True
+        if target.startswith("topbar:"):
+            self._open_home_top_bar_jump_target(target.split(":", 1)[1])
             return True
         return False
+
+    def _open_home_collections_jump_target(self) -> None:
+        self.state.switch_tab(TAB_HOME, TAB_LABELS[TAB_HOME])
+        self.state.mode = MODE_NORMAL
+        self.state.message = ""
+
+    def _open_home_jump_target(self, tab_id: str) -> None:
+        self.state.switch_tab(TAB_HOME, TAB_LABELS[TAB_HOME])
+        self.state.set_home_editor_tab(tab_id)
+        if tab_id == HOME_EDITOR_TAB_REQUEST:
+            self.state.enter_home_request_select_mode()
+            return
+        if tab_id == HOME_EDITOR_TAB_AUTH:
+            self.state.enter_home_auth_select_mode()
+            return
+        if tab_id == HOME_EDITOR_TAB_PARAMS:
+            self.state.enter_home_params_select_mode()
+            return
+        if tab_id == HOME_EDITOR_TAB_HEADERS:
+            self.state.enter_home_headers_select_mode()
+            return
+        self.state.enter_home_body_select_mode(origin_mode=MODE_HOME_SECTION_SELECT)
+
+    def _open_home_top_bar_jump_target(self, target: str) -> None:
+        self.state.switch_tab(TAB_HOME, TAB_LABELS[TAB_HOME])
+        if self.state.get_active_request() is None and self.state.get_selected_request() is not None:
+            self.state.open_selected_request(pin=True)
+        if target == "method":
+            self.state.enter_home_method_select_mode(origin_mode=MODE_HOME_SECTION_SELECT)
+        elif target == "url":
+            self.state.enter_home_url_edit_mode()
+
+    def _open_home_response_jump_target(self, tab_id: str) -> None:
+        self.state.switch_tab(TAB_HOME, TAB_LABELS[TAB_HOME])
+        if self.state.get_active_request() is None and self.state.get_selected_request() is not None:
+            self.state.open_selected_request(pin=True)
+        self.state.selected_home_response_tab = tab_id
+        self.state.enter_home_response_select_mode(origin_mode=MODE_HOME_SECTION_SELECT)
 
     def run_command(self, raw_command: str) -> None:
         before_env_pairs = dict(self.state.env_pairs)
@@ -311,31 +175,8 @@ class InteractionController:
             return
         self.app._refresh_screen()
 
-    def run_search(self, raw_query: str) -> None:
-        if self.state.current_tab == TAB_HISTORY:
-            count = self.state.set_history_filter(raw_query)
-            self.state.leave_search_mode()
-            if self.state.history_filter_query:
-                self.state.message = (
-                    f"Filtered history to {count} entr{'y' if count == 1 else 'ies'}."
-                    if count
-                    else f"No history matches for {raw_query.strip()!r}."
-                )
-            else:
-                self.state.message = "Cleared history filter."
-            self.app._refresh_screen()
-            return
-
-        target = resolve_search_target(self.state, raw_query)
-        self.state.leave_search_mode()
-        if target is None:
-            self.state.message = (
-                f"No matches for {raw_query.strip()!r}."
-                if raw_query.strip()
-                else ""
-            )
-            self.app._refresh_screen()
-            return
+    def open_search_target(self, target: SearchTarget) -> None:
+        self.state.mode = MODE_NORMAL
         if activate_search_target(self.state, target):
             self.app._persist_requests()
         else:

@@ -11,16 +11,15 @@ from piespector.domain.editor import (
 from piespector.domain.modes import MODE_HOME_SECTION_SELECT, MODE_NORMAL
 from piespector.interactions.keys import (
     DOWN_KEYS,
+    KEY_CLOSE,
     KEY_EDIT,
-    KEY_ENTER,
     KEY_ESCAPE,
     KEY_PAGE_DOWN,
     KEY_PAGE_UP,
-    KEY_SEARCH,
     KEY_SEND,
-    LEFT_KEYS,
     OPEN_KEYS,
-    RIGHT_KEYS,
+    TAB_NEXT_KEYS,
+    TAB_PREVIOUS_KEYS,
     UP_KEYS,
 )
 from piespector.screens.home import messages
@@ -28,72 +27,126 @@ from piespector.screens.home.controllers.base import HomeControllerBase
 
 
 class HomeNavigationController(HomeControllerBase):
+    def browse_sidebar(self, step: int) -> None:
+        tree = self.sidebar_tree()
+        if tree is None:
+            self.state.select_request(step)
+            self.app._refresh_home_sidebar_panel()
+            return
+        if not tree.has_focus:
+            tree.focus()
+        if step < 0:
+            tree.action_cursor_up()
+        elif step > 0:
+            tree.action_cursor_down()
+
+    def cycle_open_request(self, step: int) -> None:
+        self.state.cycle_open_request(step)
+        self.app._refresh_viewport()
+
+    def jump_folder(self, step: int) -> None:
+        if self.state.select_folder(step):
+            self.app._refresh_viewport()
+            self.app._sync_home_sidebar_cursor()
+
+    def jump_collection(self, step: int) -> None:
+        if self.state.select_collection(step):
+            self.app._refresh_viewport()
+            self.app._sync_home_sidebar_cursor()
+
     def handle_home_view_key(self, event: events.Key) -> bool:
-        visible_rows = self.app._home_request_list_visible_rows()
-
-        if event.key == KEY_SEARCH:
-            self.state.enter_search_mode()
-            self.app._refresh_screen()
+        if event.key == KEY_SEND:
+            self.app._send_selected_request()
             event.stop()
             return True
 
-        if event.key in LEFT_KEYS:
-            self.state.cycle_open_request(-1)
-            self.app._refresh_viewport()
-            event.stop()
-            return True
-
-        if event.key in RIGHT_KEYS:
-            self.state.cycle_open_request(1)
-            self.app._refresh_viewport()
-            event.stop()
-            return True
-
-        if event.key in DOWN_KEYS:
-            self.state.select_request(1)
-            self.app._refresh_viewport()
-            event.stop()
-            return True
-
-        if event.key in UP_KEYS:
-            self.state.select_request(-1)
-            self.app._refresh_viewport()
+        if event.key == KEY_CLOSE:
+            closed = self.state.close_active_request()
+            if closed is None:
+                self.state.message = "No opened request selected."
+                self.app._refresh_screen()
+            else:
+                self.app._refresh_viewport()
             event.stop()
             return True
 
         if event.key == KEY_ESCAPE:
-            if self.state.collapse_selected_context():
-                self.app._persist_requests()
-                self.app._refresh_viewport()
-                event.stop()
-                return True
+            tree = self.sidebar_tree()
+            if tree is None:
+                if self.state.collapse_selected_context():
+                    self.app._persist_requests()
+                    self.app._refresh_home_sidebar_panel()
+                    event.stop()
+                    return True
+            else:
+                if not tree.has_focus:
+                    tree.focus()
+                cursor_node = tree.cursor_node
+                if cursor_node is None:
+                    return False
+                if cursor_node.allow_expand and cursor_node.is_expanded:
+                    tree.action_toggle_node()
+                    event.stop()
+                    return True
+                parent = cursor_node.parent
+                if (
+                    parent is not None
+                    and not parent.is_root
+                    and parent.allow_expand
+                    and parent.is_expanded
+                ):
+                    tree.action_cursor_parent()
+                    tree.action_toggle_node()
+                    event.stop()
+                    return True
             return False
 
         if event.key == KEY_PAGE_DOWN:
-            self.state.scroll_request_window(visible_rows, visible_rows)
-            self.app._refresh_viewport()
+            tree = self.sidebar_tree()
+            if tree is None:
+                visible_rows = self.app._home_request_list_visible_rows()
+                self.state.scroll_request_window(visible_rows, visible_rows)
+                self.app._refresh_home_sidebar_panel()
+            else:
+                if not tree.has_focus:
+                    tree.focus()
+                tree.action_page_down()
             event.stop()
             return True
 
         if event.key == KEY_PAGE_UP:
-            self.state.scroll_request_window(-visible_rows, visible_rows)
-            self.app._refresh_viewport()
+            tree = self.sidebar_tree()
+            if tree is None:
+                visible_rows = self.app._home_request_list_visible_rows()
+                self.state.scroll_request_window(-visible_rows, visible_rows)
+                self.app._refresh_home_sidebar_panel()
+            else:
+                if not tree.has_focus:
+                    tree.focus()
+                tree.action_page_up()
             event.stop()
             return True
 
         if event.key == KEY_EDIT:
-            if self.state.get_selected_request() is None:
+            tree = self.sidebar_tree()
+            if tree is None:
+                selected_request = self.state.get_selected_request()
+                if selected_request is not None:
+                    self.state.open_selected_request(pin=True)
+                    self.app._refresh_viewport()
+                    event.stop()
+                    return True
                 if self.state.toggle_selected_sidebar_node():
                     self.app._persist_requests()
-                    self.app._refresh_viewport()
+                    self.app._refresh_home_sidebar_panel()
                     event.stop()
                     return True
                 self.state.message = messages.HOME_SELECT_REQUEST_FIRST
                 self.app._refresh_screen()
-                event.stop()
-                return True
-            self.state.enter_home_section_select_mode()
-            self.app._refresh_screen()
+            else:
+                if not tree.has_focus:
+                    tree.focus()
+                tree.action_select_cursor()
             event.stop()
             return True
 
@@ -107,27 +160,32 @@ class HomeNavigationController(HomeControllerBase):
         elif self.state.home_editor_tab == HOME_EDITOR_TAB_HEADERS:
             self.state.enter_home_headers_select_mode()
         elif self.state.home_editor_tab == HOME_EDITOR_TAB_AUTH:
-            self.state.enter_home_auth_type_edit_mode(origin_mode=MODE_HOME_SECTION_SELECT)
+            self.state.enter_home_auth_select_mode()
         elif self.state.home_editor_tab == HOME_EDITOR_TAB_BODY:
-            self.state.enter_home_body_type_edit_mode(origin_mode=MODE_HOME_SECTION_SELECT)
+            self.state.enter_home_body_select_mode(origin_mode=MODE_HOME_SECTION_SELECT)
         else:
             self.state.enter_home_request_select_mode()
 
     def handle_home_section_select_key(self, event: events.Key) -> None:
         if event.key == KEY_ESCAPE:
             self.state.mode = MODE_NORMAL
-            self.state.edit_buffer = ""
             self.app._refresh_screen()
             event.stop()
             return
 
-        if event.key in LEFT_KEYS:
+        if event.key in UP_KEYS or event.key in DOWN_KEYS:
+            self.enter_current_home_value_select_mode()
+            self.app._refresh_screen()
+            event.stop()
+            return
+
+        if event.key in TAB_PREVIOUS_KEYS:
             self.state.cycle_home_editor_tab(-1)
             self.app._refresh_screen()
             event.stop()
             return
 
-        if event.key in RIGHT_KEYS:
+        if event.key in TAB_NEXT_KEYS:
             self.state.cycle_home_editor_tab(1)
             self.app._refresh_screen()
             event.stop()

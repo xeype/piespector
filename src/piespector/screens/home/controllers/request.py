@@ -8,16 +8,20 @@ from piespector.domain.editor import (
     HOME_EDITOR_TAB_HEADERS,
     HOME_EDITOR_TAB_PARAMS,
 )
-from piespector.domain.modes import MODE_HOME_AUTH_SELECT, MODE_HOME_BODY_SELECT
+from piespector.domain.modes import (
+    MODE_HOME_AUTH_SELECT,
+    MODE_HOME_BODY_SELECT,
+    MODE_HOME_SECTION_SELECT,
+)
 from piespector.interactions.keys import (
-    DOWN_KEYS,
     KEY_ENTER,
     KEY_ESCAPE,
     KEY_SEND,
     OPEN_KEYS,
-    PREVIOUS_KEYS,
-    NEXT_KEYS,
+    TAB_NEXT_KEYS,
+    TAB_PREVIOUS_KEYS,
     UP_KEYS,
+    DOWN_KEYS,
 )
 from piespector.screens.home.controllers.base import HomeControllerBase
 
@@ -50,19 +54,30 @@ class HomeRequestController(HomeControllerBase):
     def handle_home_request_select_key(self, event: events.Key) -> None:
         if event.key == KEY_ESCAPE:
             self.state.enter_home_section_select_mode()
-            self.state.edit_buffer = ""
             self.app._refresh_screen()
             event.stop()
             return
 
         if event.key in UP_KEYS:
             self.state.select_request_field(-1)
-            self.app._refresh_screen()
+            self.app._refresh_home_request_panel()
             event.stop()
             return
 
         if event.key in DOWN_KEYS:
             self.state.select_request_field(1)
+            self.app._refresh_home_request_panel()
+            event.stop()
+            return
+
+        if event.key in TAB_PREVIOUS_KEYS:
+            self.move_request_block(-1)
+            self.app._refresh_screen()
+            event.stop()
+            return
+
+        if event.key in TAB_NEXT_KEYS:
+            self.move_request_block(1)
             self.app._refresh_screen()
             event.stop()
             return
@@ -78,6 +93,14 @@ class HomeRequestController(HomeControllerBase):
             event.stop()
 
     def handle_home_request_edit_key(self, event: events.Key) -> None:
+        request_input = self.live_input("#request-overview-input")
+        if request_input is not None and request_input.display:
+            if event.key == KEY_ESCAPE:
+                self.state.leave_home_request_edit_mode()
+                self.app._refresh_screen()
+                event.stop()
+            return
+
         if event.key == KEY_ESCAPE:
             self.state.leave_home_request_edit_mode()
             self.app._refresh_screen()
@@ -90,32 +113,42 @@ class HomeRequestController(HomeControllerBase):
                 self.app._persist_requests()
             self.app._refresh_screen()
             event.stop()
+
+    def handle_home_request_method_select_key(self, event: events.Key) -> None:
+        if event.key == KEY_ESCAPE:
+            self.state.leave_home_method_select_mode()
+            self.app._refresh_screen()
+            event.stop()
             return
 
-        self.app._handle_inline_edit_key(event)
+        if event.key in OPEN_KEYS:
+            self.state.enter_home_method_edit_mode()
+            self.app._refresh_screen()
+            event.stop()
+            return
+
+        if event.key == KEY_SEND:
+            self.app._send_selected_request()
+            event.stop()
 
     def handle_home_request_method_edit_key(self, event: events.Key) -> None:
         if event.key == KEY_ESCAPE:
-            self.state.leave_home_request_edit_mode()
+            self.state.leave_home_method_edit_mode()
             self.app._refresh_screen()
             event.stop()
             return
 
-        if event.key == KEY_ENTER:
-            updated_field = self.state.save_selected_request_method()
-            if updated_field is not None:
-                self.app._persist_requests()
-            self.app._refresh_screen()
-            event.stop()
-            return
+        method_select = self.live_select("#method-select")
+        if method_select is not None:
+            if event.key in OPEN_KEYS:
+                method_select.focus()
+                if not method_select.expanded:
+                    method_select.action_show_overlay()
+                event.stop()
+                return
+            if event.key == KEY_SEND:
+                self.app._send_selected_request()
+                event.stop()
 
-        if event.key in PREVIOUS_KEYS:
-            self.state.cycle_request_method(-1)
-            self.app._refresh_screen()
-            event.stop()
-            return
-
-        if event.key in NEXT_KEYS:
-            self.state.cycle_request_method(1)
-            self.app._refresh_screen()
-            event.stop()
+    def handle_home_url_edit_key(self, event: events.Key) -> None:
+        return

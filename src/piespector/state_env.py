@@ -41,7 +41,6 @@ class EnvStateMixin:
         self.env_scroll_offset = 0
         self.selected_env_field_index = 0
         self.env_creating_new = False
-        self.clear_edit_buffer()
         self.message = f"Selected env {self.selected_env_name}."
 
     def create_env_set(self, name: str) -> bool:
@@ -99,7 +98,6 @@ class EnvStateMixin:
         self.env_scroll_offset = 0
         self.selected_env_field_index = 0
         self.env_creating_new = False
-        self.clear_edit_buffer()
         self.mode = MODE_NORMAL
         self.message = f"Deleted env {env_name}."
         return True
@@ -133,7 +131,6 @@ class EnvStateMixin:
         self.env_scroll_offset = 0
         self.selected_env_field_index = 0
         self.env_creating_new = False
-        self.clear_edit_buffer()
         self.current_tab = TAB_ENV
         self.mode = MODE_NORMAL
         self.message = (
@@ -222,13 +219,7 @@ class EnvStateMixin:
             self.message = "Nothing to edit."
             self.mode = MODE_NORMAL
             return
-        key, value = item
-        field_name, _field_label = self.selected_env_field()
         self.mode = MODE_ENV_EDIT
-        if field_name == "key":
-            self.set_edit_buffer(key, replace_on_next_input=False)
-        else:
-            self.set_edit_buffer(value, replace_on_next_input=False)
         self.message = ""
 
     def enter_env_create_mode(self) -> None:
@@ -237,20 +228,17 @@ class EnvStateMixin:
         self.mode = MODE_ENV_EDIT
         self.selected_env_field_index = 0
         self.env_creating_new = True
-        self.set_edit_buffer("", replace_on_next_input=False)
         self.message = ""
 
     def leave_env_edit_mode(self) -> None:
         self.mode = MODE_ENV_SELECT
         self.env_creating_new = False
-        self.clear_edit_buffer()
         self.message = "h/l fields, e edit, d delete, Esc back."
 
     def leave_env_interaction(self) -> None:
         self.mode = MODE_NORMAL
         self.selected_env_field_index = 0
         self.env_creating_new = False
-        self.clear_edit_buffer()
 
     def get_selected_env_item(self) -> tuple[str, str] | None:
         items = self.get_env_items()
@@ -259,13 +247,14 @@ class EnvStateMixin:
         self.clamp_selected_env_index()
         return items[self.selected_env_index]
 
-    def save_selected_env_field(self) -> str | None:
+    def save_selected_env_field(self, value: str | None = None) -> str | None:
         self.ensure_env_workspace()
         field_name, field_label = self.selected_env_field()
+        raw = value or ""
         if self.env_creating_new:
             if field_name != "key":
                 return None
-            new_key = self.edit_buffer.strip()
+            new_key = raw.strip()
             if not new_key:
                 self.message = "Key cannot be empty."
                 return None
@@ -278,16 +267,15 @@ class EnvStateMixin:
             self.selected_env_field_index = 1
             self.env_creating_new = False
             self.mode = MODE_ENV_EDIT
-            self.set_edit_buffer("", replace_on_next_input=False)
             self.message = ""
             return new_key
 
         item = self.get_selected_env_item()
         if item is None:
             return None
-        key, value = item
+        key, existing_value = item
         if field_name == "key":
-            new_key = self.edit_buffer.strip()
+            new_key = raw.strip()
             if not new_key:
                 self.message = "Key cannot be empty."
                 return None
@@ -295,16 +283,15 @@ class EnvStateMixin:
                 self.message = f"Key {new_key} already exists."
                 return None
             items = self.get_env_items()
-            items[self.selected_env_index] = (new_key, value)
+            items[self.selected_env_index] = (new_key, existing_value)
             self.env_pairs = dict(items)
             self.env_sets[self.selected_env_name] = self.env_pairs
             updated = new_key
         else:
-            self.env_pairs[key] = self.edit_buffer
+            self.env_pairs[key] = raw
             self.env_sets[self.selected_env_name] = self.env_pairs
             updated = key
         self.mode = MODE_ENV_SELECT
-        self.clear_edit_buffer()
         self.message = f"Updated {field_label.lower()}."
         return updated
 
@@ -315,7 +302,6 @@ class EnvStateMixin:
         del self.env_pairs[key]
         self.env_sets[self.selected_env_name] = self.env_pairs
         self.clamp_selected_env_index()
-        self.clear_edit_buffer()
         self.mode = MODE_NORMAL
         self.selected_env_field_index = 0
         self.message = f"Deleted {key}."

@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from rich import box
 from rich.align import Align
+from rich.columns import Columns
 from rich.console import Group, RenderableType
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
+
+from textual.widgets import DataTable, Static
 
 from piespector.domain.editor import (
     HISTORY_DETAIL_BLOCK_REQUEST,
@@ -15,10 +18,11 @@ from piespector.domain.editor import (
 from piespector.domain.history import HistoryEntry
 from piespector.domain.modes import MODE_HISTORY_RESPONSE_SELECT
 from piespector.formatting import format_bytes
-from piespector.screens.home.render import home_response_visible_rows
+from piespector.screens.home.layout import home_response_visible_rows
+from piespector.screens.home.request.method_selection import method_color
 from piespector.state import PiespectorState
-from piespector.ui import rich_styles as ui_styles
 from piespector.ui import rendering_helpers
+from piespector.ui.selection import selected_element_style
 
 
 def history_list_visible_rows(viewport_height: int | None) -> int:
@@ -33,6 +37,181 @@ def history_sidebar_width(viewport_width: int | None) -> int:
     return max(min(viewport_width // 3, 52), 38)
 
 
+# ================================================================
+#  Widget-based refresh
+# ================================================================
+
+def refresh_history_widgets(
+    state: PiespectorState,
+    history_list: DataTable,
+    history_detail: Static,
+) -> None:
+    entries = state.visible_history_entries()
+
+    # Refresh history list
+    history_list.clear()
+    for index, entry in enumerate(entries):
+        status = str(entry.status_code) if entry.status_code is not None else "ERR"
+        meta = Text()
+        meta.append(entry.method, style=method_color(entry.method))
+        meta.append(f" {status}")
+        name = (
+            entry.source_request_name.strip()
+            or entry.source_request_path.strip()
+            or entry.url
+            or "(unnamed)"
+        )
+        history_list.add_row(
+            history_time_label(entry.created_at),
+            meta,
+            name,
+        )
+
+    if entries and state.selected_history_index < len(entries):
+        try:
+            history_list.move_cursor(row=state.selected_history_index)
+        except Exception:
+            pass
+
+    # Refresh detail panel
+    selected_entry = state.get_selected_history_entry()
+    detail_content = _render_history_detail_content(state, selected_entry)
+    history_detail.update(detail_content)
+
+
+def _render_history_detail_content(
+    state: PiespectorState,
+    entry: HistoryEntry | None,
+) -> RenderableType:
+    if entry is None:
+        if state.history_entries and state.history_filter_query:
+            empty = Text()
+            empty.append("No matching history entries.\n")
+            empty.append("Press ")
+            empty.append("s")
+            empty.append(" and submit an empty query to clear the filter.")
+            return empty
+        return Text("No history entry selected.")
+
+    summary = Text()
+    summary.append("When ")
+    summary.append(entry.created_at or "-")
+    summary.append("\nRequest ")
+    summary.append(entry.source_request_path or entry.source_request_name or "-")
+    summary.append("\nAuth ")
+    auth_summary = history_auth_summary(entry)
+    summary.append(auth_summary)
+    summary.append("\nURL ")
+    summary.append(entry.url or "-")
+    summary.append("\nStatus ")
+    summary.append(str(entry.status_code or "-"))
+    summary.append("   Time ")
+    summary.append(f"{entry.elapsed_ms or 0:.1f} ms")
+    summary.append("   Size ")
+    summary.append(format_bytes(entry.response_size))
+    if entry.error:
+        summary.append("\nError ")
+        summary.append(entry.error)
+
+    # Request tabs
+    request_tabs = Text()
+    request_tabs.append("Request ")
+    request_tabs.append(
+        " Body ",
+        style=selected_element_style(
+            state,
+            selected=(
+                state.selected_history_detail_block == HISTORY_DETAIL_BLOCK_REQUEST
+                and state.selected_history_request_tab == RESPONSE_TAB_BODY
+            ),
+        ),
+    )
+    request_tabs.append(" ")
+    request_tabs.append(
+        " Headers ",
+        style=selected_element_style(
+            state,
+            selected=(
+                state.selected_history_detail_block == HISTORY_DETAIL_BLOCK_REQUEST
+                and state.selected_history_request_tab == RESPONSE_TAB_HEADERS
+            ),
+        ),
+    )
+
+    # Request content
+    request_visible_rows = 8
+    if state.selected_history_request_tab == RESPONSE_TAB_HEADERS:
+        request_lines = list(
+            range(rendering_helpers.response_header_row_count(entry.request_headers))
+        )
+        state.clamp_history_request_scroll_offset(len(request_lines), request_visible_rows)
+        request_start = state.history_request_scroll_offset
+        request_end = min(request_start + request_visible_rows, len(request_lines))
+        request_content: RenderableType = rendering_helpers.render_response_headers(
+            entry.request_headers, request_start, request_end,
+        )
+    else:
+        request_lines = rendering_helpers.response_body_lines(entry.request_body, None)
+        state.clamp_history_request_scroll_offset(len(request_lines), request_visible_rows)
+        request_start = state.history_request_scroll_offset
+        request_end = min(request_start + request_visible_rows, len(request_lines))
+        request_content = rendering_helpers.render_response_body(
+            entry.request_body, None, request_start, request_end,
+        )
+
+    # Response tabs
+    response_tabs = Text()
+    response_tabs.append("Response ")
+    response_tabs.append(
+        " Body ",
+        style=selected_element_style(
+            state,
+            selected=(
+                state.selected_history_detail_block != HISTORY_DETAIL_BLOCK_REQUEST
+                and state.selected_history_response_tab == RESPONSE_TAB_BODY
+            ),
+        ),
+    )
+    response_tabs.append(" ")
+    response_tabs.append(
+        " Headers ",
+        style=selected_element_style(
+            state,
+            selected=(
+                state.selected_history_detail_block != HISTORY_DETAIL_BLOCK_REQUEST
+                and state.selected_history_response_tab == RESPONSE_TAB_HEADERS
+            ),
+        ),
+    )
+
+    # Response content
+    response_visible_rows = 8
+    if state.selected_history_response_tab == RESPONSE_TAB_HEADERS:
+        response_lines = list(
+            range(rendering_helpers.response_header_row_count(entry.response_headers))
+        )
+        state.clamp_history_response_scroll_offset(len(response_lines), response_visible_rows)
+        response_start = state.history_response_scroll_offset
+        response_end = min(response_start + response_visible_rows, len(response_lines))
+        response_content: RenderableType = rendering_helpers.render_response_headers(
+            entry.response_headers, response_start, response_end,
+        )
+    else:
+        response_lines = rendering_helpers.response_body_lines(entry.response_body, None)
+        state.clamp_history_response_scroll_offset(len(response_lines), response_visible_rows)
+        response_start = state.history_response_scroll_offset
+        response_end = min(response_start + response_visible_rows, len(response_lines))
+        response_content = rendering_helpers.render_response_body(
+            entry.response_body, None, response_start, response_end,
+        )
+
+    return Group(summary, request_tabs, request_content, response_tabs, response_content)
+
+
+# ================================================================
+#  Legacy Rich rendering (kept for test compatibility)
+# ================================================================
+
 def render_history_viewport(
     state: PiespectorState,
     viewport_height: int | None,
@@ -40,36 +219,26 @@ def render_history_viewport(
 ) -> RenderableType:
     if not state.history_entries:
         empty = Text()
-        empty.append("No history yet.\n", style=ui_styles.primary_style(bold=True))
-        empty.append("Send a request, then open ", style=ui_styles.TEXT_MUTED)
-        empty.append(":history", style=ui_styles.success_style(bold=True))
-        empty.append(" to inspect the snapshot.", style=ui_styles.TEXT_MUTED)
+        empty.append("No history yet.\n")
+        empty.append("Send a request, then open the Command Palette with Ctrl+P and run ")
+        empty.append("history")
+        empty.append(" to inspect the snapshot.")
         return Panel(
             Align.left(empty),
             title="History",
-            border_style=ui_styles.BORDER,
-            box=box.ROUNDED,
             padding=(1, 2),
         )
 
     visible_rows = history_list_visible_rows(viewport_height)
-    state.clamp_history_scroll_offset(visible_rows)
-    selected_entry = state.get_selected_history_entry()
-    detail_width = None
-    if viewport_width is not None:
-        detail_width = max(
-            viewport_width - history_sidebar_width(viewport_width) - 6,
-            48,
-        )
-
-    layout = Table.grid(expand=True)
-    layout.add_column(width=history_sidebar_width(viewport_width))
-    layout.add_column(ratio=1)
-    layout.add_row(
-        render_history_sidebar(state, visible_rows),
-        render_history_detail(state, selected_entry, viewport_height, detail_width),
+    state.ensure_history_selection_visible(visible_rows)
+    sidebar = render_history_sidebar(state, visible_rows)
+    detail = render_history_detail(
+        state,
+        state.get_selected_history_entry(),
+        viewport_height,
+        viewport_width,
     )
-    return layout
+    return Columns((sidebar, detail), expand=True, equal=False)
 
 
 def render_history_sidebar(
@@ -77,47 +246,45 @@ def render_history_sidebar(
     visible_rows: int,
 ) -> RenderableType:
     entries = state.visible_history_entries()
+    state.clamp_history_scroll_offset(visible_rows)
     start = state.history_scroll_offset
     end = min(start + visible_rows, len(entries))
+    visible_entries = entries[start:end]
 
     table = Table(
         expand=True,
         box=None,
         show_header=False,
-        padding=(0, 0),
+        padding=(0, 1),
     )
-    table.add_column("When", width=19, no_wrap=True)
-    table.add_column("Meta", width=12, no_wrap=True)
+    table.add_column("When", width=20)
+    table.add_column("Meta", width=10)
     table.add_column("Name", ratio=1, no_wrap=True)
 
-    for index, entry in enumerate(entries[start:end], start=start):
-        row_style = None
-        when_style = ui_styles.TEXT_MUTED
-        meta_style = ui_styles.TEXT_SECONDARY
-        name_style = ui_styles.TEXT_PRIMARY
-        if index == state.selected_history_index:
-            row_style = ui_styles.pill_style(ui_styles.TEXT_SUCCESS)
-            when_style = ui_styles.text_style(ui_styles.TEXT_INVERSE, bold=True)
-            meta_style = ui_styles.text_style(ui_styles.TEXT_INVERSE, bold=True)
-            name_style = ui_styles.text_style(ui_styles.TEXT_INVERSE, bold=True)
-
+    for index, entry in enumerate(visible_entries, start=start):
         status = str(entry.status_code) if entry.status_code is not None else "ERR"
-        meta = f"{entry.method} {status}"
+        meta = Text()
+        meta.append(entry.method, style=method_color(entry.method))
+        meta.append(f" {status}")
         name = (
             entry.source_request_name.strip()
             or entry.source_request_path.strip()
             or entry.url
             or "(unnamed)"
         )
+        row_style = selected_element_style(
+            state,
+            selected=index == state.selected_history_index,
+        )
         table.add_row(
-            Text(history_time_label(entry.created_at), style=when_style),
-            Text(meta, style=meta_style),
-            Text(name, style=name_style),
+            history_time_label(entry.created_at),
+            meta,
+            name,
             style=row_style,
         )
 
     return Panel(
-        table if entries else Text("No matching history entries.", style=ui_styles.TEXT_MUTED),
+        table,
         title="History",
         subtitle=history_sidebar_caption(
             start,
@@ -127,8 +294,6 @@ def render_history_sidebar(
             state.history_filter_query,
         ),
         subtitle_align="left",
-        border_style=ui_styles.BORDER,
-        box=box.ROUNDED,
     )
 
 
@@ -138,228 +303,32 @@ def render_history_detail(
     viewport_height: int | None,
     viewport_width: int | None,
 ) -> RenderableType:
-    if entry is None:
-        if state.history_entries and state.history_filter_query:
-            empty = Text()
-            empty.append("No matching history entries.\n", style=ui_styles.primary_style(bold=True))
-            empty.append("Press ", style=ui_styles.TEXT_MUTED)
-            empty.append("s", style=ui_styles.success_style(bold=True))
-            empty.append(
-                " and submit an empty query to clear the filter.",
-                style=ui_styles.TEXT_MUTED,
-            )
-            body: RenderableType = empty
-        else:
-            body = Text("No history entry selected.", style=ui_styles.TEXT_MUTED)
-        return Panel(
-            body,
-            title="Details",
-            border_style=ui_styles.BORDER,
-            box=box.ROUNDED,
-        )
-
-    summary = Text()
-    summary.append("When ", style=ui_styles.secondary_style(bold=True))
-    summary.append(entry.created_at or "-", style=ui_styles.TEXT_PRIMARY)
-    summary.append("\nRequest ", style=ui_styles.secondary_style(bold=True))
-    summary.append(
-        entry.source_request_path or entry.source_request_name or "-",
-        style=ui_styles.TEXT_SUCCESS,
-    )
-    summary.append("\nAuth ", style=ui_styles.secondary_style(bold=True))
-    auth_summary, auth_style = history_auth_summary(entry)
-    summary.append(auth_summary, style=auth_style)
-    summary.append("\nURL ", style=ui_styles.secondary_style(bold=True))
-    summary.append(entry.url or "-", style=ui_styles.TEXT_URL)
-    summary.append("\nStatus ", style=ui_styles.secondary_style(bold=True))
-    summary.append(
-        str(entry.status_code or "-"),
-        style=ui_styles.TEXT_SUCCESS if entry.status_code else ui_styles.TEXT_DANGER,
-    )
-    summary.append("   Time ", style=ui_styles.secondary_style(bold=True))
-    summary.append(f"{entry.elapsed_ms or 0:.1f} ms", style=ui_styles.TEXT_WARNING)
-    summary.append("   Size ", style=ui_styles.secondary_style(bold=True))
-    summary.append(format_bytes(entry.response_size), style=ui_styles.TEXT_URL)
-    if entry.error:
-        summary.append("\nError ", style=ui_styles.secondary_style(bold=True))
-        summary.append(entry.error, style=ui_styles.TEXT_DANGER)
-
-    request_tabs = Text()
-    request_tabs.append(
-        "Request ",
-        style=(
-            ui_styles.success_style(bold=True)
-            if state.selected_history_detail_block == HISTORY_DETAIL_BLOCK_REQUEST
-            else ui_styles.primary_style(bold=True)
-        ),
-    )
-    request_tabs.append(
-        " Body ",
-        style=(
-            ui_styles.pill_style(ui_styles.TEXT_SUCCESS)
-            if (
-                state.selected_history_detail_block == HISTORY_DETAIL_BLOCK_REQUEST
-                and state.selected_history_request_tab == RESPONSE_TAB_BODY
-            )
-            else ui_styles.text_style(ui_styles.TEXT_PRIMARY, bold=True, background=ui_styles.TAB_INACTIVE)
-        ),
-    )
-    request_tabs.append(" ", style="")
-    request_tabs.append(
-        " Headers ",
-        style=(
-            ui_styles.pill_style(ui_styles.TEXT_SUCCESS)
-            if (
-                state.selected_history_detail_block == HISTORY_DETAIL_BLOCK_REQUEST
-                and state.selected_history_request_tab == RESPONSE_TAB_HEADERS
-            )
-            else ui_styles.text_style(ui_styles.TEXT_PRIMARY, bold=True, background=ui_styles.TAB_INACTIVE)
-        ),
-    )
-
-    request_visible_rows = max(home_response_visible_rows(viewport_height) - 2, 4)
-    if state.selected_history_request_tab == RESPONSE_TAB_HEADERS:
-        request_lines = list(
-            range(rendering_helpers.response_header_row_count(entry.request_headers))
-        )
-        state.clamp_history_request_scroll_offset(
-            len(request_lines),
-            request_visible_rows,
-        )
-        request_start = state.history_request_scroll_offset
-        request_end = min(request_start + request_visible_rows, len(request_lines))
-        request_content: RenderableType = rendering_helpers.render_response_headers(
-            entry.request_headers,
-            request_start,
-            request_end,
-        )
-    else:
-        request_lines = rendering_helpers.response_body_lines(
-            entry.request_body,
-            viewport_width,
-        )
-        state.clamp_history_request_scroll_offset(
-            len(request_lines),
-            request_visible_rows,
-        )
-        request_start = state.history_request_scroll_offset
-        request_end = min(request_start + request_visible_rows, len(request_lines))
-        request_content = rendering_helpers.render_response_body(
-            entry.request_body,
-            viewport_width,
-            request_start,
-            request_end,
-        )
-
-    response_tabs = Text()
-    response_tabs.append(
-        "Response ",
-        style=(
-            ui_styles.success_style(bold=True)
-            if state.selected_history_detail_block != HISTORY_DETAIL_BLOCK_REQUEST
-            else ui_styles.primary_style(bold=True)
-        ),
-    )
-    response_tabs.append(
-        " Body ",
-        style=(
-            ui_styles.pill_style(ui_styles.TEXT_SUCCESS)
-            if (
-                state.selected_history_detail_block != HISTORY_DETAIL_BLOCK_REQUEST
-                and state.selected_history_response_tab == RESPONSE_TAB_BODY
-            )
-            else ui_styles.text_style(ui_styles.TEXT_PRIMARY, bold=True, background=ui_styles.TAB_INACTIVE)
-        ),
-    )
-    response_tabs.append(" ", style="")
-    response_tabs.append(
-        " Headers ",
-        style=(
-            ui_styles.pill_style(ui_styles.TEXT_SUCCESS)
-            if (
-                state.selected_history_detail_block != HISTORY_DETAIL_BLOCK_REQUEST
-                and state.selected_history_response_tab == RESPONSE_TAB_HEADERS
-            )
-            else ui_styles.text_style(ui_styles.TEXT_PRIMARY, bold=True, background=ui_styles.TAB_INACTIVE)
-        ),
-    )
-
-    response_visible_rows = max(home_response_visible_rows(viewport_height) - 2, 4)
-    if state.selected_history_response_tab == RESPONSE_TAB_HEADERS:
-        response_lines = list(
-            range(rendering_helpers.response_header_row_count(entry.response_headers))
-        )
-        state.clamp_history_response_scroll_offset(
-            len(response_lines),
-            response_visible_rows,
-        )
-        response_start = state.history_response_scroll_offset
-        response_end = min(response_start + response_visible_rows, len(response_lines))
-        response_content: RenderableType = rendering_helpers.render_response_headers(
-            entry.response_headers,
-            response_start,
-            response_end,
-        )
-    else:
-        response_lines = rendering_helpers.response_body_lines(
-            entry.response_body,
-            viewport_width,
-        )
-        state.clamp_history_response_scroll_offset(
-            len(response_lines),
-            response_visible_rows,
-        )
-        response_start = state.history_response_scroll_offset
-        response_end = min(response_start + response_visible_rows, len(response_lines))
-        response_content = rendering_helpers.render_response_body(
-            entry.response_body,
-            viewport_width,
-            response_start,
-            response_end,
-        )
-
     return Panel(
-        Group(summary, request_tabs, request_content, response_tabs, response_content),
-        title="Details",
-        subtitle=(
-            history_detail_caption(
-                state,
-                request_start,
-                request_end,
-                len(request_lines),
-                response_start,
-                response_end,
-                len(response_lines),
-            )
-            if state.mode == MODE_HISTORY_RESPONSE_SELECT
-            else "e enters response"
-        ),
-        subtitle_align="left",
-        border_style=ui_styles.BORDER,
-        box=box.ROUNDED,
+        _render_history_detail_content(state, entry),
+        title="Detail",
     )
 
 
-def history_auth_summary(entry: HistoryEntry) -> tuple[str, str]:
+def history_auth_summary(entry: HistoryEntry) -> str:
     if entry.auth_type == "basic":
-        return ("Basic Auth via Authorization header", ui_styles.TEXT_WARNING)
+        return "Basic Auth via Authorization header"
     if entry.auth_type == "bearer":
-        return ("Bearer Token via Authorization header", ui_styles.TEXT_WARNING)
+        return "Bearer Token via Authorization header"
     if entry.auth_type == "api-key":
         if entry.auth_location == "query":
             name = entry.auth_name or "query key"
-            return (f"API Key via query param {name}", ui_styles.TEXT_WARNING)
+            return f"API Key via query param {name}"
         name = entry.auth_name or "header"
-        return (f"API Key via header {name}", ui_styles.TEXT_WARNING)
+        return f"API Key via header {name}"
     if entry.auth_type == "cookie":
         name = entry.auth_name or "cookie"
-        return (f"Cookie Auth via Cookie header ({name})", ui_styles.TEXT_WARNING)
+        return f"Cookie Auth via Cookie header ({name})"
     if entry.auth_type == "custom-header":
         name = entry.auth_name or "custom header"
-        return (f"Custom Header via {name}", ui_styles.TEXT_WARNING)
+        return f"Custom Header via {name}"
     if entry.auth_type == "oauth2-client-credentials":
-        return ("OAuth 2.0 Client Credentials via Authorization header", ui_styles.TEXT_WARNING)
-    return ("No Auth", ui_styles.TEXT_MUTED)
+        return "OAuth 2.0 Client Credentials via Authorization header"
+    return "No Auth"
 
 
 def history_time_label(created_at: str) -> str:

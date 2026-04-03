@@ -202,6 +202,55 @@ class WorkspaceStateMixin:
                 self.selected_sidebar_index = index
                 return
 
+    def _selected_collection_id(self) -> str | None:
+        node = self.get_selected_sidebar_node()
+        if node is None:
+            return None
+        if node.kind == "collection":
+            return node.node_id
+        if node.kind == "folder":
+            folder = self.get_folder_by_id(node.node_id)
+            return folder.collection_id if folder is not None else None
+        request = self.get_selected_request()
+        return request.collection_id if request is not None else None
+
+    def _selected_folder_id(self) -> str | None:
+        node = self.get_selected_sidebar_node()
+        if node is None:
+            return None
+        if node.kind == "folder":
+            return node.node_id
+        if node.kind != "request":
+            return None
+        request = self.get_selected_request()
+        return request.folder_id if request is not None else None
+
+    def _folder_navigation_ids(
+        self,
+        collection_id: str,
+        parent_folder_id: str | None = None,
+    ) -> list[str]:
+        folder_ids: list[str] = []
+        for folder in self.folders:
+            if (
+                folder.collection_id != collection_id
+                or folder.parent_folder_id != parent_folder_id
+            ):
+                continue
+            folder_ids.append(folder.folder_id)
+            folder_ids.extend(
+                self._folder_navigation_ids(collection_id, folder.folder_id)
+            )
+        return folder_ids
+
+    def _expand_folder_ancestors(self, folder_id: str) -> None:
+        folder = self.get_folder_by_id(folder_id)
+        if folder is None:
+            return
+        self.collapsed_collection_ids.discard(folder.collection_id)
+        for ancestor in self.folder_chain(folder.parent_folder_id):
+            self.collapsed_folder_ids.discard(ancestor.folder_id)
+
     def _expand_request_ancestors(self, request: RequestDefinition) -> None:
         if request.collection_id is not None:
             self.collapsed_collection_ids.discard(request.collection_id)
@@ -281,6 +330,44 @@ class WorkspaceStateMixin:
         if request is not None:
             self._expand_request_ancestors(request)
         self.open_selected_request()
+
+    def sync_sidebar_selection(self, index: int) -> None:
+        nodes = self.get_sidebar_nodes()
+        if not nodes:
+            self.selected_sidebar_index = 0
+            self.preview_request_id = None
+            self.active_request_id = None
+            return
+        self.selected_sidebar_index = max(0, min(index, len(nodes) - 1))
+        self._sync_request_from_selected_sidebar()
+
+    def set_selected_sidebar_node_expanded(self, expanded: bool) -> bool:
+        node = self.get_selected_sidebar_node()
+        if node is None:
+            return False
+
+        if node.kind == "collection":
+            was_collapsed = node.node_id in self.collapsed_collection_ids
+            if expanded:
+                self.collapsed_collection_ids.discard(node.node_id)
+            else:
+                self.collapsed_collection_ids.add(node.node_id)
+            changed = was_collapsed == expanded
+        elif node.kind == "folder":
+            was_collapsed = node.node_id in self.collapsed_folder_ids
+            if expanded:
+                self.collapsed_folder_ids.discard(node.node_id)
+            else:
+                self.collapsed_folder_ids.add(node.node_id)
+            changed = was_collapsed == expanded
+        else:
+            return False
+
+        if changed:
+            self.active_request_id = None
+            self.preview_request_id = None
+            self.clamp_selected_sidebar_index()
+        return changed
 
     def ensure_request_workspace(self) -> None:
         nodes = self.get_sidebar_nodes()
@@ -363,6 +450,47 @@ class WorkspaceStateMixin:
             return
         self.selected_sidebar_index = (self.selected_sidebar_index + step) % len(nodes)
         self._sync_request_from_selected_sidebar()
+
+    def select_collection(self, step: int) -> bool:
+        if step == 0 or not self.collections:
+            return False
+
+        collection_ids = [collection.collection_id for collection in self.collections]
+        current_collection_id = self._selected_collection_id()
+        if current_collection_id in collection_ids:
+            target_index = (
+                collection_ids.index(current_collection_id) + step
+            ) % len(collection_ids)
+        else:
+            target_index = 0 if step > 0 else len(collection_ids) - 1
+
+        self._set_selected_sidebar_node("collection", collection_ids[target_index])
+        self._sync_request_from_selected_sidebar()
+        return True
+
+    def select_folder(self, step: int) -> bool:
+        if step == 0:
+            return False
+
+        collection_id = self._selected_collection_id()
+        if collection_id is None:
+            return False
+
+        folder_ids = self._folder_navigation_ids(collection_id)
+        if not folder_ids:
+            return False
+
+        current_folder_id = self._selected_folder_id()
+        if current_folder_id in folder_ids:
+            target_index = (folder_ids.index(current_folder_id) + step) % len(folder_ids)
+        else:
+            target_index = 0 if step > 0 else len(folder_ids) - 1
+
+        target_folder_id = folder_ids[target_index]
+        self._expand_folder_ancestors(target_folder_id)
+        self._set_selected_sidebar_node("folder", target_folder_id)
+        self._sync_request_from_selected_sidebar()
+        return True
 
     def activate_request_by_index(self, index: int, *, pin: bool = False) -> None:
         if not self.requests:
@@ -487,7 +615,6 @@ class WorkspaceStateMixin:
             self.clamp_selected_request_index()
         self.response_scroll_offset = 0
         self.mode = MODE_NORMAL
-        self.clear_edit_buffer()
         self.message = f"Closed {request.name}."
         return request
 
@@ -1097,7 +1224,6 @@ class WorkspaceStateMixin:
             self.clamp_selected_request_index()
             self._sync_request_from_selected_sidebar()
 
-        self.clear_edit_buffer()
         self.mode = MODE_NORMAL
         self.message = f"Deleted {deleted.name}."
         return deleted

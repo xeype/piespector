@@ -34,10 +34,11 @@ from piespector.domain.modes import (
     MODE_HOME_PARAMS_EDIT,
     MODE_HOME_PARAMS_SELECT,
     MODE_HOME_REQUEST_EDIT,
+    MODE_HOME_REQUEST_METHOD_SELECT,
     MODE_HOME_REQUEST_METHOD_EDIT,
     MODE_HOME_REQUEST_SELECT,
+    MODE_HOME_URL_EDIT,
     MODE_HOME_RESPONSE_SELECT,
-    MODE_HOME_RESPONSE_TEXTAREA,
     MODE_HOME_SECTION_SELECT,
     MODE_NORMAL,
 )
@@ -76,7 +77,6 @@ class HomeStateMixin:
         self.ensure_request_workspace()
         self.pin_active_request()
         self.mode = MODE_HOME_SECTION_SELECT
-        self.clear_edit_buffer()
         self.message = ""
 
     def current_request_fields(self) -> tuple[tuple[str, str], ...]:
@@ -99,6 +99,77 @@ class HomeStateMixin:
         self.mode = MODE_HOME_REQUEST_SELECT
         self.selected_request_field_index = 0
         self._clamp_selected_request_field_index()
+        self.message = ""
+
+    def enter_home_method_edit_mode(self) -> None:
+        request = self.get_active_request()
+        if request is None:
+            self.mode = MODE_NORMAL
+            self.message = "No request selected."
+            return
+        self.home_top_bar_edit_return_mode = self.mode
+        self.mode = MODE_HOME_REQUEST_METHOD_EDIT
+        self.message = ""
+
+    def enter_home_method_select_mode(self, origin_mode: str | None = None) -> None:
+        request = self.get_active_request()
+        if request is None:
+            self.mode = MODE_NORMAL
+            self.message = "No request selected."
+            return
+        self.home_top_bar_return_mode = origin_mode or self.mode
+        self.selected_top_bar_field = "method"
+        self.mode = MODE_HOME_REQUEST_METHOD_SELECT
+        self.message = ""
+
+    def leave_home_method_select_mode(self) -> None:
+        self.mode = self.home_top_bar_return_mode or MODE_NORMAL
+        self.message = ""
+
+    def save_home_method_edit(self, value: str = "GET") -> str | None:
+        request = self.get_active_request()
+        if request is None:
+            return None
+        request.method = (value or "GET").upper()
+        self.mode = self.home_top_bar_edit_return_mode or MODE_NORMAL
+        self.message = "Updated Method."
+        return "method"
+
+    def save_home_method_selection(self, value: str) -> str | None:
+        request = self.get_active_request()
+        if request is None:
+            return None
+        method = value.upper()
+        request.method = method if method in HTTP_METHODS else "GET"
+        self.mode = self.home_top_bar_edit_return_mode or MODE_NORMAL
+        self.message = "Updated Method."
+        return "method"
+
+    def leave_home_method_edit_mode(self) -> None:
+        self.mode = self.home_top_bar_edit_return_mode or MODE_NORMAL
+        self.message = ""
+
+    def enter_home_url_edit_mode(self) -> None:
+        request = self.get_active_request()
+        if request is None:
+            self.mode = MODE_NORMAL
+            self.message = "No request selected."
+            return
+        self.home_top_bar_edit_return_mode = self.mode
+        self.mode = MODE_HOME_URL_EDIT
+        self.message = ""
+
+    def save_home_url_edit(self, value: str | None = None) -> str | None:
+        request = self.get_active_request()
+        if request is None:
+            return None
+        request.url = value or ""
+        self.mode = self.home_top_bar_edit_return_mode or MODE_NORMAL
+        self.message = "Updated URL."
+        return "url"
+
+    def leave_home_url_edit_mode(self) -> None:
+        self.mode = self.home_top_bar_edit_return_mode or MODE_NORMAL
         self.message = ""
 
     def get_active_request_params(self) -> list[tuple[str, str]]:
@@ -190,17 +261,11 @@ class HomeStateMixin:
 
     def clamp_selected_auth_index(self) -> None:
         field_count = len(self.auth_fields())
-        if field_count <= 0:
-            self.selected_auth_index = 0
-            return
-        self.selected_auth_index = max(1, min(self.selected_auth_index, field_count))
+        self.selected_auth_index = max(0, min(self.selected_auth_index, field_count))
 
     def select_auth_row(self, step: int) -> None:
         field_count = len(self.auth_fields())
-        if field_count <= 0:
-            self.selected_auth_index = 0
-            return
-        options = list(range(1, field_count + 1))
+        options = list(range(0, field_count + 1))
         current = self.selected_auth_index if self.selected_auth_index in options else options[0]
         self.selected_auth_index = options[
             (options.index(current) + step) % len(options)
@@ -224,10 +289,7 @@ class HomeStateMixin:
         self.current_tab = TAB_HOME
         self.pin_active_request()
         self.mode = MODE_HOME_AUTH_SELECT
-        if self.auth_fields(request):
-            self.selected_auth_index = 1
-        else:
-            self.selected_auth_index = 0
+        self.selected_auth_index = 0
         self.message = ""
 
     def enter_home_auth_edit_mode(self) -> None:
@@ -247,13 +309,11 @@ class HomeStateMixin:
             self.message = ""
             return
         self.mode = MODE_HOME_AUTH_EDIT
-        self.set_edit_buffer(str(getattr(request, field_name) or ""), replace_on_next_input=False)
         self.message = ""
 
     def leave_home_auth_edit_mode(self) -> None:
         self.mode = MODE_HOME_AUTH_SELECT
         self.clamp_selected_auth_index()
-        self.clear_edit_buffer()
         self.message = ""
 
     def enter_home_auth_type_edit_mode(self, origin_mode: str | None = None) -> None:
@@ -278,6 +338,53 @@ class HomeStateMixin:
         self.mode = MODE_HOME_AUTH_SELECT
         self.clamp_selected_auth_index()
         self.message = ""
+
+    def save_home_auth_type_selection(self, value: str) -> str | None:
+        request = self.get_active_request()
+        if request is None:
+            return None
+        values = {option_value for option_value, _label in AUTH_TYPE_OPTIONS}
+        request.auth_type = value if value in values else AUTH_TYPE_OPTIONS[0][0]
+        self.leave_home_auth_type_edit_mode()
+        self.message = f"Auth type: {self.auth_type_label(request.auth_type)}."
+        return request.auth_type
+
+    def save_home_auth_option_selection(self, value: str) -> str | None:
+        request = self.get_active_request()
+        field = self.selected_auth_field()
+        if request is None or field is None:
+            return None
+
+        field_name, _field_label = field
+        if field_name == "auth_api_key_location":
+            values = {option_value for option_value, _label in AUTH_API_KEY_LOCATION_OPTIONS}
+            request.auth_api_key_location = (
+                value if value in values else AUTH_API_KEY_LOCATION_OPTIONS[0][0]
+            )
+            self.leave_home_auth_location_edit_mode()
+            self.message = (
+                "API key location: "
+                f"{self.auth_api_key_location_label(request.auth_api_key_location)}."
+            )
+            return request.auth_api_key_location
+
+        if field_name == "auth_oauth_client_authentication":
+            values = {
+                option_value for option_value, _label in AUTH_OAUTH_CLIENT_AUTHENTICATION_OPTIONS
+            }
+            request.auth_oauth_client_authentication = (
+                value
+                if value in values
+                else AUTH_OAUTH_CLIENT_AUTHENTICATION_OPTIONS[0][0]
+            )
+            self.leave_home_auth_location_edit_mode()
+            self.message = (
+                "OAuth client authentication: "
+                f"{self.auth_oauth_client_authentication_label(request.auth_oauth_client_authentication)}."
+            )
+            return request.auth_oauth_client_authentication
+
+        return None
 
     def cycle_auth_type(self, step: int) -> str | None:
         request = self.get_active_request()
@@ -321,7 +428,7 @@ class HomeStateMixin:
         )
         return request.auth_oauth_client_authentication
 
-    def save_selected_auth_field(self) -> str | None:
+    def save_selected_auth_field(self, value: str | None = None) -> str | None:
         request = self.get_active_request()
         field = self.selected_auth_field()
         if request is None or field is None:
@@ -337,26 +444,26 @@ class HomeStateMixin:
                 "auth_oauth_scope",
             }
         )
-        value = self.edit_buffer.strip() if field_name in strip_fields else self.edit_buffer
-        if field_name == "auth_api_key_name" and not value.strip():
+        raw = value or ""
+        final_value = raw.strip() if field_name in strip_fields else raw
+        if field_name == "auth_api_key_name" and not final_value.strip():
             self.message = "Key cannot be empty."
             return None
-        if field_name == "auth_cookie_name" and not value.strip():
+        if field_name == "auth_cookie_name" and not final_value.strip():
             self.message = "Cookie cannot be empty."
             return None
-        if field_name == "auth_custom_header_name" and not value.strip():
+        if field_name == "auth_custom_header_name" and not final_value.strip():
             self.message = "Header cannot be empty."
             return None
-        if field_name == "auth_oauth_token_url" and not value.strip():
+        if field_name == "auth_oauth_token_url" and not final_value.strip():
             self.message = "Token URL cannot be empty."
             return None
-        if field_name == "auth_oauth_client_id" and not value.strip():
+        if field_name == "auth_oauth_client_id" and not final_value.strip():
             self.message = "Client ID cannot be empty."
             return None
-        setattr(request, field_name, value)
+        setattr(request, field_name, final_value)
         self.mode = MODE_HOME_AUTH_SELECT
         self.clamp_selected_auth_index()
-        self.clear_edit_buffer()
         self.message = f"Updated {field_label.lower()}."
         return field_name
 
@@ -416,48 +523,40 @@ class HomeStateMixin:
         self.params_creating_new = creating
         if creating:
             self.selected_param_field_index = 0
-            self.set_edit_buffer("", replace_on_next_input=False)
             self.message = ""
             return
         if not items:
             self.mode = MODE_HOME_PARAMS_SELECT
             self.message = "Nothing to edit."
             return
-        item = items[self.selected_param_index]
-        field_name, _field_label = self.selected_param_field()
-        self.set_edit_buffer(
-            item.key if field_name == "key" else item.value,
-            replace_on_next_input=False,
-        )
         self.message = ""
 
     def leave_home_params_edit_mode(self) -> None:
         self.mode = MODE_HOME_PARAMS_SELECT
         self.params_creating_new = False
-        self.clear_edit_buffer()
         self.message = ""
 
-    def save_selected_param_field(self) -> str | None:
+    def save_selected_param_field(self, value: str | None = None) -> str | None:
         request = self.get_active_request()
         if request is None:
             return None
 
         items = self.get_active_request_params()
         field_name, field_label = self.selected_param_field()
+        current_value = value or ""
         if self.params_creating_new:
             if field_name != "key":
                 return None
-            new_key = self.edit_buffer.strip()
+            new_key = current_value.strip()
             if not new_key:
                 self.message = "Key cannot be empty."
                 return None
             items.append(RequestKeyValue(key=new_key, value=""))
             self.selected_param_index = max(0, len(items) - 1)
-            self.selected_param_field_index = 1
+            self.selected_param_field_index = 0
             self.params_creating_new = False
-            self.mode = MODE_HOME_PARAMS_EDIT
-            self.set_edit_buffer("", replace_on_next_input=False)
-            self.message = ""
+            self.mode = MODE_HOME_PARAMS_SELECT
+            self.message = f"Added param {new_key}."
             return new_key
 
         self.clamp_selected_param_index()
@@ -466,18 +565,17 @@ class HomeStateMixin:
             return None
         item = items[self.selected_param_index]
         if field_name == "key":
-            new_key = self.edit_buffer.strip()
+            new_key = current_value.strip()
             if not new_key:
                 self.message = "Key cannot be empty."
                 return None
             item.key = new_key
             updated = new_key
         else:
-            item.value = self.edit_buffer
+            item.value = current_value
             updated = item.key
         self.mode = MODE_HOME_PARAMS_SELECT
         self.params_creating_new = False
-        self.clear_edit_buffer()
         self.message = f"Updated {field_label.lower()}."
         return updated
 
@@ -558,48 +656,40 @@ class HomeStateMixin:
         self.headers_creating_new = creating
         if creating:
             self.selected_header_field_index = 0
-            self.set_edit_buffer("", replace_on_next_input=False)
             self.message = ""
             return
         if not items:
             self.mode = MODE_HOME_HEADERS_SELECT
             self.message = "Nothing to edit."
             return
-        item = items[self.selected_header_index]
-        field_name, _field_label = self.selected_header_field()
-        self.set_edit_buffer(
-            item.key if field_name == "key" else item.value,
-            replace_on_next_input=False,
-        )
         self.message = ""
 
     def leave_home_headers_edit_mode(self) -> None:
         self.mode = MODE_HOME_HEADERS_SELECT
         self.headers_creating_new = False
-        self.clear_edit_buffer()
         self.message = ""
 
-    def save_selected_header_field(self) -> str | None:
+    def save_selected_header_field(self, value: str | None = None) -> str | None:
         request = self.get_active_request()
         if request is None:
             return None
 
         items = self.get_active_request_headers()
         field_name, field_label = self.selected_header_field()
+        current_value = value or ""
         if self.headers_creating_new:
             if field_name != "key":
                 return None
-            new_key = self.edit_buffer.strip()
+            new_key = current_value.strip()
             if not new_key:
                 self.message = "Key cannot be empty."
                 return None
             items.append(RequestKeyValue(key=new_key, value=""))
             self.selected_header_index = max(0, len(items) - 1)
-            self.selected_header_field_index = 1
+            self.selected_header_field_index = 0
             self.headers_creating_new = False
-            self.mode = MODE_HOME_HEADERS_EDIT
-            self.set_edit_buffer("", replace_on_next_input=False)
-            self.message = ""
+            self.mode = MODE_HOME_HEADERS_SELECT
+            self.message = f"Added header {new_key}."
             return new_key
 
         self.clamp_selected_header_index()
@@ -608,18 +698,17 @@ class HomeStateMixin:
             return None
         item = items[self.selected_header_index]
         if field_name == "key":
-            new_key = self.edit_buffer.strip()
+            new_key = current_value.strip()
             if not new_key:
                 self.message = "Key cannot be empty."
                 return None
             item.key = new_key
             updated = new_key
         else:
-            item.value = self.edit_buffer
+            item.value = current_value
             updated = item.key
         self.mode = MODE_HOME_HEADERS_SELECT
         self.headers_creating_new = False
-        self.clear_edit_buffer()
         self.message = f"Updated {field_label.lower()}."
         return updated
 
@@ -720,13 +809,41 @@ class HomeStateMixin:
         self.message = f"Raw format: {self.raw_subtype_label(request.raw_subtype)}."
         return request.raw_subtype
 
+    def save_home_body_type_selection(self, value: str) -> str | None:
+        request = self.get_active_request()
+        if request is None:
+            return None
+        request.sync_active_body_text()
+        values = {option_value for option_value, _label in BODY_TYPE_OPTIONS}
+        request.body_type = value if value in values else BODY_TYPE_OPTIONS[0][0]
+        request.restore_active_body_text()
+        self.selected_body_index = 0
+        self.leave_home_body_type_edit_mode()
+        self.message = f"Body type: {self.body_type_label(request.body_type)}."
+        return request.body_type
+
+    def save_home_body_raw_type_selection(self, value: str) -> str | None:
+        request = self.get_active_request()
+        if request is None:
+            return None
+        request.sync_active_body_text()
+        values = {option_value for option_value, _label in RAW_SUBTYPE_OPTIONS}
+        request.raw_subtype = value if value in values else RAW_SUBTYPE_OPTIONS[0][0]
+        request.restore_active_body_text()
+        self.leave_home_body_raw_type_edit_mode()
+        self.message = f"Raw format: {self.raw_subtype_label(request.raw_subtype)}."
+        return request.raw_subtype
+
     def clamp_selected_body_index(self) -> None:
         request = self.get_active_request()
         if request is None:
             self.selected_body_index = 0
             return
-        if request.body_type in BODY_KEY_VALUE_TYPES:
-            min_index = 1
+        if request.body_type == "raw":
+            min_index = 0
+            max_index = 2
+        elif request.body_type in BODY_KEY_VALUE_TYPES:
+            min_index = 0
             max_index = len(self.get_active_request_body_items()) + 1
         elif request.body_type in BODY_TEXT_EDITOR_TYPES | {"binary"}:
             min_index = 0
@@ -741,8 +858,11 @@ class HomeStateMixin:
         if request is None:
             self.selected_body_index = 0
             return
-        if request.body_type in BODY_KEY_VALUE_TYPES:
-            min_index = 1
+        if request.body_type == "raw":
+            min_index = 0
+            max_index = 2
+        elif request.body_type in BODY_KEY_VALUE_TYPES:
+            min_index = 0
             max_index = len(self.get_active_request_body_items()) + 1
         elif request.body_type in BODY_TEXT_EDITOR_TYPES | {"binary"}:
             min_index = 0
@@ -774,7 +894,6 @@ class HomeStateMixin:
         self.message = ""
 
     def leave_home_body_select_mode(self) -> None:
-        self.clear_edit_buffer()
         if self.home_body_select_return_mode == MODE_HOME_BODY_TYPE_EDIT:
             self.mode = MODE_HOME_BODY_TYPE_EDIT
             self.message = ""
@@ -814,19 +933,9 @@ class HomeStateMixin:
         self.mode = MODE_HOME_BODY_TEXTAREA
         self.message = ""
 
-    def enter_home_response_view_mode(self, origin_mode: str | None = None) -> bool:
-        request = self.get_active_request()
-        if request is None or request.last_response is None:
-            self.message = "No response to view."
-            return False
-        self.home_response_view_return_mode = origin_mode or self.mode
-        self.mode = MODE_HOME_RESPONSE_TEXTAREA
-        self.message = ""
-        return True
-
     def enter_home_response_select_mode(self, origin_mode: str | None = None) -> bool:
         request = self.get_active_request()
-        if request is None or request.last_response is None:
+        if request is None:
             self.message = "No response to inspect."
             return False
         self.home_response_select_return_mode = origin_mode or self.mode
@@ -836,10 +945,6 @@ class HomeStateMixin:
 
     def leave_home_response_select_mode(self) -> None:
         self.mode = self.home_response_select_return_mode or MODE_NORMAL
-        self.message = ""
-
-    def leave_home_response_view_mode(self) -> None:
-        self.mode = self.home_response_view_return_mode or MODE_NORMAL
         self.message = ""
 
     def enter_home_body_edit_mode(
@@ -861,24 +966,17 @@ class HomeStateMixin:
             return
         if request.body_type == "binary":
             self.mode = MODE_HOME_BODY_EDIT
-            self.set_edit_buffer(request.body_text, replace_on_next_input=False)
             self.message = ""
             return
         self.mode = MODE_HOME_BODY_EDIT
         if request.body_type in BODY_KEY_VALUE_TYPES:
             items = self.get_active_request_body_items()
             item_index = self.selected_body_index - 1
-        if creating or item_index < 0 or item_index >= len(items):
-            self.selected_body_index = len(items) + 1
-            self.set_edit_buffer("", replace_on_next_input=False)
-        else:
-            item = items[item_index]
-            key, value = item.key, item.value
-            self.set_edit_buffer(f"{key}={value}" if value else key, replace_on_next_input=False)
+            if creating or item_index < 0 or item_index >= len(items):
+                self.selected_body_index = len(items) + 1
         self.message = ""
 
     def leave_home_body_edit_mode(self) -> None:
-        self.clear_edit_buffer()
         self._restore_home_body_parent_mode()
 
     def leave_home_body_type_edit_mode(self) -> None:
@@ -907,41 +1005,40 @@ class HomeStateMixin:
         self.message = "Updated body."
         return "body_text"
 
-    def save_body_selection(self) -> str | None:
+    def save_body_selection(self, value: str | None = None) -> str | None:
         request = self.get_active_request()
         if request is None:
             return None
+        raw = value or ""
         if request.body_type == "binary":
-            request.body_text = self.edit_buffer.strip()
+            request.body_text = raw.strip()
             request.sync_active_body_text()
-            self.clear_edit_buffer()
             self._restore_home_body_parent_mode()
             self.message = "Updated binary file path."
             return "body_text"
         if request.body_type in BODY_KEY_VALUE_TYPES:
-            payload = self.edit_buffer.strip()
+            payload = raw.strip()
             if not payload:
                 self.message = "Use KEY=value"
                 return None
             if "=" in payload:
-                key, value = payload.split("=", 1)
+                key, val = payload.split("=", 1)
             else:
-                key, value = payload, ""
+                key, val = payload, ""
             key = key.strip()
-            value = value.strip()
+            val = val.strip()
             if not key:
                 self.message = "Use KEY=value"
                 return None
             items = self.get_active_request_body_items()
             item_index = self.selected_body_index - 1
             if item_index < 0 or item_index >= len(items):
-                items.append(RequestKeyValue(key=key, value=value))
+                items.append(RequestKeyValue(key=key, value=val))
                 self.selected_body_index = len(items)
             else:
                 items[item_index].key = key
-                items[item_index].value = value
+                items[item_index].value = val
                 self.selected_body_index = item_index + 1
-            self.clear_edit_buffer()
             self._restore_home_body_parent_mode()
             self.message = f"Saved body field {key}."
             return key
@@ -1008,56 +1105,34 @@ class HomeStateMixin:
             self.mode = MODE_NORMAL
             self.message = "No requests to edit."
             return
-        field_name, _ = self.selected_request_field()
-        if field_name == "method":
-            self.mode = MODE_HOME_REQUEST_METHOD_EDIT
-            self.set_edit_buffer(request.method.upper() or "GET", replace_on_next_input=False)
-            self.message = ""
-            return
         self.mode = MODE_HOME_REQUEST_EDIT
-        self.set_edit_buffer(str(getattr(request, field_name)), replace_on_next_input=False)
         self.message = ""
 
     def leave_home_request_edit_mode(self) -> None:
         self.mode = MODE_HOME_REQUEST_SELECT
-        self.clear_edit_buffer()
         self.message = ""
 
     def cycle_request_method(self, step: int) -> str | None:
         request = self.get_active_request()
         if request is None:
             return None
-        current = (self.edit_buffer or request.method or "GET").upper()
+        current = (request.method or "GET").upper()
         if current not in HTTP_METHODS:
             current = "GET"
         index = HTTP_METHODS.index(current)
-        self.edit_buffer = HTTP_METHODS[(index + step) % len(HTTP_METHODS)]
-        self.edit_cursor_index = len(self.edit_buffer)
-        return self.edit_buffer
+        request.method = HTTP_METHODS[(index + step) % len(HTTP_METHODS)]
+        return request.method
 
-    def save_selected_request_method(self) -> str | None:
-        request = self.get_active_request()
-        if request is None:
-            return None
-        request.method = (self.edit_buffer or "GET").upper()
-        self.mode = MODE_HOME_REQUEST_SELECT
-        self.clear_edit_buffer()
-        self.message = "Updated Method."
-        return "method"
-
-    def save_selected_request_field(self) -> str | None:
+    def save_selected_request_field(self, value: str | None = None) -> str | None:
         request = self.get_active_request()
         if request is None:
             return None
         field_name, field_label = self.selected_request_field()
-        value = self.edit_buffer
-        if field_name == "method":
-            value = value.upper() or "GET"
+        value = value or ""
         if field_name == "name" and not value.strip():
             value = "Untitled Request"
         setattr(request, field_name, value)
         self.mode = MODE_HOME_REQUEST_SELECT
-        self.clear_edit_buffer()
         self.message = f"Updated {field_label}."
         return field_name
 
@@ -1069,7 +1144,7 @@ class HomeStateMixin:
         self.response_scroll_offset = max(0, min(self.response_scroll_offset, max_offset))
 
     def cycle_home_response_tab(self, step: int) -> None:
-        tabs = RESPONSE_TABS
+        tabs = [tab_id for tab_id, _label in RESPONSE_TABS]
         current = (
             self.selected_home_response_tab
             if self.selected_home_response_tab in tabs

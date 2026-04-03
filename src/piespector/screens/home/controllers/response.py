@@ -1,22 +1,22 @@
 from __future__ import annotations
 
 from textual import events
-from textual.widgets import Static
 
 from piespector.domain.editor import RESPONSE_TAB_BODY
 from piespector.domain.modes import MODE_HOME_RESPONSE_SELECT, REQUEST_RESPONSE_SHORTCUT_MODES
 from piespector.interactions.keys import (
+    DOWN_KEYS,
     KEY_ESCAPE,
     KEY_SCROLL_DOWN,
     KEY_VIEW,
-    LEFT_KEYS,
     OPEN_KEYS,
     RESPONSE_SCROLL_KEYS,
-    RIGHT_KEYS,
+    TAB_NEXT_KEYS,
+    TAB_PREVIOUS_KEYS,
+    UP_KEYS,
 )
 from piespector.screens.home import messages
 from piespector.screens.home.controllers.base import HomeControllerBase
-from piespector.screens.home.render import response_scroll_step
 
 
 class HomeResponseController(HomeControllerBase):
@@ -33,13 +33,11 @@ class HomeResponseController(HomeControllerBase):
             return False
 
         if event.key in RESPONSE_SCROLL_KEYS:
-            response_step = response_scroll_step(
-                self.app.query_one("#viewport", Static).size.height
-            )
+            response_step = self.app._home_response_scroll_step()
             self.state.scroll_response(
                 response_step if event.key == KEY_SCROLL_DOWN else -response_step
             )
-            self.app._refresh_viewport()
+            self.app._refresh_home_response_panel()
             event.stop()
             return True
 
@@ -52,15 +50,27 @@ class HomeResponseController(HomeControllerBase):
             event.stop()
             return
 
-        if event.key in LEFT_KEYS:
+        if event.key in TAB_PREVIOUS_KEYS:
             self.state.cycle_home_response_tab(-1)
-            self.app._refresh_viewport()
+            self.app._refresh_home_response_panel()
             event.stop()
             return
 
-        if event.key in RIGHT_KEYS:
+        if event.key in TAB_NEXT_KEYS:
             self.state.cycle_home_response_tab(1)
-            self.app._refresh_viewport()
+            self.app._refresh_home_response_panel()
+            event.stop()
+            return
+
+        if event.key in UP_KEYS:
+            self.state.scroll_response(-1)
+            self.app._refresh_home_response_panel()
+            event.stop()
+            return
+
+        if event.key in DOWN_KEYS:
+            self.state.scroll_response(1)
+            self.app._refresh_home_response_panel()
             event.stop()
             return
 

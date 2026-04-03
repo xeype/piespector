@@ -8,7 +8,6 @@ from piespector.domain.editor import (
 )
 from piespector.domain.modes import (
     MODE_HISTORY_RESPONSE_SELECT,
-    MODE_HISTORY_RESPONSE_TEXTAREA,
     MODE_NORMAL,
 )
 from piespector.domain.history import HistoryEntry, history_entry_matches
@@ -84,7 +83,7 @@ class HistoryStateMixin:
         self.selected_history_detail_block = blocks[(index + step) % len(blocks)]
 
     def cycle_history_request_tab(self, step: int) -> None:
-        tabs = RESPONSE_TABS
+        tabs = [tab_id for tab_id, _label in RESPONSE_TABS]
         current = (
             self.selected_history_request_tab
             if self.selected_history_request_tab in tabs
@@ -95,7 +94,7 @@ class HistoryStateMixin:
         self.history_request_scroll_offset = 0
 
     def cycle_history_response_tab(self, step: int) -> None:
-        tabs = RESPONSE_TABS
+        tabs = [tab_id for tab_id, _label in RESPONSE_TABS]
         current = (
             self.selected_history_response_tab
             if self.selected_history_response_tab in tabs
@@ -116,19 +115,6 @@ class HistoryStateMixin:
 
     def leave_history_response_select_mode(self) -> None:
         self.mode = self.history_response_select_return_mode or MODE_NORMAL
-        self.message = ""
-
-    def enter_history_response_view_mode(self, origin_mode: str | None = None) -> bool:
-        if self.get_selected_history_entry() is None:
-            self.message = "No history entry selected."
-            return False
-        self.history_response_view_return_mode = origin_mode or self.mode
-        self.mode = MODE_HISTORY_RESPONSE_TEXTAREA
-        self.message = ""
-        return True
-
-    def leave_history_response_view_mode(self) -> None:
-        self.mode = self.history_response_view_return_mode or MODE_NORMAL
         self.message = ""
 
     def scroll_history_request(self, step: int) -> None:

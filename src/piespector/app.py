@@ -8,12 +8,37 @@ import shutil
 import subprocess
 
 from textual import events
-from textual.app import App, ComposeResult
-from textual.containers import Vertical
+from textual.app import App, ScreenStackError, SystemCommand
+from textual.command import CommandPalette
+from textual.css.query import NoMatches
 from textual import work
-from textual.widgets import Static, TextArea
+from textual.suggester import SuggestFromList
+from textual.widgets import (
+    ContentSwitcher,
+    DataTable,
+    Input,
+    Select,
+    Static,
+    TabbedContent,
+    Tabs,
+    TextArea,
+    Tree,
+)
 
-from piespector.domain.editor import TAB_ENV, TAB_HELP, TAB_HISTORY, TAB_HOME, TAB_LABELS
+from piespector.commands import command_context_mode, help_commands
+from piespector.domain.editor import (
+    HOME_SIDEBAR_JUMP_KEY,
+    HOME_SIDEBAR_LABEL,
+    REQUEST_EDITOR_JUMP_BINDINGS,
+    RESPONSE_JUMP_BINDINGS,
+    TAB_ENV,
+    TAB_HISTORY,
+    TAB_HOME,
+    TAB_LABELS,
+    TAB_ORDER,
+    TOP_BAR_METHOD_JUMP_KEY,
+    TOP_BAR_URL_JUMP_KEY,
+)
 from piespector.domain.modes import COMMAND_BLOCKED_MODES, REQUEST_RESPONSE_SHORTCUT_MODES
 from piespector.domain.modes import (
     MODE_COMMAND,
@@ -21,10 +46,9 @@ from piespector.domain.modes import (
     MODE_ENV_EDIT,
     MODE_ENV_SELECT,
     MODE_HISTORY_RESPONSE_SELECT,
-    MODE_HOME_BODY_EDIT,
-    MODE_HOME_RESPONSE_TEXTAREA,
+    MODE_HOME_URL_EDIT,
+    MODE_JUMP,
     MODE_NORMAL,
-    MODE_SEARCH,
 )
 from piespector.formatting import format_bytes
 from piespector.history import build_history_entry
@@ -32,18 +56,25 @@ from piespector.http_client import (
     perform_request,
     preview_request_url,
 )
-from piespector.rendering import (
-    render_command_line,
-    render_status_line,
-    render_viewport,
-)
 from piespector.interactions.controller import InteractionController
 from piespector.interactions.keys import response_copy_hint, response_copy_keys
+from piespector.screens.base import PiespectorScreen
 from piespector.screens.env import render as env_render
 from piespector.screens.env.controller import EnvController
+from piespector.screens.env.screen import EnvScreen
 from piespector.screens.history import render as history_render
 from piespector.screens.history.controller import HistoryController
+from piespector.screens.history.screen import HistoryScreen
 from piespector.screens.home.controller import HomeController
+from piespector.screens.home.layout import home_top_bar_height
+from piespector.screens.home.render import (
+    refresh_home_sidebar,
+    refresh_home_request_content,
+    refresh_home_response,
+    refresh_home_url_bar,
+    sync_home_focus_highlights,
+)
+from piespector.screens.home.screen import HomeScreen
 from piespector.search import request_path
 from piespector.state import PiespectorState
 from piespector.storage import (
@@ -61,17 +92,29 @@ from piespector.storage import (
     save_request_workspace,
 )
 from piespector.ui import APP_BINDINGS, APP_CSS
-from piespector.ui.overlays import OverlayController, build_overlay_widgets
-
+from piespector.ui.command_line_content import build_command_line_text
+from piespector.ui.command_palette import (
+    PiespectorPalette,
+    PiespectorCommandProvider,
+    PiespectorSearchProvider,
+    PiespectorThemeProvider,
+)
+from piespector.ui.footer import PiespectorFooter
+from piespector.ui.help_panel import PiespectorHelpPanel
+from piespector.ui.jump_overlay import JumpOverlay
+from piespector.ui.jumper import JumpTarget, Jumper
+from piespector.ui.overlays import OverlayController
+from piespector.ui.status_content import status_bar_content
 
 class PiespectorApp(App[None]):
-    """Minimal terminal UI skeleton with a Vim-like layout."""
+    """Terminal UI API client with Vim-like navigation."""
 
-    ENABLE_COMMAND_PALETTE = False
+    ENABLE_COMMAND_PALETTE = True
     REQUEST_TIMEOUT_SECONDS = 15.0
-    theme = "atom-one-dark"
+    theme = "monokai"
     CSS = APP_CSS
     BINDINGS = APP_BINDINGS
+    COMMANDS = App.COMMANDS | {PiespectorCommandProvider}
     REQUEST_RESPONSE_SHORTCUT_MODES = REQUEST_RESPONSE_SHORTCUT_MODES
 
     def __init__(self) -> None:
@@ -87,8 +130,6 @@ class PiespectorApp(App[None]):
         self._log_file_path = app_data_dir() / ".piespector.log"
         self.response_copy_keys = response_copy_keys()
         self.response_copy_hint = response_copy_hint()
-        self._command_completion_anchor = ""
-        self._command_completion_index = -1
         self._edit_path_completion_anchor = ""
         self._edit_path_completion_index = -1
         self.env_controller = EnvController(self)
@@ -96,26 +137,64 @@ class PiespectorApp(App[None]):
         self.home_controller = HomeController(self)
         self.interaction_controller = InteractionController(self)
         self.overlay_controller = OverlayController(self)
-
-    def compose(self) -> ComposeResult:
-        with Vertical():
-            with Vertical(id="workspace"):
-                yield Static("", id="viewport")
-                for widget in build_overlay_widgets():
-                    yield widget
-            yield Static("", id="status-line")
-            yield Static("", id="command-line")
+        self._home_screen = HomeScreen()
+        self._env_screen = EnvScreen()
+        self._history_screen = HistoryScreen()
+        self.state.attach_app(self)
+        self._screens_installed = False
 
     def on_mount(self) -> None:
-        self.overlay_controller.register_text_area_languages()
+        self.install_screen(self._home_screen, TAB_HOME)
+        self.install_screen(self._env_screen, TAB_ENV)
+        self.install_screen(self._history_screen, TAB_HISTORY)
+        self._screens_installed = True
+        initial_tab = self.state.current_tab if self.state.current_tab in TAB_ORDER else TAB_HOME
+        self.push_screen(initial_tab)
         self._load_env_workspace()
         self._load_history()
         self._load_request_workspace()
         if self.state.requests and self.state.get_active_request() is None:
             self.state.open_selected_request()
         self.set_interval(0.12, self._tick_request_loader)
-        self._refresh_screen()
         self.call_after_refresh(self._refresh_screen)
+
+    def apply_theme(self, theme_name: str) -> None:
+        self.theme = theme_name
+        if self._screens_installed:
+            self.refresh_css(animate=False)
+            self._refresh_screen()
+
+    def search_themes(self) -> None:
+        self.open_palette(
+            providers=[PiespectorThemeProvider],
+            placeholder="Search for themes…",
+            palette_id="--theme-palette",
+        )
+
+    def get_system_commands(self, screen):
+        for command in super().get_system_commands(screen):
+            if command.title != "Keys":
+                yield command
+                continue
+            yield SystemCommand(
+                "Help",
+                (
+                    "Hide the help panel."
+                    if screen.query(PiespectorHelpPanel)
+                    else "Show help for the focused widget and a summary of available keys."
+                ),
+                command.callback,
+                command.discover,
+            )
+
+    def action_show_help_panel(self) -> None:
+        try:
+            self.screen.query_one(PiespectorHelpPanel)
+        except NoMatches:
+            self.screen.mount(PiespectorHelpPanel())
+
+    def action_hide_help_panel(self) -> None:
+        self.screen.query(PiespectorHelpPanel).remove()
 
     def _load_env_workspace(self) -> None:
         env_workspace_source = self._env_workspace_path
@@ -187,6 +266,18 @@ class PiespectorApp(App[None]):
         self._refresh_screen()
 
     def on_key(self, event: events.Key) -> None:
+        try:
+            current_screen = self.screen
+        except ScreenStackError:
+            current_screen = None
+        if current_screen is not None and current_screen.is_modal and isinstance(current_screen, JumpOverlay):
+            current_screen.on_key(event)
+            return
+
+        if self.state.mode == MODE_JUMP:
+            self.interaction_controller.handle_jump_key(event)
+            return
+
         if self.state.mode == MODE_CONFIRM:
             self.interaction_controller.handle_confirm_key(event)
             return
@@ -195,16 +286,10 @@ class PiespectorApp(App[None]):
             self.interaction_controller.handle_command_key(event)
             return
 
-        if self.state.mode == MODE_SEARCH:
-            self.interaction_controller.handle_search_key(event)
-            return
-
         if self.state.current_tab == TAB_HOME:
             if self.home_controller.handle_request_response_shortcuts(event):
                 return
             if self.state.mode == MODE_NORMAL and self.home_controller.handle_home_view_key(event):
-                return
-            if self.state.mode == MODE_HOME_RESPONSE_TEXTAREA:
                 return
             self.home_controller.dispatch_key(self.state.mode, event)
             return
@@ -226,16 +311,6 @@ class PiespectorApp(App[None]):
                 self.history_controller.handle_history_response_select_key(event)
                 return
 
-        if self.state.current_tab == TAB_HELP:
-            if (
-                self.state.mode == MODE_NORMAL
-                and self.interaction_controller.handle_help_view_key(event)
-            ):
-                return
-
-    def _handle_inline_edit_key(self, event: events.Key) -> bool:
-        return self.interaction_controller.handle_inline_edit_key(event)
-
     def _autocomplete_body_editor_placeholder(self) -> bool:
         return self.overlay_controller.autocomplete_body_editor_placeholder()
 
@@ -243,8 +318,31 @@ class PiespectorApp(App[None]):
         self.overlay_controller.postprocess_body_editor_brace()
 
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
-        if self.state.mode in COMMAND_BLOCKED_MODES and action == "enter_command_mode":
+        if action in {
+            "enter_command_mode",
+            "command_palette",
+            "search_workspace",
+        } and self.state.mode in COMMAND_BLOCKED_MODES:
             return False
+
+        if (
+            action == "enter_jump_mode"
+            and self.state.mode in COMMAND_BLOCKED_MODES
+            and self.state.mode != MODE_HOME_URL_EDIT
+        ):
+            return False
+
+        if action in {
+            "home_browse_up",
+            "home_browse_down",
+            "home_previous_folder",
+            "home_next_folder",
+            "home_previous_collection",
+            "home_next_collection",
+            "home_previous_open_request",
+            "home_next_open_request",
+        }:
+            return self.state.current_tab == TAB_HOME and self.state.mode == MODE_NORMAL
 
         if self.state.mode != MODE_NORMAL and action in {
             "show_home",
@@ -256,9 +354,58 @@ class PiespectorApp(App[None]):
             return False
         return True
 
+    def action_enter_jump_mode(self) -> None:
+        self.state.enter_jump_mode()
+        if self.state.current_tab == TAB_HOME and self._has_live_screen():
+            self._refresh_screen()
+            self.push_screen(
+                self._build_home_jump_overlay(),
+                self._handle_jump_overlay_result,
+            )
+            return
+        self._refresh_jump_state()
+
     def action_enter_command_mode(self) -> None:
-        self.state.enter_command_mode()
-        self._refresh_screen()
+        self.action_command_palette()
+
+    def open_palette(
+        self,
+        *,
+        placeholder: str,
+        initial_value: str = "",
+        providers=None,
+        palette_id: str = "--command-palette",
+    ) -> None:
+        if not self.use_command_palette or CommandPalette.is_open(self):
+            return
+        self.push_screen(
+            PiespectorPalette(
+                providers=providers,
+                placeholder=placeholder,
+                id=palette_id,
+                initial_value=initial_value,
+            )
+        )
+
+    def open_command_palette(self, initial_value: str = "") -> None:
+        self.open_palette(
+            placeholder="Run a piespector command…",
+            initial_value=initial_value,
+            palette_id="--command-palette",
+        )
+
+    def action_command_palette(self) -> None:
+        self.open_command_palette()
+
+    def open_search_palette(self) -> None:
+        self.open_palette(
+            providers=[PiespectorSearchProvider],
+            placeholder="Search collections, folders, and requests…",
+            palette_id="--workspace-search",
+        )
+
+    def action_search_workspace(self) -> None:
+        self.open_search_palette()
 
     def action_show_home(self) -> None:
         self.state.switch_tab(TAB_HOME, TAB_LABELS[TAB_HOME])
@@ -279,6 +426,80 @@ class PiespectorApp(App[None]):
     def action_next_tab(self) -> None:
         self.state.cycle_tab(1)
         self._refresh_screen()
+
+    def action_home_browse_up(self) -> None:
+        self.home_controller.navigation.browse_sidebar(-1)
+
+    def action_home_browse_down(self) -> None:
+        self.home_controller.navigation.browse_sidebar(1)
+
+    def action_home_previous_folder(self) -> None:
+        self.home_controller.navigation.jump_folder(-1)
+
+    def action_home_next_folder(self) -> None:
+        self.home_controller.navigation.jump_folder(1)
+
+    def action_home_previous_collection(self) -> None:
+        self.home_controller.navigation.jump_collection(-1)
+
+    def action_home_next_collection(self) -> None:
+        self.home_controller.navigation.jump_collection(1)
+
+    def action_home_previous_open_request(self) -> None:
+        self.home_controller.navigation.cycle_open_request(-1)
+
+    def action_home_next_open_request(self) -> None:
+        self.home_controller.navigation.cycle_open_request(1)
+
+    def _sync_home_sidebar_cursor(self) -> None:
+        if self.state.current_tab != TAB_HOME or not self._has_live_screen():
+            return
+        try:
+            tree = self._query_current("#sidebar-tree", Tree)
+        except Exception:
+            return
+        item_count = len(self.state.get_sidebar_nodes())
+        if item_count <= 0:
+            return
+        selected_index = max(0, min(self.state.selected_sidebar_index, item_count - 1))
+        tree._piespector_ignore_highlight_index = selected_index
+        try:
+            tree.cursor_line = selected_index
+            tree.scroll_to_line(selected_index, animate=False)
+        except Exception:
+            tree._piespector_ignore_highlight_index = None
+
+    def _switch_screen_visibility(self) -> None:
+        if not self._screens_installed:
+            return
+        current_screen = self._current_base_screen()
+        if current_screen is None:
+            return
+        if self.screen.is_modal:
+            return
+
+        target_tab = self.state.current_tab if self.state.current_tab in TAB_ORDER else TAB_HOME
+        if current_screen is not self._screen_for_tab(target_tab):
+            self.switch_screen(target_tab)
+
+    def _screen_for_tab(self, tab_id: str) -> PiespectorScreen:
+        if tab_id == TAB_ENV:
+            return self._env_screen
+        if tab_id == TAB_HISTORY:
+            return self._history_screen
+        return self._home_screen
+
+    def _current_base_screen(self) -> PiespectorScreen | None:
+        for screen in reversed(self.screen_stack):
+            if isinstance(screen, PiespectorScreen):
+                return screen
+        return None
+
+    def _query_current(self, selector: str, expect_type=None):
+        current_screen = self._current_base_screen()
+        if current_screen is None:
+            raise ScreenStackError("No active application screen.")
+        return current_screen.query_one(selector, expect_type)
 
     def _send_selected_request(self) -> None:
         if self.state.get_active_request() is None and self.state.get_selected_request() is not None:
@@ -355,17 +576,34 @@ class PiespectorApp(App[None]):
             )
         else:
             status = response.status_code or "-"
-            self.state.message = f"Response {status} in {response.elapsed_ms or 0:.1f} ms."
+            self.state.message = ""
             self._append_request_log(
                 f"END {request.method} {request.url or '<empty-url>'} status={status} elapsed_ms={response.elapsed_ms or 0:.1f} size={format_bytes(response.body_length)}"
             )
         self._refresh_screen()
 
     def _refresh_screen(self) -> None:
+        if not self._screens_installed:
+            return
+        self._switch_screen_visibility()
+        if not self._screen_widgets_ready():
+            self.call_after_refresh(self._refresh_screen)
+            return
         self.overlay_controller.refresh()
         self._refresh_viewport()
         self._refresh_status_line()
         self._refresh_command_line()
+
+    def _screen_widgets_ready(self) -> bool:
+        try:
+            self._query_current("#workspace")
+            self._query_current("#status-line")
+            self._query_current("#command-line")
+            self._query_current("#command-line-content", Static)
+            self._query_current("#command-input", Input)
+        except Exception:
+            return False
+        return True
 
     def _tick_request_loader(self) -> None:
         if self.state.pending_request_id is None:
@@ -376,39 +614,321 @@ class PiespectorApp(App[None]):
         self._refresh_viewport()
 
     def _refresh_viewport(self) -> None:
-        viewport = self.query_one("#viewport", Static)
         if self.state.current_tab == TAB_HOME:
             self.state.ensure_request_workspace()
             visible_rows = self._home_request_list_visible_rows()
             self.state.ensure_request_selection_visible(visible_rows)
-        if self.state.current_tab == TAB_ENV:
+            self._refresh_home_screen()
+        elif self.state.current_tab == TAB_ENV:
             visible_rows = self._env_visible_rows()
             self.state.ensure_env_selection_visible(visible_rows)
-        if self.state.current_tab == TAB_HISTORY:
+            self._refresh_env_screen()
+        elif self.state.current_tab == TAB_HISTORY:
             visible_rows = self._history_visible_rows()
             self.state.ensure_history_selection_visible(visible_rows)
-        viewport.update(render_viewport(self.state, viewport.size.height, viewport.size.width))
+            self._refresh_history_screen()
+
+    def _refresh_home_screen(self) -> None:
+        self._refresh_home_sidebar_panel()
+        self._refresh_home_url_bar_panel()
+        self._refresh_home_request_panel()
+        self._refresh_home_response_panel()
+        self._refresh_home_jump_cues()
+
+    def _refresh_home_jump_cues(self) -> None:
+        if not self._has_live_screen():
+            return
+
+        url_bar_container = self._query_current("#url-bar-container")
+        sidebar_container = self._query_current("#sidebar-container")
+        request_panel = self._query_current("#request-panel")
+        response_panel = self._query_current("#response-panel")
+        method_select = self._query_current("#method-select", Select)
+        url_bar_subtitle = self._query_current("#url-bar-subtitle", Static)
+        sidebar_container.styles.border_title_align = "right"
+        request_panel.styles.border_title_align = "right"
+        response_panel.styles.border_title_align = "right"
+        sidebar_container.border_title = HOME_SIDEBAR_LABEL
+        request_panel.border_title = "Request"
+        response_panel.border_title = "Response"
+        url_bar_container.styles.height = home_top_bar_height()
+        url_bar_subtitle.update("")
+        url_bar_subtitle.display = False
+        sync_home_focus_highlights(
+            self.state,
+            url_bar_container,
+            sidebar_container,
+            request_panel,
+            response_panel,
+            method_select,
+        )
+
+    def _build_home_jump_overlay(self) -> JumpOverlay:
+        active_request = self.state.get_active_request()
+        tree = self._query_current("#sidebar-tree", Tree)
+        method_select = self._query_current("#method-select", Select)
+        url_display = self._query_current("#url-display", Static)
+        url_input = self._query_current("#url-input", Input)
+        request_tabs = self._query_current("#request-tabs", TabbedContent)
+        response_tabs = self._query_current("#response-tabs", Tabs)
+
+        request_tab_widgets = sorted(
+            request_tabs.query("ContentTab"),
+            key=lambda widget: widget.region.x,
+        )
+        response_tab_widgets = sorted(
+            response_tabs.query("Tab"),
+            key=lambda widget: widget.region.x,
+        )
+
+        targets: list[JumpTarget] = [
+            JumpTarget(HOME_SIDEBAR_JUMP_KEY, "collections", tree),
+        ]
+        if active_request is not None:
+            targets.extend(
+                [
+                    JumpTarget(TOP_BAR_METHOD_JUMP_KEY, "topbar:method", method_select),
+                    JumpTarget(
+                        TOP_BAR_URL_JUMP_KEY,
+                        "topbar:url",
+                        url_input if url_input.display else url_display,
+                    ),
+                ]
+            )
+        targets.extend(
+            JumpTarget(jump_key, f"request:{tab_id}", widget)
+            for widget, (tab_id, jump_key) in zip(request_tab_widgets, REQUEST_EDITOR_JUMP_BINDINGS)
+        )
+        targets.extend(
+            JumpTarget(jump_key, f"response:{tab_id}", widget)
+            for widget, (tab_id, jump_key) in zip(response_tab_widgets, RESPONSE_JUMP_BINDINGS)
+        )
+        return JumpOverlay(Jumper(tuple(targets)))
+
+    def _handle_jump_overlay_result(self, target: str | None) -> None:
+        self.state.leave_jump_mode()
+        if target is not None:
+            self.interaction_controller.activate_jump_target(target)
+        self._refresh_screen()
+        self.call_after_refresh(self._clear_home_jump_focus)
+
+    def _clear_home_jump_focus(self) -> None:
+        if self.state.mode == MODE_HOME_URL_EDIT:
+            try:
+                url_input = self._query_current("#url-input", Input)
+            except Exception:
+                url_input = None
+            if url_input is not None and url_input.display:
+                self.set_focus(url_input)
+                return
+
+        self.set_focus(None)
+        for widget_id in (
+            "method-select",
+            "auth-type-select",
+            "auth-option-select",
+            "body-type-select",
+            "body-raw-type-select",
+        ):
+            try:
+                self._query_current(f"#{widget_id}", Select).blur()
+            except Exception:
+                pass
+
+    def _has_live_screen(self) -> bool:
+        return self._current_base_screen() is not None
+
+    def _refresh_home_sidebar_panel(self) -> None:
+        if not self._has_live_screen():
+            self._refresh_viewport()
+            return
+        tree = self._query_current("#sidebar-tree", Tree)
+        sidebar_subtitle = self._query_current("#sidebar-subtitle", Static)
+        sidebar_container = self._query_current("#sidebar-container")
+        sidebar_title = self._query_current("#sidebar-title", Static)
+        visible_rows = self._home_request_list_visible_rows()
+        refresh_home_sidebar(
+            self.state,
+            tree,
+            sidebar_subtitle,
+            sidebar_container,
+            sidebar_title,
+            visible_rows,
+        )
+
+    def _refresh_home_url_bar_panel(self) -> None:
+        if not self._has_live_screen():
+            self._refresh_screen()
+            return
+        method_select = self._query_current("#method-select", Select)
+        url_display = self._query_current("#url-display", Static)
+        url_input = self._query_current("#url-input", Input)
+        open_tabs = self._query_current("#open-request-tabs", Tabs)
+        refresh_home_url_bar(self.state, method_select, url_display, url_input, open_tabs)
+
+    def _refresh_home_request_panel(self) -> None:
+        if not self._has_live_screen():
+            self._refresh_screen()
+            return
+        request_panel = self._query_current("#request-panel")
+        request_title = self._query_current("#request-title", Static)
+        request_subtitle = self._query_current("#request-subtitle", Static)
+        request_tabs = self._query_current("#request-tabs", TabbedContent)
+        refresh_home_request_content(
+            self.state,
+            request_tabs,
+            request_panel,
+            request_title,
+            request_subtitle,
+        )
+
+    def _refresh_home_response_panel(self) -> None:
+        if not self._has_live_screen():
+            self._refresh_viewport()
+            return
+        response_note = self._query_current("#response-note", Static)
+        response_summary = self._query_current("#response-summary", Static)
+        response_panel = self._query_current("#response-panel")
+        response_title = self._query_current("#response-title", Static)
+        response_subtitle = self._query_current("#response-subtitle", Static)
+        response_tabs = self._query_current("#response-tabs", Tabs)
+        response_content = self._query_current("#response-content", ContentSwitcher)
+        response_body_content = self._query_current("#response-body-content", Static)
+        response_content_height = response_content.size.height or response_body_content.size.height or None
+        response_width = response_content.size.width or response_body_content.size.width or self._query_current("#home-main").size.width
+        refresh_home_response(
+            self.state,
+            response_note,
+            response_summary,
+            response_tabs,
+            response_content,
+            response_panel,
+            response_title,
+            response_subtitle,
+            response_content_height,
+            response_width,
+        )
+
+    def _refresh_jump_state(self) -> None:
+        if not self._has_live_screen():
+            self._refresh_screen()
+            return
+        self.overlay_controller.refresh()
+        self._refresh_viewport()
+        self._refresh_status_line()
+        self._refresh_command_line()
+
+    def _refresh_env_screen(self) -> None:
+        try:
+            env_input = self._query_current("#env-field-input", Input)
+        except Exception:
+            env_input = None
+        env_render.refresh_env_widgets(
+            self.state,
+            self._query_current("#env-select", Select),
+            self._query_current("#env-table", DataTable),
+            env_input,
+        )
+
+    def _refresh_history_screen(self) -> None:
+        history_render.refresh_history_widgets(
+            self.state,
+            self._query_current("#history-list", DataTable),
+            self._query_current("#history-detail", Static),
+        )
 
     def _refresh_overlay_editors(self) -> None:
         self.overlay_controller.refresh()
 
     def _refresh_status_line(self) -> None:
-        self.query_one("#status-line", Static).update(render_status_line(self.state))
+        footer = self._query_current("#status-line", PiespectorFooter)
+        footer.set_status_content(status_bar_content(self.state))
 
     def _refresh_command_line(self) -> None:
-        self.query_one("#command-line", Static).update(render_command_line(self.state))
+        command_prompt = self._query_current("#command-prompt", Static)
+        command_content = self._query_current("#command-line-content", Static)
+        command_input = self._query_current("#command-input", Input)
+
+        if self.state.mode == MODE_COMMAND:
+            command_prompt.display = True
+            command_content.display = False
+            command_input.display = True
+            self._sync_command_input(command_input)
+            return
+
+        command_prompt.display = False
+        command_input.display = False
+        command_input._piespector_focus_token = None
+        if command_input.value:
+            command_input.value = ""
+        command_content.display = True
+        command_content.update(build_command_line_text(self.state))
+
+    def _sync_command_input(self, command_input: Input) -> None:
+        suggestions = self._command_suggestions()
+        command_input.suggester = SuggestFromList(suggestions, case_sensitive=False)
+
+        focus_token = (
+            self.state.current_tab,
+            self.state.command_context_mode,
+        )
+        if getattr(command_input, "_piespector_focus_token", None) == focus_token:
+            return
+
+        command_input._piespector_focus_token = focus_token
+        command_input.value = ""
+        command_input.focus()
+
+    def _command_input_widget(self) -> Input | None:
+        try:
+            return self._query_current("#command-input", Input)
+        except Exception:
+            return None
+
+    def _command_suggestions(self) -> list[str]:
+        return help_commands(
+            self.state,
+            self.state.current_tab,
+            command_context_mode(self.state),
+        )
 
     def _env_visible_rows(self) -> int:
-        viewport = self.query_one("#viewport", Static)
-        return env_render.env_visible_rows(viewport.size.height)
+        try:
+            env_table = self._query_current("#env-table", DataTable)
+            return max(env_table.size.height - 2, 1)
+        except Exception:
+            return 20
 
     def _history_visible_rows(self) -> int:
-        viewport = self.query_one("#viewport", Static)
-        return history_render.history_list_visible_rows(viewport.size.height)
+        try:
+            history_list = self._query_current("#history-list", DataTable)
+            return max(history_list.size.height - 2, 6)
+        except Exception:
+            return 14
 
     def _home_request_list_visible_rows(self) -> int:
-        viewport = self.query_one("#viewport", Static)
-        return max(viewport.size.height - 8, 6)
+        try:
+            tree = self._query_current("#sidebar-tree", Tree)
+            return max(tree.size.height - 2, 6)
+        except Exception:
+            return 14
+
+    def _home_response_visible_rows(self) -> int:
+        try:
+            response_content = self._query_current("#response-body-content", Static)
+            return max(response_content.size.height, 1)
+        except Exception:
+            return 8
+
+    def _home_response_scroll_step(self) -> int:
+        return max(self._home_response_visible_rows() // 2, 1)
+
+    def _history_detail_scroll_step(self) -> int:
+        try:
+            history_detail = self._query_current("#history-detail", Static)
+            return max(history_detail.size.height // 4, 1)
+        except Exception:
+            return 4
 
     def _persist_env_pairs(self) -> None:
         save_env_workspace(
@@ -518,24 +1038,15 @@ class PiespectorApp(App[None]):
 
         return True
 
-    def _reset_command_completion(self) -> None:
-        self._command_completion_anchor = ""
-        self._command_completion_index = -1
-
     def _reset_edit_path_completion(self) -> None:
         self._edit_path_completion_anchor = ""
         self._edit_path_completion_index = -1
 
-    def _binary_path_edit_active(self) -> bool:
-        request = self.state.get_active_request()
-        return (
-            request is not None
-            and request.body_type == "binary"
-            and self.state.mode == MODE_HOME_BODY_EDIT
-        )
-
-    def _normalize_pasted_inline_text(self, pasted: str) -> str:
-        return pasted.replace("\r\n", "\n").replace("\r", "\n").replace("\n", "")
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        if event.input.id != "command-input" or self.state.mode != MODE_COMMAND:
+            return
+        event.stop()
+        self.interaction_controller.run_command(event.value)
 
     def _paste_text(self) -> str | None:
         system = platform.system()

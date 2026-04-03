@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from textual import events
-from textual.widgets import Static
 
 from piespector.domain.editor import HISTORY_DETAIL_BLOCK_REQUEST
 from piespector.domain.modes import MODE_HISTORY_RESPONSE_SELECT
@@ -13,15 +12,12 @@ from piespector.interactions.keys import (
     KEY_ESCAPE,
     KEY_SCROLL_DOWN,
     KEY_SCROLL_UP,
-    KEY_SEARCH,
     LEFT_KEYS,
     OPEN_KEYS,
     RESPONSE_SCROLL_KEYS,
     RIGHT_KEYS,
     UP_KEYS,
 )
-from piespector.screens.home.render import response_scroll_step
-
 if TYPE_CHECKING:
     from piespector.app import PiespectorApp
 
@@ -35,13 +31,6 @@ class HistoryController:
         return self.app.state
 
     def handle_history_view_key(self, event: events.Key) -> bool:
-        if event.key == KEY_SEARCH:
-            self.state.enter_search_mode()
-            self.state.command_buffer = self.state.history_filter_query
-            self.app._refresh_screen()
-            event.stop()
-            return True
-
         if event.key in DOWN_KEYS:
             self.state.select_history_entry(1)
             self.app._refresh_screen()
@@ -105,9 +94,7 @@ class HistoryController:
             return
 
         if event.key in RESPONSE_SCROLL_KEYS:
-            step_size = response_scroll_step(
-                self.app.query_one("#viewport", Static).size.height
-            )
+            step_size = self.app._history_detail_scroll_step()
             step = step_size if event.key == KEY_SCROLL_DOWN else -step_size
             if self.state.selected_history_detail_block == HISTORY_DETAIL_BLOCK_REQUEST:
                 self.state.scroll_history_request(step)
