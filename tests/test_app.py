@@ -48,14 +48,15 @@ class AppCommandModeTests(unittest.TestCase):
         self.assertEqual(state.session.env.selected_env_index, 2)
         self.assertEqual(state.session.history.selected_history_response_tab, "headers")
 
-    def test_app_attaches_screen_local_state_to_screen_instances(self) -> None:
+    def test_app_keeps_home_state_in_session_and_attaches_other_screen_state(self) -> None:
         app = PiespectorApp()
 
         app.state.home_editor_tab = "auth"
         app.state.selected_env_index = 3
         app.state.selected_history_response_tab = "headers"
 
-        self.assertEqual(app._home_screen.home_editor_tab, "auth")
+        self.assertEqual(app.state.session.home.home_editor_tab, "auth")
+        self.assertFalse(hasattr(app._home_screen, "home_editor_tab"))
         self.assertEqual(app._env_screen.selected_env_index, 3)
         self.assertEqual(app._history_screen.selected_history_response_tab, "headers")
 

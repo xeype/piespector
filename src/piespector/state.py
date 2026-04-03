@@ -147,6 +147,16 @@ def _session_field_property(field_name: str) -> property:
     return property(getter, setter)
 
 
+def _session_group_field_property(group_name: str, field_name: str) -> property:
+    def getter(self: PiespectorState):
+        return getattr(getattr(self.session, group_name), field_name)
+
+    def setter(self: PiespectorState, value) -> None:
+        setattr(getattr(self.session, group_name), field_name, value)
+
+    return property(getter, setter)
+
+
 def _screen_state_field_property(group_name: str, field_name: str) -> property:
     def getter(self: PiespectorState):
         owner = self._screen_owner(group_name)
@@ -166,7 +176,11 @@ def _screen_state_field_property(group_name: str, field_name: str) -> property:
 for _session_field_name in SESSION_ROOT_FIELD_NAMES:
     setattr(PiespectorState, _session_field_name, _session_field_property(_session_field_name))
 for _home_field_name in HOME_SCREEN_FIELD_NAMES:
-    setattr(PiespectorState, _home_field_name, _screen_state_field_property("home", _home_field_name))
+    setattr(
+        PiespectorState,
+        _home_field_name,
+        _session_group_field_property("home", _home_field_name),
+    )
 for _env_field_name in ENV_SCREEN_FIELD_NAMES:
     setattr(PiespectorState, _env_field_name, _screen_state_field_property("env", _env_field_name))
 for _history_field_name in HISTORY_SCREEN_FIELD_NAMES:

@@ -4,7 +4,6 @@ from textual import events
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
-from textual.reactive import reactive
 from textual.widgets import ContentSwitcher, DataTable, Input, Select, Static, Tab, TabbedContent, TabPane, Tabs, Tree
 
 from piespector.domain.editor import (
@@ -24,7 +23,6 @@ from piespector.domain.editor import (
 from piespector.domain.http import HTTP_METHODS
 from piespector.domain.modes import (
     MODE_HOME_AUTH_EDIT,
-    MODE_HOME_AUTH_SELECT,
     MODE_HOME_AUTH_LOCATION_EDIT,
     MODE_HOME_AUTH_TYPE_EDIT,
     MODE_HOME_BODY_EDIT,
@@ -36,8 +34,6 @@ from piespector.domain.modes import (
     MODE_HOME_REQUEST_EDIT,
     MODE_HOME_REQUEST_METHOD_EDIT,
     MODE_HOME_URL_EDIT,
-    MODE_HOME_SECTION_SELECT,
-    MODE_NORMAL,
 )
 from piespector.commands import filesystem_path_completions
 from piespector.placeholders import apply_placeholder_completion
@@ -52,29 +48,6 @@ class SidebarTree(Tree, inherit_bindings=False):
 
 
 class HomeScreen(PiespectorScreen):
-    request_scroll_offset = reactive(0)
-    response_scroll_offset = reactive(0)
-    selected_home_response_tab = reactive(RESPONSE_TAB_BODY)
-    home_editor_tab = reactive(HOME_EDITOR_TAB_REQUEST)
-    selected_request_field_index = reactive(0)
-    selected_auth_index = reactive(0)
-    selected_param_index = reactive(0)
-    selected_param_field_index = reactive(0)
-    selected_header_index = reactive(0)
-    selected_header_field_index = reactive(0)
-    selected_body_index = reactive(0)
-    home_top_bar_return_mode = reactive(MODE_NORMAL)
-    home_top_bar_edit_return_mode = reactive(MODE_NORMAL)
-    selected_top_bar_field = reactive("method")
-    home_auth_type_return_mode = reactive(MODE_HOME_AUTH_SELECT)
-    home_body_type_return_mode = reactive(MODE_HOME_SECTION_SELECT)
-    home_body_raw_type_return_mode = reactive(MODE_HOME_BODY_TYPE_EDIT)
-    home_body_content_return_mode = reactive(MODE_HOME_BODY_SELECT)
-    home_body_select_return_mode = reactive(MODE_HOME_SECTION_SELECT)
-    home_response_select_return_mode = reactive(MODE_NORMAL)
-    params_creating_new = reactive(False)
-    headers_creating_new = reactive(False)
-
     @staticmethod
     def _response_content_id(tab_id: str) -> str:
         if tab_id == RESPONSE_TAB_HEADERS:
