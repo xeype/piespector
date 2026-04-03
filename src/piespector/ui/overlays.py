@@ -19,7 +19,7 @@ from piespector.domain.editor import (
 from piespector.domain.modes import (
     MODE_HOME_BODY_TEXTAREA,
 )
-from piespector.http_client import validate_raw_body
+from piespector.request_builder import validate_raw_body
 from piespector.interactions.keys import KEY_ESCAPE, KEY_SAVE, KEY_TAB
 from piespector.placeholders import apply_placeholder_completion, auto_pair_placeholder, placeholder_match
 from piespector.ui.rendering_helpers import (

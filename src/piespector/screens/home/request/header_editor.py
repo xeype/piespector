@@ -7,7 +7,7 @@ from textual.widgets import DataTable
 
 from piespector.domain.modes import MODE_HOME_HEADERS_EDIT, MODE_HOME_HEADERS_SELECT
 from piespector.domain.requests import RequestDefinition
-from piespector.http_client import preview_auto_headers
+from piespector.request_builder import preview_auto_headers
 from piespector.screens.home import messages
 from piespector.state import PiespectorState
 from piespector.ui.selection import effective_mode, selected_element_style

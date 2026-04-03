@@ -12,7 +12,7 @@ from piespector.domain.modes import (
     MODE_HOME_URL_EDIT,
 )
 from piespector.domain.requests import RequestDefinition
-from piespector.http_client import preview_request_url
+from piespector.request_builder import preview_request_url
 from piespector.screens.home.request.method_selection import (
     method_color,
     render_method_selector_value,

@@ -51,7 +51,7 @@ from piespector.domain.modes import (
     REQUEST_RESPONSE_SHORTCUT_MODES,
 )
 from piespector.domain.requests import RequestDefinition
-from piespector.http_client import preview_request_url, preview_auto_headers
+from piespector.request_builder import preview_auto_headers, preview_request_url
 from piespector.screens.home import messages
 from piespector.screens.home.layout import (
     home_request_list_visible_rows,

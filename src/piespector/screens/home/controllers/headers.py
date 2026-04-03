@@ -3,7 +3,6 @@ from __future__ import annotations
 from textual import events
 
 from piespector.domain.modes import MODE_HOME_HEADERS_EDIT, MODE_HOME_HEADERS_SELECT
-from piespector.http_client import preview_auto_headers
 from piespector.interactions.keys import (
     ARROW_LEFT_KEYS,
     ARROW_RIGHT_KEYS,
@@ -19,6 +18,7 @@ from piespector.interactions.keys import (
     TAB_PREVIOUS_KEYS,
     UP_KEYS,
 )
+from piespector.request_builder import preview_auto_headers
 from piespector.screens.home import messages
 from piespector.screens.home.controllers.base import HomeControllerBase, HomeModeHandler
 

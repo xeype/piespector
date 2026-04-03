@@ -5,7 +5,8 @@ from urllib import parse
 
 from piespector.domain.history import HistoryEntry
 from piespector.domain.requests import RequestDefinition, ResponseSummary
-from piespector.http_client import preview_effective_headers, preview_request_url, resolve_placeholders
+from piespector.placeholders import resolve_placeholders
+from piespector.request_builder import preview_effective_headers, preview_request_url
 
 BODY_STORAGE_LIMIT = 1_048_576
 SENSITIVE_HEADER_MARKER = "<redacted>"
