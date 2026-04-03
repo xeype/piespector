@@ -965,6 +965,50 @@ class WorkspaceStateMixin:
         self.notify_requests_mutated()
         return copied
 
+    def _copy_folder_subtree(
+        self,
+        folders: list[FolderDefinition],
+        requests: list[RequestDefinition],
+        *,
+        collection_id: str,
+        parent_folder_overrides: dict[str, str | None] | None = None,
+        renamed_folder_ids: set[str] | None = None,
+    ) -> tuple[list[FolderDefinition], list[RequestDefinition]]:
+        folder_id_map: dict[str, str] = {}
+        copied_folders: list[FolderDefinition] = []
+        overrides = parent_folder_overrides or {}
+        renamed_ids = renamed_folder_ids or set()
+
+        for original in folders:
+            new_folder_id = uuid4().hex
+            folder_id_map[original.folder_id] = new_folder_id
+            copied_folders.append(
+                FolderDefinition(
+                    folder_id=new_folder_id,
+                    name=(
+                        f"{original.name} Copy"
+                        if original.folder_id in renamed_ids
+                        else original.name
+                    ),
+                    collection_id=collection_id,
+                    parent_folder_id=(
+                        overrides[original.folder_id]
+                        if original.folder_id in overrides
+                        else folder_id_map.get(original.parent_folder_id)
+                    ),
+                )
+            )
+
+        copied_requests: list[RequestDefinition] = []
+        for request in requests:
+            copied = deepcopy(request)
+            copied.request_id = uuid4().hex
+            copied.collection_id = collection_id
+            copied.folder_id = folder_id_map.get(request.folder_id)
+            copied_requests.append(copied)
+
+        return copied_folders, copied_requests
+
     def copy_folder_to(
         self,
         folder_id: str,
@@ -977,38 +1021,18 @@ class WorkspaceStateMixin:
             return None
 
         subtree = self._folder_subtree(folder.folder_id)
-        folder_id_map: dict[str, str] = {}
-        copied_folders: list[FolderDefinition] = []
-        for original in subtree:
-            new_folder_id = uuid4().hex
-            folder_id_map[original.folder_id] = new_folder_id
-            copied_folders.append(
-                FolderDefinition(
-                    folder_id=new_folder_id,
-                    name=(
-                        f"{original.name} Copy"
-                        if original.folder_id == folder.folder_id
-                        else original.name
-                    ),
-                    collection_id=collection_id,
-                    parent_folder_id=(
-                        parent_folder_id
-                        if original.folder_id == folder.folder_id
-                        else folder_id_map.get(original.parent_folder_id)
-                    ),
-                )
-            )
-
         subtree_ids = {item.folder_id for item in subtree}
-        copied_requests: list[RequestDefinition] = []
-        for request in self.requests:
-            if request.folder_id not in subtree_ids:
-                continue
-            copied = deepcopy(request)
-            copied.request_id = uuid4().hex
-            copied.collection_id = collection_id
-            copied.folder_id = folder_id_map.get(request.folder_id)
-            copied_requests.append(copied)
+        copied_folders, copied_requests = self._copy_folder_subtree(
+            subtree,
+            [
+                request
+                for request in self.requests
+                if request.folder_id in subtree_ids
+            ],
+            collection_id=collection_id,
+            parent_folder_overrides={folder.folder_id: parent_folder_id},
+            renamed_folder_ids={folder.folder_id},
+        )
 
         self._extend_folders(copied_folders)
         self._extend_requests(copied_requests)
@@ -1041,34 +1065,19 @@ class WorkspaceStateMixin:
             for folder in self.folders
             if folder.collection_id == collection.collection_id
         ]
-        ordered_folders = sorted(source_folders, key=lambda item: len(self.folder_chain(item.folder_id)))
-        folder_id_map: dict[str, str] = {}
-        copied_folders: list[FolderDefinition] = []
-        for original in ordered_folders:
-            new_folder_id = uuid4().hex
-            folder_id_map[original.folder_id] = new_folder_id
-            copied_folders.append(
-                FolderDefinition(
-                    folder_id=new_folder_id,
-                    name=original.name,
-                    collection_id=copied_collection.collection_id,
-                    parent_folder_id=folder_id_map.get(original.parent_folder_id),
-                )
-            )
-
-        copied_requests: list[RequestDefinition] = []
-        for request in self.requests:
-            if request.collection_id != collection.collection_id:
-                continue
-            copied = deepcopy(request)
-            copied.request_id = uuid4().hex
-            copied.collection_id = copied_collection.collection_id
-            copied.folder_id = (
-                folder_id_map.get(request.folder_id)
-                if request.folder_id is not None
-                else None
-            )
-            copied_requests.append(copied)
+        ordered_folders = sorted(
+            source_folders,
+            key=lambda item: len(self.folder_chain(item.folder_id)),
+        )
+        copied_folders, copied_requests = self._copy_folder_subtree(
+            ordered_folders,
+            [
+                request
+                for request in self.requests
+                if request.collection_id == collection.collection_id
+            ],
+            collection_id=copied_collection.collection_id,
+        )
 
         self._extend_folders(copied_folders)
         self._extend_requests(copied_requests)

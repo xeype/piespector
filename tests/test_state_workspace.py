@@ -74,6 +74,57 @@ class WorkspaceIndexTests(unittest.TestCase):
         self.assertIs(state.get_folder_by_id(copied_folder.folder_id), copied_folder)
         self.assertIs(state.get_request_by_id(copied_request.request_id), copied_request)
 
+    def test_copy_folder_updates_lookup_indices_for_new_items(self) -> None:
+        collection = CollectionDefinition(collection_id="c1", name="Alpha")
+        folder = FolderDefinition(
+            folder_id="f1",
+            name="Auth",
+            collection_id=collection.collection_id,
+        )
+        nested_folder = FolderDefinition(
+            folder_id="f2",
+            name="Tokens",
+            collection_id=collection.collection_id,
+            parent_folder_id=folder.folder_id,
+        )
+        request = RequestDefinition(
+            request_id="r1",
+            name="Refresh",
+            collection_id=collection.collection_id,
+            folder_id=nested_folder.folder_id,
+        )
+        state = PiespectorState(
+            collections=[collection],
+            folders=[folder, nested_folder],
+            requests=[request],
+        )
+
+        copied_folder = state.copy_folder_to(
+            folder.folder_id,
+            collection.collection_id,
+            None,
+        )
+
+        self.assertIsNotNone(copied_folder)
+        assert copied_folder is not None
+        copied_nested_folder = next(
+            item
+            for item in state.folders
+            if item.parent_folder_id == copied_folder.folder_id
+        )
+        copied_request = next(
+            item
+            for item in state.requests
+            if item.folder_id == copied_nested_folder.folder_id
+        )
+        self.assertEqual(copied_folder.name, "Auth Copy")
+        self.assertIs(state.get_folder_by_id(copied_folder.folder_id), copied_folder)
+        self.assertIs(
+            state.get_folder_by_id(copied_nested_folder.folder_id),
+            copied_nested_folder,
+        )
+        self.assertIs(state.get_request_by_id(copied_request.request_id), copied_request)
+
     def test_delete_selected_request_removes_request_lookup(self) -> None:
         request = RequestDefinition(request_id="r1", name="Health")
         state = PiespectorState(requests=[request])
