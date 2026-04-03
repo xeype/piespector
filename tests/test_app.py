@@ -336,7 +336,7 @@ class AppCommandModeTests(unittest.TestCase):
         self.assertEqual(app.state.mode, MODE_JUMP)
         self.assertTrue(event.stopped)
 
-    def test_jump_to_request_enters_request_select_mode(self) -> None:
+    def test_jump_to_request_lands_on_request_tab_select(self) -> None:
         app = PiespectorApp()
         request = RequestDefinition(name="Health")
         app.state.requests = [request]
@@ -350,7 +350,7 @@ class AppCommandModeTests(unittest.TestCase):
             app.interaction_controller.handle_jump_key(event)
 
         self.assertEqual(app.state.current_tab, TAB_HOME)
-        self.assertEqual(app.state.mode, MODE_HOME_REQUEST_SELECT)
+        self.assertEqual(app.state.mode, MODE_HOME_SECTION_SELECT)
         self.assertEqual(app.state.home_editor_tab, "request")
         self.assertTrue(event.stopped)
 
@@ -368,7 +368,7 @@ class AppCommandModeTests(unittest.TestCase):
         self.assertEqual(app.state.mode, MODE_NORMAL)
         self.assertTrue(event.stopped)
 
-    def test_jump_to_headers_enters_headers_select_mode(self) -> None:
+    def test_jump_to_headers_lands_on_headers_tab_select(self) -> None:
         app = PiespectorApp()
         request = RequestDefinition(name="Health")
         app.state.requests = [request]
@@ -380,7 +380,7 @@ class AppCommandModeTests(unittest.TestCase):
             app.interaction_controller.handle_jump_key(event)
 
         self.assertEqual(app.state.current_tab, TAB_HOME)
-        self.assertEqual(app.state.mode, MODE_HOME_HEADERS_SELECT)
+        self.assertEqual(app.state.mode, MODE_HOME_SECTION_SELECT)
         self.assertEqual(app.state.home_editor_tab, "headers")
         self.assertTrue(event.stopped)
 

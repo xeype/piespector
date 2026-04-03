@@ -384,6 +384,16 @@ def _sync_input_widget(
     input_widget.focus()
 
 
+def _deactivate_table_widget(table: DataTable) -> None:
+    if not table.has_focus:
+        return
+    app = table.app
+    if app is not None:
+        app.set_focus(None)
+        return
+    table.blur()
+
+
 def _refresh_open_request_tabs(state: PiespectorState, tabs: Tabs) -> None:
     try:
         tabs_list = tabs.query_one("#tabs-list")
@@ -633,13 +643,11 @@ def refresh_home_request_content(
                 else None
             ),
         )
-        if (
-            panel_selected
-            and state.mode != MODE_HOME_PARAMS_EDIT
-            and params_table.can_focus
-            and not params_table.has_focus
-        ):
+        params_table_selected = panel_selected and state.mode == MODE_HOME_PARAMS_SELECT
+        if params_table_selected and params_table.can_focus and not params_table.has_focus:
             params_table.focus()
+        elif not params_table_selected:
+            _deactivate_table_widget(params_table)
         return
 
     if state.home_editor_tab == HOME_EDITOR_TAB_HEADERS:
@@ -671,13 +679,11 @@ def refresh_home_request_content(
                 else None
             ),
         )
-        if (
-            panel_selected
-            and state.mode != MODE_HOME_HEADERS_EDIT
-            and headers_table.can_focus
-            and not headers_table.has_focus
-        ):
+        headers_table_selected = panel_selected and state.mode == MODE_HOME_HEADERS_SELECT
+        if headers_table_selected and headers_table.can_focus and not headers_table.has_focus:
             headers_table.focus()
+        elif not headers_table_selected:
+            _deactivate_table_widget(headers_table)
         return
 
     sync_select_widget(
@@ -732,13 +738,15 @@ def refresh_home_request_content(
             )
         else:
             _sync_input_widget(body_input, "", display=False)
-            if (
+            body_table_selected = (
                 panel_selected
+                and state.mode == MODE_HOME_BODY_SELECT
                 and state.selected_body_index > 0
-                and body_table.can_focus
-                and not body_table.has_focus
-            ):
+            )
+            if body_table_selected and body_table.can_focus and not body_table.has_focus:
                 body_table.focus()
+            elif not body_table_selected:
+                _deactivate_table_widget(body_table)
         return
 
     body_preview.update(

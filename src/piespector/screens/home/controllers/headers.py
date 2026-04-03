@@ -64,6 +64,11 @@ class HomeHeadersController(HomeControllerBase):
             return
 
         if event.key in UP_KEYS:
+            if total_rows <= 0 or self.state.selected_header_index <= 0:
+                self.state.enter_home_section_select_mode()
+                self.app._refresh_screen()
+                event.stop()
+                return
             self.state.select_header_row(-1, total_rows)
             self.app._refresh_home_request_panel()
             event.stop()

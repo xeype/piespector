@@ -174,6 +174,23 @@ class AppUiTests(unittest.TestCase):
         self.assertEqual(app.state.mode, "HOME_AUTH_SELECT")
         self.assertTrue(event.stopped)
 
+    def test_request_select_k_on_first_field_returns_to_section_select(self) -> None:
+        app = PiespectorApp()
+        request = RequestDefinition(name="Health")
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+        app.state.home_editor_tab = "request"
+        app.state.mode = "HOME_REQUEST_SELECT"
+        app.state.selected_request_field_index = 0
+        event = FakeKeyEvent("k")
+
+        with patch.object(app, "_refresh_screen"):
+            app.home_controller.request.handle_home_request_select_key(event)
+
+        self.assertEqual(app.state.home_editor_tab, "request")
+        self.assertEqual(app.state.mode, "HOME_SECTION_SELECT")
+        self.assertTrue(event.stopped)
+
     def test_jump_to_method_opens_top_bar_method_selector_not_dropdown(self) -> None:
         app = PiespectorApp()
         request = RequestDefinition(
@@ -309,6 +326,25 @@ class AppUiTests(unittest.TestCase):
         self.assertEqual(app.state.mode, "HOME_HEADERS_SELECT")
         self.assertTrue(event.stopped)
 
+    def test_params_select_k_on_first_row_returns_to_section_select(self) -> None:
+        app = PiespectorApp()
+        request = RequestDefinition(
+            query_items=[RequestKeyValue(key="page", value="1")],
+        )
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+        app.state.home_editor_tab = "params"
+        app.state.mode = "HOME_PARAMS_SELECT"
+        app.state.selected_param_index = 0
+        event = FakeKeyEvent("k")
+
+        with patch.object(app, "_refresh_screen"):
+            app.home_controller.params.handle_home_params_select_key(event)
+
+        self.assertEqual(app.state.home_editor_tab, "params")
+        self.assertEqual(app.state.mode, "HOME_SECTION_SELECT")
+        self.assertTrue(event.stopped)
+
     def test_params_select_shift_l_keeps_params_block_and_moves_field(self) -> None:
         app = PiespectorApp()
         request = RequestDefinition(
@@ -397,6 +433,26 @@ class AppUiTests(unittest.TestCase):
         self.assertEqual(app.state.mode, "HOME_BODY_SELECT")
         self.assertEqual(app.state.selected_body_index, 0)
 
+    def test_auth_select_k_on_type_row_returns_to_section_select(self) -> None:
+        app = PiespectorApp()
+        request = RequestDefinition(
+            auth_type="bearer",
+            auth_bearer_token="token",
+        )
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+        app.state.home_editor_tab = "auth"
+        app.state.mode = "HOME_AUTH_SELECT"
+        app.state.selected_auth_index = 0
+        event = FakeKeyEvent("k")
+
+        with patch.object(app, "_refresh_screen"):
+            app.home_controller.auth.handle_home_auth_select_key(event)
+
+        self.assertEqual(app.state.home_editor_tab, "auth")
+        self.assertEqual(app.state.mode, "HOME_SECTION_SELECT")
+        self.assertTrue(event.stopped)
+
     def test_creating_header_keeps_focus_on_new_row_key(self) -> None:
         app = PiespectorApp()
         request = RequestDefinition(header_items=[])
@@ -436,6 +492,25 @@ class AppUiTests(unittest.TestCase):
         self.assertEqual(app.state.mode, "HOME_HEADERS_SELECT")
         self.assertTrue(event.stopped)
 
+    def test_headers_select_k_on_first_row_returns_to_section_select(self) -> None:
+        app = PiespectorApp()
+        request = RequestDefinition(
+            header_items=[RequestKeyValue(key="Accept", value="application/json")],
+        )
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+        app.state.home_editor_tab = "headers"
+        app.state.mode = "HOME_HEADERS_SELECT"
+        app.state.selected_header_index = 0
+        event = FakeKeyEvent("k")
+
+        with patch.object(app, "_refresh_screen"):
+            app.home_controller.headers.handle_home_headers_select_key(event)
+
+        self.assertEqual(app.state.home_editor_tab, "headers")
+        self.assertEqual(app.state.mode, "HOME_SECTION_SELECT")
+        self.assertTrue(event.stopped)
+
     def test_body_select_e_on_type_row_opens_body_type_dropdown(self) -> None:
         app = PiespectorApp()
         request = RequestDefinition(
@@ -453,6 +528,25 @@ class AppUiTests(unittest.TestCase):
 
         self.assertEqual(app.state.mode, "HOME_BODY_TYPE_EDIT")
         self.assertEqual(app.state.selected_body_index, 0)
+        self.assertTrue(event.stopped)
+
+    def test_body_select_k_on_type_row_returns_to_section_select(self) -> None:
+        app = PiespectorApp()
+        request = RequestDefinition(
+            body_type="form-data",
+        )
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+        app.state.home_editor_tab = "body"
+        app.state.mode = "HOME_BODY_SELECT"
+        app.state.selected_body_index = 0
+        event = FakeKeyEvent("k")
+
+        with patch.object(app, "_refresh_screen"):
+            app.home_controller.body.handle_home_body_select_key(event)
+
+        self.assertEqual(app.state.home_editor_tab, "body")
+        self.assertEqual(app.state.mode, "HOME_SECTION_SELECT")
         self.assertTrue(event.stopped)
 
     def test_body_type_edit_e_on_raw_closes_dropdown_without_opening_editor(self) -> None:
@@ -793,6 +887,42 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(url_bar.has_class("piespector-focus-frame"))
             self.assertFalse(response_panel.has_class("piespector-tab-select"))
 
+    async def test_section_select_k_returns_from_params_rows_to_tab_highlight(self) -> None:
+        app = PiespectorApp()
+        app._load_request_workspace = lambda: None
+        request = RequestDefinition(
+            request_id="r1",
+            name="List",
+            query_items=[RequestKeyValue(key="page", value="1")],
+        )
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+        app.state.home_editor_tab = "params"
+        app.state.mode = "HOME_SECTION_SELECT"
+
+        async with app.run_test(size=(140, 40)) as pilot:
+            app._refresh_screen()
+            await pilot.pause()
+
+            request_panel = app.screen.query_one("#request-panel")
+            table = app.screen.query_one("#request-params-table", DataTable)
+
+            self.assertTrue(request_panel.has_class("piespector-tab-select"))
+            self.assertFalse(table.has_focus)
+
+            await pilot.press("j")
+            await pilot.pause()
+
+            self.assertEqual(app.state.mode, "HOME_PARAMS_SELECT")
+            self.assertTrue(table.has_focus)
+
+            await pilot.press("k")
+            await pilot.pause()
+
+            self.assertEqual(app.state.mode, "HOME_SECTION_SELECT")
+            self.assertTrue(request_panel.has_class("piespector-tab-select"))
+            self.assertFalse(table.has_focus)
+
     async def test_jump_mode_tab_still_opens_home_collections(self) -> None:
         app = PiespectorApp()
         app._load_request_workspace = lambda: None
@@ -875,8 +1005,12 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
             await pilot.pause()
 
             self.assertFalse(app.screen.is_modal)
-            self.assertEqual(app.state.mode, "HOME_HEADERS_SELECT")
+            self.assertEqual(app.state.mode, "HOME_SECTION_SELECT")
             self.assertEqual(app.state.home_editor_tab, "headers")
+            request_panel = app.screen.query_one("#request-panel")
+            headers_table = app.screen.query_one("#request-headers-table", DataTable)
+            self.assertTrue(request_panel.has_class("piespector-tab-select"))
+            self.assertFalse(headers_table.has_focus)
 
     async def test_home_jump_overlay_escape_dismisses_jump_mode(self) -> None:
         app = PiespectorApp()
@@ -1814,9 +1948,16 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
             await pilot.press("ctrl+o", "t")
             await pilot.pause()
 
-            self.assertEqual(app.state.mode, "HOME_BODY_SELECT")
+            self.assertEqual(app.state.mode, "HOME_SECTION_SELECT")
+            self.assertEqual(app.state.home_editor_tab, "body")
             self.assertFalse(method_select.has_focus_within)
             self.assertFalse(method_select.expanded)
+
+            await pilot.press("j")
+            await pilot.pause()
+
+            self.assertEqual(app.state.mode, "HOME_BODY_SELECT")
+            self.assertEqual(app.state.selected_body_index, 0)
 
             await pilot.press("j")
             await pilot.pause()

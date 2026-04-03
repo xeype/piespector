@@ -36,6 +36,11 @@ class HomeParamsController(HomeControllerBase):
             return
 
         if event.key in UP_KEYS:
+            if not self.state.get_active_request_params() or self.state.selected_param_index <= 0:
+                self.state.enter_home_section_select_mode()
+                self.app._refresh_screen()
+                event.stop()
+                return
             self.state.select_param_row(-1)
             self.app._refresh_home_request_panel()
             event.stop()

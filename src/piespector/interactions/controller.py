@@ -7,11 +7,6 @@ from textual.app import ScreenStackError
 
 from piespector.commands import run_command
 from piespector.domain.editor import (
-    HOME_EDITOR_TAB_AUTH,
-    HOME_EDITOR_TAB_BODY,
-    HOME_EDITOR_TAB_HEADERS,
-    HOME_EDITOR_TAB_PARAMS,
-    HOME_EDITOR_TAB_REQUEST,
     REQUEST_EDITOR_JUMP_KEY_TO_TAB,
     RESPONSE_JUMP_KEY_TO_TAB,
     TAB_ENV,
@@ -137,20 +132,10 @@ class InteractionController:
 
     def _open_home_jump_target(self, tab_id: str) -> None:
         self.state.switch_tab(TAB_HOME, TAB_LABELS[TAB_HOME])
+        if self.state.get_active_request() is None and self.state.get_selected_request() is not None:
+            self.state.open_selected_request(pin=True)
         self.state.set_home_editor_tab(tab_id)
-        if tab_id == HOME_EDITOR_TAB_REQUEST:
-            self.state.enter_home_request_select_mode()
-            return
-        if tab_id == HOME_EDITOR_TAB_AUTH:
-            self.state.enter_home_auth_select_mode()
-            return
-        if tab_id == HOME_EDITOR_TAB_PARAMS:
-            self.state.enter_home_params_select_mode()
-            return
-        if tab_id == HOME_EDITOR_TAB_HEADERS:
-            self.state.enter_home_headers_select_mode()
-            return
-        self.state.enter_home_body_select_mode(origin_mode=MODE_HOME_SECTION_SELECT)
+        self.state.enter_home_section_select_mode()
 
     def _open_home_top_bar_jump_target(self, target: str) -> None:
         self.state.switch_tab(TAB_HOME, TAB_LABELS[TAB_HOME])

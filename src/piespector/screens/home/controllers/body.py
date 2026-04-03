@@ -43,6 +43,11 @@ class HomeBodyController(HomeControllerBase):
             return
 
         if event.key in UP_KEYS:
+            if self.state.selected_body_index <= 0:
+                self.state.enter_home_section_select_mode()
+                self.app._refresh_screen()
+                event.stop()
+                return
             self.state.select_body_row(-1)
             self.app._refresh_home_request_panel()
             event.stop()
