@@ -182,12 +182,9 @@ class EventRouter:
 
     def handle_key(self, event: events.Key) -> None:
         current_screen = self._current_screen()
-        if (
-            current_screen is not None
-            and current_screen.is_modal
-            and isinstance(current_screen, JumpOverlay)
-        ):
-            current_screen.on_key(event)
+        if current_screen is not None and current_screen.is_modal:
+            if isinstance(current_screen, JumpOverlay):
+                current_screen.on_key(event)
             return
 
         if self.state.mode == MODE_JUMP:

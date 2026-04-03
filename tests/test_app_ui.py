@@ -1366,6 +1366,29 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(CommandPalette.is_open(app))
             self.assertIsInstance(app.screen.query_one(CommandInput), CommandInput)
 
+    async def test_command_palette_blocks_background_navigation(self) -> None:
+        app = PiespectorApp()
+        app._load_request_workspace = lambda: None
+        app.state.requests = [
+            RequestDefinition(request_id="r1", name="Health"),
+            RequestDefinition(request_id="r2", name="Ready"),
+        ]
+        app.state.ensure_request_workspace()
+
+        async with app.run_test(size=(140, 40)) as pilot:
+            await pilot.pause()
+            self.assertEqual(app.state.selected_sidebar_index, 0)
+
+            await pilot.press("ctrl+p")
+            await pilot.pause()
+            await pilot.press("j")
+            await pilot.pause()
+
+            command_input = app.screen.query_one(CommandInput)
+            self.assertEqual(command_input.value, "j")
+            self.assertEqual(app.state.selected_sidebar_index, 0)
+            self.assertEqual(app.state.active_request_id, "r1")
+
     async def test_slash_opens_workspace_search_and_navigates_to_request(self) -> None:
         app = PiespectorApp()
         app._load_request_workspace = lambda: None
@@ -1398,6 +1421,29 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(app.state.active_request_id, request.request_id)
             self.assertEqual(app.state.message, "Opened request OAuth Protected.")
             self.assertFalse(CommandPalette.is_open(app))
+
+    async def test_workspace_search_blocks_background_navigation(self) -> None:
+        app = PiespectorApp()
+        app._load_request_workspace = lambda: None
+        app.state.requests = [
+            RequestDefinition(request_id="r1", name="Health"),
+            RequestDefinition(request_id="r2", name="Ready"),
+        ]
+        app.state.ensure_request_workspace()
+
+        async with app.run_test(size=(140, 40)) as pilot:
+            await pilot.pause()
+            self.assertEqual(app.state.selected_sidebar_index, 0)
+
+            await pilot.press("/")
+            await pilot.pause()
+            await pilot.press("j")
+            await pilot.pause()
+
+            command_input = app.screen.query_one(CommandInput)
+            self.assertEqual(command_input.value, "j")
+            self.assertEqual(app.state.selected_sidebar_index, 0)
+            self.assertEqual(app.state.active_request_id, "r1")
 
     async def test_command_palette_submission_runs_help_system_command(self) -> None:
         app = PiespectorApp()
