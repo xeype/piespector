@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from textual.app import ScreenStackError
+from textual.css.query import NoMatches
 from textual.widgets import (
     ContentSwitcher,
     DataTable,
@@ -87,18 +88,15 @@ class ScreenRefreshCoordinator:
             return
         try:
             tree = self.app._query_current("#sidebar-tree", Tree)
-        except Exception:
+        except NoMatches:
             return
         item_count = len(self.state.get_sidebar_nodes())
         if item_count <= 0:
             return
         selected_index = max(0, min(self.state.selected_sidebar_index, item_count - 1))
         tree._piespector_ignore_highlight_index = selected_index
-        try:
-            tree.cursor_line = selected_index
-            tree.scroll_to_line(selected_index, animate=False)
-        except Exception:
-            tree._piespector_ignore_highlight_index = None
+        tree.cursor_line = selected_index
+        tree.scroll_to_line(selected_index, animate=False)
 
     def switch_screen_visibility(self) -> None:
         if not self.app._screens_installed:
@@ -151,7 +149,7 @@ class ScreenRefreshCoordinator:
             self.app._query_current("#command-line")
             self.app._query_current("#command-line-content", Static)
             self.app._query_current("#command-input", Input)
-        except Exception:
+        except NoMatches:
             return False
         return True
 
@@ -297,7 +295,7 @@ class ScreenRefreshCoordinator:
     def refresh_env_screen(self) -> None:
         try:
             env_input = self.app._query_current("#env-field-input", Input)
-        except Exception:
+        except NoMatches:
             env_input = None
         env_render.refresh_env_widgets(
             self.state,
@@ -344,28 +342,28 @@ class ScreenRefreshCoordinator:
         try:
             env_table = self.app._query_current("#env-table", DataTable)
             return max(env_table.size.height - 2, 1)
-        except Exception:
+        except NoMatches:
             return 20
 
     def history_visible_rows(self) -> int:
         try:
             history_list = self.app._query_current("#history-list", DataTable)
             return max(history_list.size.height - 2, 6)
-        except Exception:
+        except NoMatches:
             return 14
 
     def home_request_list_visible_rows(self) -> int:
         try:
             tree = self.app._query_current("#sidebar-tree", Tree)
             return max(tree.size.height - 2, 6)
-        except Exception:
+        except NoMatches:
             return 14
 
     def home_response_visible_rows(self) -> int:
         try:
             response_content = self.app._query_current("#response-body-content", Static)
             return max(response_content.size.height, 1)
-        except Exception:
+        except NoMatches:
             return 8
 
     def home_response_scroll_step(self) -> int:
@@ -375,5 +373,5 @@ class ScreenRefreshCoordinator:
         try:
             history_detail = self.app._query_current("#history-detail", Static)
             return max(history_detail.size.height // 4, 1)
-        except Exception:
+        except NoMatches:
             return 4

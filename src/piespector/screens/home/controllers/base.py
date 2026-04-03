@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Callable
 
 from textual import events
 from textual.app import ScreenStackError
+from textual.css.query import NoMatches
 from textual.widgets import Input, Select, Tree
 
 from piespector.domain.modes import MODE_HOME_SECTION_SELECT
@@ -36,17 +37,17 @@ class HomeControllerBase:
     def sidebar_tree(self) -> Tree | None:
         try:
             return self.app._query_current("#sidebar-tree", Tree)
-        except ScreenStackError:
+        except (ScreenStackError, NoMatches):
             return None
 
     def live_select(self, selector: str) -> Select | None:
         try:
             return self.app._query_current(selector, Select)
-        except Exception:
+        except (ScreenStackError, NoMatches):
             return None
 
     def live_input(self, selector: str) -> Input | None:
         try:
             return self.app._query_current(selector, Input)
-        except Exception:
+        except (ScreenStackError, NoMatches):
             return None

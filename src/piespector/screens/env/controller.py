@@ -3,6 +3,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from textual import events
+from textual.app import ScreenStackError
+from textual.css.query import NoMatches
 from textual.widgets import Input
 from piespector.interactions.keys import (
     KEY_ADD,
@@ -109,7 +111,7 @@ class EnvController:
     def _env_input(self) -> Input | None:
         try:
             return self.app._query_current("#env-field-input", Input)
-        except Exception:
+        except (ScreenStackError, NoMatches):
             return None
 
     def handle_env_edit_key(self, event: events.Key) -> None:

@@ -8,6 +8,7 @@ from rich.panel import Panel
 from rich.style import Style
 from rich.text import Text
 
+from textual.css.query import NoMatches
 from textual.widgets import ContentSwitcher, DataTable, Input, Select, Static, Tab, TabbedContent, Tabs, Tree
 
 from piespector.domain.editor import (
@@ -226,20 +227,13 @@ def _ensure_tree_cursor(tree: Tree, state: PiespectorState, item_count: int) -> 
     if not item_count:
         return
 
-    try:
-        cursor_line = tree.cursor_line
-    except Exception:
-        return
-
+    cursor_line = tree.cursor_line
     if 0 <= cursor_line < item_count:
         return
 
     selected_index = max(0, min(state.selected_sidebar_index, item_count - 1))
     tree.cursor_line = selected_index
-    try:
-        tree.scroll_to_line(selected_index, animate=False)
-    except Exception:
-        pass
+    tree.scroll_to_line(selected_index, animate=False)
 
 
 # ================================================================
@@ -283,7 +277,7 @@ def refresh_home_url_bar(
     method_select.display = True
     try:
         method_select.query_one("#label").styles.color = method_color(active_request.method)
-    except Exception:
+    except NoMatches:
         pass
 
     mode = effective_mode(state)
@@ -393,7 +387,7 @@ def _sync_input_widget(
 def _refresh_open_request_tabs(state: PiespectorState, tabs: Tabs) -> None:
     try:
         tabs_list = tabs.query_one("#tabs-list")
-    except Exception:
+    except NoMatches:
         return
 
     open_requests = state.get_open_requests()
@@ -432,22 +426,16 @@ def _refresh_open_request_tabs(state: PiespectorState, tabs: Tabs) -> None:
             tabs_list.mount(Tab(label, id=tab_id))
 
     if state.active_request_id:
-        try:
-            tabs.active = f"open-req-{state.active_request_id}"
-        except Exception:
-            pass
+        active_tab_id = f"open-req-{state.active_request_id}"
+        if tabs.query(f"#tabs-list > #{active_tab_id}"):
+            tabs.active = active_tab_id
         return
 
     _clear_open_request_tabs_selection(tabs)
 
 
 def _clear_open_request_tabs_selection(tabs: Tabs) -> None:
-    for empty_value in (None, ""):
-        try:
-            tabs.active = empty_value
-            return
-        except Exception:
-            continue
+    tabs.active = ""
 
 
 # ================================================================
@@ -466,10 +454,8 @@ def refresh_home_request_content(
     del panel, title
 
     # Update active tab
-    try:
+    if tabs.query(f"TabPane#{state.home_editor_tab}"):
         tabs.active = state.home_editor_tab
-    except Exception:
-        pass
 
     overview_content = tabs.query_one("#request-overview-content", Static)
     overview_input = tabs.query_one("#request-overview-input", Input)
@@ -805,14 +791,11 @@ def refresh_home_response(
     del panel, title
 
     # Update tabs
-    try:
+    if tabs.query(f"#tabs-list > #{state.selected_home_response_tab}"):
         tabs.active = state.selected_home_response_tab
-    except Exception:
-        pass
-    try:
-        content_switcher.current = _response_content_id(state.selected_home_response_tab)
-    except Exception:
-        pass
+    content_id = _response_content_id(state.selected_home_response_tab)
+    if content_switcher.query(f"#{content_id}"):
+        content_switcher.current = content_id
 
     body_content = content_switcher.query_one("#response-body-content", Static)
     headers_content = content_switcher.query_one("#response-headers-content", Static)

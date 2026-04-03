@@ -23,10 +23,7 @@ def _deactivate_select_widget(select: Select) -> None:
     if app is not None:
         app.set_focus(None)
         return
-    try:
-        select.blur()
-    except Exception:
-        pass
+    select.blur()
 
 
 def sync_select_widget(

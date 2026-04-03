@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
+from textual.css.query import NoMatches
 from textual.screen import Screen
 from textual.widgets import Input, Static
 
@@ -43,5 +44,5 @@ class PiespectorScreen(Screen[None]):
         for widget_id in widget_ids:
             try:
                 self.query_one(f"#{widget_id}").can_focus = False
-            except Exception:
+            except NoMatches:
                 pass

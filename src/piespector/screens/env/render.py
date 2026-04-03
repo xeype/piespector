@@ -72,11 +72,8 @@ def refresh_env_widgets(
     # Update env selector
     options = [(name, name) for name in state.env_names]
     env_select.set_options(options)
-    if state.selected_env_name:
-        try:
-            env_select.value = state.selected_env_name
-        except Exception:
-            pass
+    if state.selected_env_name in state.env_names:
+        env_select.value = state.selected_env_name
 
     # Update env table
     env_table.clear()
@@ -87,10 +84,7 @@ def refresh_env_widgets(
 
     # Set cursor to selected row
     if items and state.selected_env_index < len(items):
-        try:
-            env_table.move_cursor(row=state.selected_env_index)
-        except Exception:
-            pass
+        env_table.move_cursor(row=state.selected_env_index)
 
     # Sync env field input
     if env_input is not None:

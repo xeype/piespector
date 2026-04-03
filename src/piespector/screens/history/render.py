@@ -68,10 +68,7 @@ def refresh_history_widgets(
         )
 
     if entries and state.selected_history_index < len(entries):
-        try:
-            history_list.move_cursor(row=state.selected_history_index)
-        except Exception:
-            pass
+        history_list.move_cursor(row=state.selected_history_index)
 
     # Refresh detail panel
     selected_entry = state.get_selected_history_entry()

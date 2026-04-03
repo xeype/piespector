@@ -424,7 +424,7 @@ class PiespectorApp(App[None]):
         if self.state.mode == MODE_HOME_URL_EDIT:
             try:
                 url_input = self._query_current("#url-input", Input)
-            except Exception:
+            except NoMatches:
                 url_input = None
             if url_input is not None and url_input.display:
                 self.set_focus(url_input)
@@ -440,7 +440,7 @@ class PiespectorApp(App[None]):
         ):
             try:
                 self._query_current(f"#{widget_id}", Select).blur()
-            except Exception:
+            except NoMatches:
                 pass
 
     def _sync_command_input(self, command_input: Input) -> None:
@@ -461,7 +461,7 @@ class PiespectorApp(App[None]):
     def _command_input_widget(self) -> Input | None:
         try:
             return self._query_current("#command-input", Input)
-        except Exception:
+        except NoMatches:
             return None
 
     def _command_suggestions(self) -> list[str]:

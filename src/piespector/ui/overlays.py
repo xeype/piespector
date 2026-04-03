@@ -8,6 +8,7 @@ from textual._tree_sitter import get_language
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical
+from textual.css.query import NoMatches
 from textual.screen import ModalScreen
 from textual.widgets import Static, TextArea
 from textual.widgets._text_area import LanguageDoesNotExist
@@ -90,10 +91,7 @@ class BodyTextEditor(TextArea):
 
 
 def register_graphql_text_area_language(editor: TextArea) -> None:
-    try:
-        javascript_language = get_language("javascript")
-    except Exception:
-        return
+    javascript_language = get_language("javascript")
     if javascript_language is None:
         return
     editor.register_language(
@@ -226,7 +224,7 @@ class OverlayController:
         for editor_id in ("#body-editor",):
             try:
                 editor = query_one(editor_id, TextArea)
-            except Exception:
+            except NoMatches:
                 continue
             register_graphql_text_area_language(editor)
 
@@ -338,11 +336,11 @@ class OverlayController:
             for sid in screen_ids:
                 try:
                     self._query_current(f"#{sid}").add_class("hidden")
-                except Exception:
+                except NoMatches:
                     pass
             try:
                 self._query_current(PiespectorHelpPanel).add_class("hidden")
-            except Exception:
+            except NoMatches:
                 pass
             body_header.remove_class("hidden")
             body_editor.remove_class("hidden")
@@ -366,7 +364,7 @@ class OverlayController:
         self.app._switch_screen_visibility()
         try:
             self._query_current(PiespectorHelpPanel).remove_class("hidden")
-        except Exception:
+        except NoMatches:
             pass
         body_header.add_class("hidden")
         body_editor.add_class("hidden")
