@@ -1748,6 +1748,34 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(app.screen.is_modal)
             self.assertIn('"ok"', editor.text)
 
+    async def test_raw_body_select_e_preloads_existing_body_text(self) -> None:
+        app = PiespectorApp()
+        app._persist_requests = lambda: None
+        app._load_request_workspace = lambda: None
+        request = RequestDefinition(
+            request_id="r1",
+            name="Script",
+            body_type="raw",
+            raw_subtype="javascript",
+            body_text="console.log('hi')",
+        )
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+        app.state.home_editor_tab = "body"
+        app.state.mode = "HOME_BODY_SELECT"
+        app.state.selected_body_index = 2
+
+        async with app.run_test(size=(140, 40)) as pilot:
+            app._refresh_screen()
+            await pilot.pause()
+
+            await pilot.press("e")
+            await pilot.pause()
+
+            editor = app.screen.query_one("#body-editor", TextArea)
+            self.assertEqual(app.state.mode, "HOME_BODY_TEXTAREA")
+            self.assertEqual(editor.text, "console.log('hi')")
+
     async def test_body_text_editor_escape_restores_home_screen_visibility(self) -> None:
         app = PiespectorApp()
         app._persist_requests = lambda: None

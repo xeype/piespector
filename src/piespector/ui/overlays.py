@@ -329,6 +329,14 @@ class OverlayController:
         screen_ids = ("home-screen", "env-screen", "history-screen")
 
         if self.state.mode == MODE_HOME_BODY_TEXTAREA:
+            request = self.state.get_active_request()
+            if request is not None and body_editor.has_class("hidden"):
+                self.set_text_area_language(
+                    body_editor,
+                    text_area_syntax_language(request_body_syntax_language(request)),
+                )
+                body_editor.load_text(request.body_text)
+                body_editor.move_cursor((0, 0))
             body_header.update(self.body_editor_header_text())
             cursor_index = self.body_editor_cursor_index()
             match = placeholder_match(body_editor.text, cursor_index, sorted(self.state.env_pairs))
