@@ -80,13 +80,13 @@ HOME_HELP_KEY_LINES = {
         "Auth option: up/down choose, e or Enter confirm, s send, v response, ctrl+u/d response scroll, Esc back",
     ),
     MODE_HOME_PARAMS_SELECT: (
-        "Params: h/l tabs, j/k rows, left/right fields, e or Enter edit, a add, d delete, space toggle, s send, v response, ctrl+u/d response scroll, Esc back",
+        "Params: h/l tabs, j/k rows, H/L fields, e or Enter edit, a add, d delete, space toggle, s send, v response, ctrl+u/d response scroll, Esc back",
     ),
     MODE_HOME_PARAMS_EDIT: (
         "Param edit: Enter save, Esc cancel, Tab placeholder completion, ctrl+v paste",
     ),
     MODE_HOME_HEADERS_SELECT: (
-        "Headers: h/l tabs, j/k rows, left/right fields, e or Enter edit, a add, d delete, space toggle explicit or auto headers, s send, v response, ctrl+u/d response scroll, Esc back",
+        "Headers: h/l tabs, j/k rows, H/L fields, e or Enter edit, a add, d delete, space toggle explicit or auto headers, s send, v response, ctrl+u/d response scroll, Esc back",
     ),
     MODE_HOME_HEADERS_EDIT: (
         "Header edit: Enter save, Esc cancel, Tab placeholder completion, ctrl+v paste",

@@ -309,7 +309,27 @@ class AppUiTests(unittest.TestCase):
         self.assertEqual(app.state.mode, "HOME_HEADERS_SELECT")
         self.assertTrue(event.stopped)
 
-    def test_params_select_right_arrow_keeps_params_block_and_moves_field(self) -> None:
+    def test_params_select_shift_l_keeps_params_block_and_moves_field(self) -> None:
+        app = PiespectorApp()
+        request = RequestDefinition(
+            query_items=[],
+        )
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+        app.state.home_editor_tab = "params"
+        app.state.mode = "HOME_PARAMS_SELECT"
+        app.state.selected_param_field_index = 0
+        event = FakeKeyEvent("L")
+
+        with patch.object(app, "_refresh_home_request_panel"):
+            app.home_controller.params.handle_home_params_select_key(event)
+
+        self.assertEqual(app.state.home_editor_tab, "params")
+        self.assertEqual(app.state.selected_param_field_index, 1)
+        self.assertEqual(app.state.mode, "HOME_PARAMS_SELECT")
+        self.assertTrue(event.stopped)
+
+    def test_params_select_right_arrow_does_not_move_field(self) -> None:
         app = PiespectorApp()
         request = RequestDefinition(
             query_items=[],
@@ -321,13 +341,14 @@ class AppUiTests(unittest.TestCase):
         app.state.selected_param_field_index = 0
         event = FakeKeyEvent("right")
 
-        with patch.object(app, "_refresh_screen"):
+        with patch.object(app, "_refresh_home_request_panel") as refresh_panel:
             app.home_controller.params.handle_home_params_select_key(event)
 
         self.assertEqual(app.state.home_editor_tab, "params")
-        self.assertEqual(app.state.selected_param_field_index, 1)
+        self.assertEqual(app.state.selected_param_field_index, 0)
         self.assertEqual(app.state.mode, "HOME_PARAMS_SELECT")
-        self.assertTrue(event.stopped)
+        refresh_panel.assert_not_called()
+        self.assertFalse(event.stopped)
 
     def test_creating_param_keeps_focus_on_new_row_key(self) -> None:
         app = PiespectorApp()
@@ -394,6 +415,26 @@ class AppUiTests(unittest.TestCase):
         self.assertEqual(app.state.selected_header_field_index, 0)
         self.assertEqual(request.header_items[0].key, "X-Trace-Id")
         self.assertEqual(request.header_items[0].value, "")
+
+    def test_headers_select_shift_l_keeps_headers_block_and_moves_field(self) -> None:
+        app = PiespectorApp()
+        request = RequestDefinition(
+            header_items=[],
+        )
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+        app.state.home_editor_tab = "headers"
+        app.state.mode = "HOME_HEADERS_SELECT"
+        app.state.selected_header_field_index = 0
+        event = FakeKeyEvent("L")
+
+        with patch.object(app, "_refresh_home_request_panel"):
+            app.home_controller.headers.handle_home_headers_select_key(event)
+
+        self.assertEqual(app.state.home_editor_tab, "headers")
+        self.assertEqual(app.state.selected_header_field_index, 1)
+        self.assertEqual(app.state.mode, "HOME_HEADERS_SELECT")
+        self.assertTrue(event.stopped)
 
     def test_body_select_e_on_type_row_opens_body_type_dropdown(self) -> None:
         app = PiespectorApp()

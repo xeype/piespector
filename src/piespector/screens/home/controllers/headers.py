@@ -4,9 +4,9 @@ from textual import events
 
 from piespector.domain.modes import MODE_HOME_HEADERS_EDIT, MODE_HOME_HEADERS_SELECT
 from piespector.interactions.keys import (
-    ARROW_LEFT_KEYS,
-    ARROW_RIGHT_KEYS,
     DOWN_KEYS,
+    FIELD_NEXT_KEYS,
+    FIELD_PREVIOUS_KEYS,
     KEY_ADD,
     KEY_DELETE_ROW,
     KEY_ENTER,
@@ -87,13 +87,13 @@ class HomeHeadersController(HomeControllerBase):
             event.stop()
             return
 
-        if event.key in ARROW_LEFT_KEYS:
+        if event.key in FIELD_PREVIOUS_KEYS:
             self.state.cycle_header_field(-1)
             self.app._refresh_home_request_panel()
             event.stop()
             return
 
-        if event.key in ARROW_RIGHT_KEYS:
+        if event.key in FIELD_NEXT_KEYS:
             self.state.cycle_header_field(1)
             self.app._refresh_home_request_panel()
             event.stop()

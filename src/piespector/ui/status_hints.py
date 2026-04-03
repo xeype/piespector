@@ -65,7 +65,7 @@ MODE_HINTS: dict[str, tuple[HintItem, ...]] = {
     MODE_HOME_PARAMS_SELECT: (
         ("h/l", "tabs"),
         ("j/k", "rows"),
-        ("left/right", "fields"),
+        ("H/L", "fields"),
         ("space", "toggle"),
         ("e", "edit"),
         ("a", "add"),
@@ -79,7 +79,7 @@ MODE_HINTS: dict[str, tuple[HintItem, ...]] = {
     MODE_HOME_HEADERS_SELECT: (
         ("h/l", "tabs"),
         ("j/k", "rows"),
-        ("left/right", "fields"),
+        ("H/L", "fields"),
         ("space", "toggle"),
         ("e", "edit"),
         ("a", "add"),

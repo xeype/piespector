@@ -63,7 +63,7 @@ def home_editor_subtitle(state: PiespectorState) -> str:
             return "up/down client auth   e/enter confirm   esc back"
         return "up/down location   e/enter confirm   esc back"
     if mode in {MODE_HOME_PARAMS_SELECT, MODE_HOME_HEADERS_SELECT}:
-        return "h/l tabs   j/k rows   left/right field   space toggle   e edit   a add   d delete"
+        return "h/l tabs   j/k rows   H/L field   space toggle   e edit   a add   d delete"
     if mode == MODE_HOME_BODY_SELECT:
         request = state.get_active_request()
         if request is not None and request.body_type in BODY_KEY_VALUE_TYPES:

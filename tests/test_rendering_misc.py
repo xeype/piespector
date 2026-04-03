@@ -111,6 +111,18 @@ class RenderingMiscTests(unittest.TestCase):
         self.assertIn("Context Env", rendered)
         self.assertIn("h/l or j/k key-value fields, e or Enter edit, a add, d delete, Esc back", rendered)
 
+    def test_render_help_viewport_home_params_context_uses_shift_field_keys(self) -> None:
+        state = PiespectorState(
+            current_tab="help",
+            help_source_tab="home",
+            help_source_mode="HOME_PARAMS_SELECT",
+        )
+
+        rendered = render_plain(render_help_viewport(state), width=160)
+
+        self.assertIn("Params: h/l tabs, j/k rows, H/L fields, e or Enter edit", rendered)
+        self.assertNotIn("left/right fields", rendered)
+
     def test_render_env_viewport_empty_and_populated_states(self) -> None:
         empty_state = PiespectorState(current_tab="env")
         empty_rendered = render_plain(render_env_viewport(empty_state, viewport_height=20))
@@ -635,6 +647,13 @@ class UiAndScrollbarTests(unittest.TestCase):
         self.assertIn(("ctrl+o", "enter_jump_mode"), bindings)
         self.assertIn(("j", "home_browse_down"), bindings)
         self.assertIn(("ctrl+j", "home_next_collection"), bindings)
+
+    def test_status_hints_use_shift_field_keys_for_params_and_headers(self) -> None:
+        params_state = PiespectorState(current_tab="home", mode="HOME_PARAMS_SELECT")
+        headers_state = PiespectorState(current_tab="home", mode="HOME_HEADERS_SELECT")
+
+        self.assertIn(("H/L", "fields"), status_hint_items(params_state))
+        self.assertIn(("H/L", "fields"), status_hint_items(headers_state))
 
     def test_css_uses_native_widget_scrollbars(self) -> None:
         self.assertIn("DataTable {", APP_CSS)
