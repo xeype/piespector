@@ -358,11 +358,14 @@ def refresh_home_url_bar(
 
     if active_request is None:
         method_select.display = False
+        method_select.can_focus = False
         _sync_input_widget(url_input, "", display=False)
         url_display.display = True
         url_display.update(Text("No opened request."))
         url_display._piespector_signature = ("no-opened-request",)
         return
+
+    method_select.can_focus = state.mode == MODE_HOME_REQUEST_METHOD_EDIT
 
     sync_select_widget(
         method_select,

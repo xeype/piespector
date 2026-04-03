@@ -1655,8 +1655,10 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
             await pilot.press("escape")
             await pilot.pause()
 
+            method_select = app.screen.query_one("#method-select", Select)
             self.assertFalse(app.screen.is_modal)
             self.assertEqual(app.state.mode, "HOME_RESPONSE_SELECT")
+            self.assertFalse(method_select.has_focus_within)
 
     async def test_home_response_summary_shows_values_without_labels(self) -> None:
         app = PiespectorApp()
@@ -1805,9 +1807,11 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
             await pilot.press("escape")
             await pilot.pause()
 
+            method_select = app.screen.query_one("#method-select", Select)
             self.assertEqual(app.state.mode, "HOME_BODY_SELECT")
             self.assertFalse(home_screen.has_class("hidden"))
             self.assertTrue(editor.has_class("hidden"))
+            self.assertFalse(method_select.has_focus_within)
 
     async def test_body_text_editor_ctrl_s_restores_home_screen_visibility(self) -> None:
         app = PiespectorApp()

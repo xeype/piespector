@@ -417,6 +417,7 @@ class OverlayController:
             self.state.leave_home_body_text_editor_mode()
         self.app.set_focus(None)
         self.app._refresh_screen()
+        self.app.call_after_refresh(self.app._clear_home_jump_focus)
 
     def open_response_viewer(self, origin_mode: str | None = None) -> None:
         request = self.state.get_active_request()
@@ -501,3 +502,4 @@ class OverlayController:
             self.app.pop_screen()
         self.app.set_focus(None)
         self.app._refresh_screen()
+        self.app.call_after_refresh(self.app._clear_home_jump_focus)
