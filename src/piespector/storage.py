@@ -8,6 +8,8 @@ from uuid import uuid4
 
 from piespector.domain.history import HistoryEntry
 from piespector.domain.requests import (
+    RequestAuth,
+    RequestBody,
     RequestDefinition,
     RequestKeyValue,
     parse_headers_text,
@@ -455,46 +457,9 @@ def _load_requests_payload(payload: object) -> list[RequestDefinition]:
                     item.get("headers_text", ""),
                     is_headers=True,
                 ),
-                auth_type=_normalize_auth_type(item.get("auth_type", "none")),
-                auth_basic_username=str(item.get("auth_basic_username", "")),
-                auth_basic_password=str(item.get("auth_basic_password", "")),
-                auth_bearer_prefix=str(item.get("auth_bearer_prefix", "Bearer")),
-                auth_bearer_token=str(item.get("auth_bearer_token", "")),
-                auth_api_key_name=str(item.get("auth_api_key_name", "X-API-Key")),
-                auth_api_key_value=str(item.get("auth_api_key_value", "")),
-                auth_api_key_location=_normalize_auth_api_key_location(
-                    item.get("auth_api_key_location", "header")
-                ),
-                auth_cookie_name=str(item.get("auth_cookie_name", "session")),
-                auth_cookie_value=str(item.get("auth_cookie_value", "")),
-                auth_custom_header_name=str(
-                    item.get("auth_custom_header_name", "X-Auth-Token")
-                ),
-                auth_custom_header_value=str(item.get("auth_custom_header_value", "")),
-                auth_oauth_token_url=str(item.get("auth_oauth_token_url", "")),
-                auth_oauth_client_id=str(item.get("auth_oauth_client_id", "")),
-                auth_oauth_client_secret=str(item.get("auth_oauth_client_secret", "")),
-                auth_oauth_client_authentication=_normalize_auth_oauth_client_authentication(
-                    item.get("auth_oauth_client_authentication", "basic-header")
-                ),
-                auth_oauth_header_prefix=str(item.get("auth_oauth_header_prefix", "Bearer")),
-                auth_oauth_scope=str(item.get("auth_oauth_scope", "")),
+                auth=_load_request_auth(item),
                 disabled_auto_headers=_load_disabled_auto_headers(item),
-                body_type=_normalize_body_type(item.get("body_type", "none")),
-                raw_subtype=_normalize_raw_subtype(item.get("raw_subtype", "json")),
-                body_text=item.get("body_text", ""),
-                raw_body_texts=_load_body_text_map(item.get("raw_body_texts")),
-                graphql_body_text=str(item.get("graphql_body_text", "")),
-                binary_file_path=str(item.get("binary_file_path", "")),
-                body_form_items=_load_request_items(
-                    item.get("body_form_items"),
-                    item.get("body_form_text", ""),
-                ),
-                body_urlencoded_items=_load_request_items(
-                    item.get("body_urlencoded_items"),
-                    item.get("body_urlencoded_text", ""),
-                ),
-                body_form_text=item.get("body_form_text", ""),
+                body=_load_request_body(item),
             )
         )
     return requests
@@ -576,57 +541,9 @@ def save_request_workspace(
                     }
                     for item in request.header_items
                 ],
-                "auth_type": request.auth_type,
-                "auth_basic_username": request.auth_basic_username,
-                "auth_basic_password": request.auth_basic_password,
-                "auth_bearer_prefix": request.auth_bearer_prefix,
-                "auth_bearer_token": request.auth_bearer_token,
-                "auth_api_key_name": request.auth_api_key_name,
-                "auth_api_key_value": request.auth_api_key_value,
-                "auth_api_key_location": request.auth_api_key_location,
-                "auth_cookie_name": request.auth_cookie_name,
-                "auth_cookie_value": request.auth_cookie_value,
-                "auth_custom_header_name": request.auth_custom_header_name,
-                "auth_custom_header_value": request.auth_custom_header_value,
-                "auth_oauth_token_url": request.auth_oauth_token_url,
-                "auth_oauth_client_id": request.auth_oauth_client_id,
-                "auth_oauth_client_secret": request.auth_oauth_client_secret,
-                "auth_oauth_client_authentication": request.auth_oauth_client_authentication,
-                "auth_oauth_header_prefix": request.auth_oauth_header_prefix,
-                "auth_oauth_scope": request.auth_oauth_scope,
+                "auth": _serialize_request_auth(request.auth),
                 "disabled_auto_headers": request.disabled_auto_headers,
-                "body_type": request.body_type,
-                "raw_subtype": request.raw_subtype,
-                "body_text": request.body_text,
-                "raw_body_texts": request.raw_body_texts,
-                "graphql_body_text": request.graphql_body_text,
-                "binary_file_path": request.binary_file_path,
-                "body_form_items": [
-                    {
-                        "key": item.key,
-                        "value": item.value,
-                        "enabled": item.enabled,
-                    }
-                    for item in request.body_form_items
-                ],
-                "body_urlencoded_items": [
-                    {
-                        "key": item.key,
-                        "value": item.value,
-                        "enabled": item.enabled,
-                    }
-                    for item in request.body_urlencoded_items
-                ],
-                "body_form_text": "&".join(
-                    f"{item.key}={item.value}" if item.value else item.key
-                    for item in request.body_form_items
-                    if item.key
-                ),
-                "body_urlencoded_text": "&".join(
-                    f"{item.key}={item.value}" if item.value else item.key
-                    for item in request.body_urlencoded_items
-                    if item.key
-                ),
+                "body": _serialize_request_body(request.body),
             }
             for request in persisted_requests
         ],
@@ -751,6 +668,329 @@ def _load_disabled_auto_headers(item: dict[object, object]) -> list[str]:
     if item.get("auto_headers_enabled", True):
         return []
     return ["Accept", "User-Agent", "Content-Type"]
+
+
+def _request_payload_value(
+    item: dict[object, object],
+    nested_key: str,
+    legacy_key: str,
+    default,
+    *,
+    nested_container: str,
+):
+    payload = item.get(nested_container)
+    if isinstance(payload, dict) and nested_key in payload:
+        return payload.get(nested_key, default)
+    return item.get(legacy_key, default)
+
+
+def _load_request_auth(item: dict[object, object]) -> RequestAuth:
+    return RequestAuth(
+        type=_normalize_auth_type(
+            _request_payload_value(
+                item,
+                "type",
+                "auth_type",
+                "none",
+                nested_container="auth",
+            )
+        ),
+        basic_username=str(
+            _request_payload_value(
+                item,
+                "basic_username",
+                "auth_basic_username",
+                "",
+                nested_container="auth",
+            )
+        ),
+        basic_password=str(
+            _request_payload_value(
+                item,
+                "basic_password",
+                "auth_basic_password",
+                "",
+                nested_container="auth",
+            )
+        ),
+        bearer_prefix=str(
+            _request_payload_value(
+                item,
+                "bearer_prefix",
+                "auth_bearer_prefix",
+                "Bearer",
+                nested_container="auth",
+            )
+        ),
+        bearer_token=str(
+            _request_payload_value(
+                item,
+                "bearer_token",
+                "auth_bearer_token",
+                "",
+                nested_container="auth",
+            )
+        ),
+        api_key_name=str(
+            _request_payload_value(
+                item,
+                "api_key_name",
+                "auth_api_key_name",
+                "X-API-Key",
+                nested_container="auth",
+            )
+        ),
+        api_key_value=str(
+            _request_payload_value(
+                item,
+                "api_key_value",
+                "auth_api_key_value",
+                "",
+                nested_container="auth",
+            )
+        ),
+        api_key_location=_normalize_auth_api_key_location(
+            _request_payload_value(
+                item,
+                "api_key_location",
+                "auth_api_key_location",
+                "header",
+                nested_container="auth",
+            )
+        ),
+        cookie_name=str(
+            _request_payload_value(
+                item,
+                "cookie_name",
+                "auth_cookie_name",
+                "session",
+                nested_container="auth",
+            )
+        ),
+        cookie_value=str(
+            _request_payload_value(
+                item,
+                "cookie_value",
+                "auth_cookie_value",
+                "",
+                nested_container="auth",
+            )
+        ),
+        custom_header_name=str(
+            _request_payload_value(
+                item,
+                "custom_header_name",
+                "auth_custom_header_name",
+                "X-Auth-Token",
+                nested_container="auth",
+            )
+        ),
+        custom_header_value=str(
+            _request_payload_value(
+                item,
+                "custom_header_value",
+                "auth_custom_header_value",
+                "",
+                nested_container="auth",
+            )
+        ),
+        oauth_token_url=str(
+            _request_payload_value(
+                item,
+                "oauth_token_url",
+                "auth_oauth_token_url",
+                "",
+                nested_container="auth",
+            )
+        ),
+        oauth_client_id=str(
+            _request_payload_value(
+                item,
+                "oauth_client_id",
+                "auth_oauth_client_id",
+                "",
+                nested_container="auth",
+            )
+        ),
+        oauth_client_secret=str(
+            _request_payload_value(
+                item,
+                "oauth_client_secret",
+                "auth_oauth_client_secret",
+                "",
+                nested_container="auth",
+            )
+        ),
+        oauth_client_authentication=_normalize_auth_oauth_client_authentication(
+            _request_payload_value(
+                item,
+                "oauth_client_authentication",
+                "auth_oauth_client_authentication",
+                "basic-header",
+                nested_container="auth",
+            )
+        ),
+        oauth_header_prefix=str(
+            _request_payload_value(
+                item,
+                "oauth_header_prefix",
+                "auth_oauth_header_prefix",
+                "Bearer",
+                nested_container="auth",
+            )
+        ),
+        oauth_scope=str(
+            _request_payload_value(
+                item,
+                "oauth_scope",
+                "auth_oauth_scope",
+                "",
+                nested_container="auth",
+            )
+        ),
+    )
+
+
+def _load_request_body(item: dict[object, object]) -> RequestBody:
+    return RequestBody(
+        type=_normalize_body_type(
+            _request_payload_value(
+                item,
+                "type",
+                "body_type",
+                "none",
+                nested_container="body",
+            )
+        ),
+        raw_subtype=_normalize_raw_subtype(
+            _request_payload_value(
+                item,
+                "raw_subtype",
+                "raw_subtype",
+                "json",
+                nested_container="body",
+            )
+        ),
+        text=str(
+            _request_payload_value(
+                item,
+                "text",
+                "body_text",
+                "",
+                nested_container="body",
+            )
+        ),
+        raw_texts=_load_body_text_map(
+            _request_payload_value(
+                item,
+                "raw_texts",
+                "raw_body_texts",
+                None,
+                nested_container="body",
+            )
+        ),
+        graphql_text=str(
+            _request_payload_value(
+                item,
+                "graphql_text",
+                "graphql_body_text",
+                "",
+                nested_container="body",
+            )
+        ),
+        binary_file_path=str(
+            _request_payload_value(
+                item,
+                "binary_file_path",
+                "binary_file_path",
+                "",
+                nested_container="body",
+            )
+        ),
+        form_items=_load_request_items(
+            _request_payload_value(
+                item,
+                "form_items",
+                "body_form_items",
+                None,
+                nested_container="body",
+            ),
+            str(
+                _request_payload_value(
+                    item,
+                    "form_text",
+                    "body_form_text",
+                    "",
+                    nested_container="body",
+                )
+            ),
+        ),
+        urlencoded_items=_load_request_items(
+            _request_payload_value(
+                item,
+                "urlencoded_items",
+                "body_urlencoded_items",
+                None,
+                nested_container="body",
+            ),
+            str(
+                _request_payload_value(
+                    item,
+                    "urlencoded_text",
+                    "body_urlencoded_text",
+                    "",
+                    nested_container="body",
+                )
+            ),
+        ),
+    )
+
+
+def _serialize_request_items(items: list[RequestKeyValue]) -> list[dict[str, object]]:
+    return [
+        {
+            "key": item.key,
+            "value": item.value,
+            "enabled": item.enabled,
+        }
+        for item in items
+    ]
+
+
+def _serialize_request_auth(auth: RequestAuth) -> dict[str, object]:
+    return {
+        "type": auth.type,
+        "basic_username": auth.basic_username,
+        "basic_password": auth.basic_password,
+        "bearer_prefix": auth.bearer_prefix,
+        "bearer_token": auth.bearer_token,
+        "api_key_name": auth.api_key_name,
+        "api_key_value": auth.api_key_value,
+        "api_key_location": auth.api_key_location,
+        "cookie_name": auth.cookie_name,
+        "cookie_value": auth.cookie_value,
+        "custom_header_name": auth.custom_header_name,
+        "custom_header_value": auth.custom_header_value,
+        "oauth_token_url": auth.oauth_token_url,
+        "oauth_client_id": auth.oauth_client_id,
+        "oauth_client_secret": auth.oauth_client_secret,
+        "oauth_client_authentication": auth.oauth_client_authentication,
+        "oauth_header_prefix": auth.oauth_header_prefix,
+        "oauth_scope": auth.oauth_scope,
+    }
+
+
+def _serialize_request_body(body: RequestBody) -> dict[str, object]:
+    return {
+        "type": body.type,
+        "raw_subtype": body.raw_subtype,
+        "text": body.text,
+        "raw_texts": body.raw_texts,
+        "graphql_text": body.graphql_text,
+        "binary_file_path": body.binary_file_path,
+        "form_items": _serialize_request_items(body.form_items),
+        "urlencoded_items": _serialize_request_items(body.urlencoded_items),
+    }
 
 
 def _normalize_auth_type(value: object) -> str:

@@ -5,6 +5,8 @@ from typing import Callable
 
 from piespector.domain.history import HistoryEntry, history_entry_matches
 from piespector.domain.requests import (
+    RequestAuth,
+    RequestBody,
     RequestDefinition,
     RequestKeyValue,
     ResponseSummary,

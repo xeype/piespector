@@ -7,7 +7,14 @@ import unittest
 from unittest.mock import patch
 
 from piespector import storage
-from piespector.state import CollectionDefinition, FolderDefinition, HistoryEntry, RequestDefinition
+from piespector.state import (
+    CollectionDefinition,
+    FolderDefinition,
+    HistoryEntry,
+    RequestAuth,
+    RequestBody,
+    RequestDefinition,
+)
 
 
 class StorageTests(unittest.TestCase):
@@ -294,10 +301,15 @@ class StorageTests(unittest.TestCase):
             ]
 
             storage.save_request_workspace(path, [], [], requests, set(), set())
+            saved_payload = json.loads(path.read_text(encoding="utf-8"))
             _collections, _folders, loaded_requests, _collapsed_collections, _collapsed_folders = (
                 storage.load_request_workspace(path)
             )
 
+        self.assertEqual(saved_payload["requests"][0]["auth"]["type"], "cookie")
+        self.assertEqual(saved_payload["requests"][4]["body"]["type"], "graphql")
+        self.assertNotIn("auth_type", saved_payload["requests"][0])
+        self.assertNotIn("body_type", saved_payload["requests"][4])
         self.assertEqual(loaded_requests[0].auth_type, "cookie")
         self.assertEqual(loaded_requests[0].auth_cookie_name, "session")
         self.assertEqual(loaded_requests[0].auth_cookie_value, "secret")
@@ -324,6 +336,73 @@ class StorageTests(unittest.TestCase):
         self.assertEqual(loaded_requests[6].raw_subtype, "html")
         self.assertEqual(loaded_requests[6].raw_body_texts["javascript"], "console.log('hi')")
         self.assertEqual(loaded_requests[7].raw_subtype, "javascript")
+
+    def test_request_definition_accepts_nested_auth_and_body_objects(self) -> None:
+        request = RequestDefinition(
+            auth=RequestAuth(
+                type="bearer",
+                bearer_prefix="JWT",
+                bearer_token="secret-bearer-token",
+            ),
+            body=RequestBody(
+                type="graphql",
+                text="query Health { health }",
+            ),
+        )
+
+        self.assertEqual(request.auth.type, "bearer")
+        self.assertEqual(request.auth_type, "bearer")
+        self.assertEqual(request.auth.bearer_token, "secret-bearer-token")
+        self.assertEqual(request.auth_bearer_token, "secret-bearer-token")
+        self.assertEqual(request.body.type, "graphql")
+        self.assertEqual(request.body_type, "graphql")
+        self.assertEqual(request.body.graphql_text, "query Health { health }")
+        self.assertEqual(request.body_text, "query Health { health }")
+
+    def test_load_request_workspace_supports_legacy_flat_auth_and_body_fields(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "legacy-requests.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "collections": [],
+                        "folders": [],
+                        "requests": [
+                            {
+                                "request_id": "legacy-auth",
+                                "name": "Legacy Auth",
+                                "auth_type": "cookie",
+                                "auth_cookie_name": "session",
+                                "auth_cookie_value": "secret",
+                            },
+                            {
+                                "request_id": "legacy-body",
+                                "name": "Legacy Body",
+                                "body_type": "raw",
+                                "raw_subtype": "html",
+                                "body_text": "<p>hello</p>",
+                                "raw_body_texts": {"javascript": "console.log('hi')"},
+                            },
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            _collections, _folders, loaded_requests, _collapsed_collections, _collapsed_folders = (
+                storage.load_request_workspace(path)
+            )
+
+        self.assertEqual(loaded_requests[0].auth.type, "cookie")
+        self.assertEqual(loaded_requests[0].auth_cookie_name, "session")
+        self.assertEqual(loaded_requests[0].auth_cookie_value, "secret")
+        self.assertEqual(loaded_requests[1].body.type, "raw")
+        self.assertEqual(loaded_requests[1].body_type, "raw")
+        self.assertEqual(loaded_requests[1].body_text, "<p>hello</p>")
+        self.assertEqual(
+            loaded_requests[1].raw_body_texts["javascript"],
+            "console.log('hi')",
+        )
 
     def test_export_collection_workspace_filters_transient_and_selected_collections(self) -> None:
         with TemporaryDirectory() as tmp_dir:
