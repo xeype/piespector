@@ -7,6 +7,7 @@ import unittest
 from unittest.mock import patch
 
 from piespector import storage
+from piespector.storage import paths as storage_paths
 from piespector.state import (
     CollectionDefinition,
     FolderDefinition,
@@ -69,28 +70,59 @@ class StorageTests(unittest.TestCase):
         )
 
     def test_app_data_dir_defaults_to_macos_application_support(self) -> None:
-        with patch.object(storage.Path, "home", return_value=Path("/Users/test")), patch.object(
-            storage.sys, "platform", "darwin"
-        ), patch.dict(storage.os.environ, {}, clear=True):
+        with patch.object(storage_paths.Path, "home", return_value=Path("/Users/test")), patch.object(
+            storage_paths.sys, "platform", "darwin"
+        ), patch.dict(storage_paths.os.environ, {}, clear=True):
             path = storage.app_data_dir()
 
         self.assertEqual(path, Path("/Users/test/Library/Application Support/piespector"))
 
     def test_app_data_dir_defaults_to_xdg_location_on_linux(self) -> None:
-        with patch.object(storage.Path, "home", return_value=Path("/home/test")), patch.object(
-            storage.sys, "platform", "linux"
-        ), patch.dict(storage.os.environ, {"XDG_DATA_HOME": "/tmp/xdg-data"}, clear=True):
+        with patch.object(storage_paths.Path, "home", return_value=Path("/home/test")), patch.object(
+            storage_paths.sys, "platform", "linux"
+        ), patch.dict(storage_paths.os.environ, {"XDG_DATA_HOME": "/tmp/xdg-data"}, clear=True):
             path = storage.app_data_dir()
 
         self.assertEqual(path, Path("/tmp/xdg-data/piespector"))
 
     def test_app_data_dir_defaults_to_appdata_on_windows(self) -> None:
-        with patch.object(storage.Path, "home", return_value=Path("C:/Users/test")), patch.object(
-            storage.sys, "platform", "win32"
-        ), patch.dict(storage.os.environ, {"APPDATA": "C:/Users/test/AppData/Roaming"}, clear=True):
+        with patch.object(storage_paths.Path, "home", return_value=Path("C:/Users/test")), patch.object(
+            storage_paths.sys, "platform", "win32"
+        ), patch.dict(storage_paths.os.environ, {"APPDATA": "C:/Users/test/AppData/Roaming"}, clear=True):
             path = storage.app_data_dir()
 
         self.assertEqual(path, Path("C:/Users/test/AppData/Roaming/piespector"))
+
+    def test_discover_workspace_paths_prefers_legacy_workspace_files_until_migrated(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            app_data_dir = root / "app-data"
+            workspace_dir = root / "workspace"
+            workspace_dir.mkdir()
+            legacy_env_workspace = workspace_dir / ".piespector.env.json"
+            legacy_requests = workspace_dir / ".piespector.requests.json"
+            legacy_history = workspace_dir / ".piespector.history.jsonl"
+            legacy_env_workspace.write_text("{}", encoding="utf-8")
+            legacy_requests.write_text("{}", encoding="utf-8")
+            legacy_history.write_text("", encoding="utf-8")
+
+            paths = storage.discover_workspace_paths(
+                base_dir=app_data_dir,
+                cwd=workspace_dir,
+            )
+
+        self.assertEqual(
+            paths.env_workspace_path,
+            app_data_dir / ".piespector.env.json",
+        )
+        self.assertEqual(paths.env_workspace_source_path, legacy_env_workspace)
+        self.assertIsNone(paths.legacy_env_path)
+        self.assertTrue(paths.needs_env_workspace_migration)
+        self.assertEqual(paths.requests_source_path, legacy_requests)
+        self.assertTrue(paths.needs_requests_migration)
+        self.assertEqual(paths.history_source_path, legacy_history)
+        self.assertTrue(paths.needs_history_migration)
+        self.assertEqual(paths.log_path, app_data_dir / ".piespector.log")
 
     def test_save_request_workspace_creates_parent_directory(self) -> None:
         with TemporaryDirectory() as tmp_dir:
@@ -359,7 +391,7 @@ class StorageTests(unittest.TestCase):
         self.assertEqual(request.body.graphql_text, "query Health { health }")
         self.assertEqual(request.body_text, "query Health { health }")
 
-    def test_load_request_workspace_supports_legacy_flat_auth_and_body_fields(self) -> None:
+    def test_load_request_workspace_ignores_legacy_flat_auth_and_body_fields(self) -> None:
         with TemporaryDirectory() as tmp_dir:
             path = Path(tmp_dir) / "legacy-requests.json"
             path.write_text(
@@ -393,16 +425,14 @@ class StorageTests(unittest.TestCase):
                 storage.load_request_workspace(path)
             )
 
-        self.assertEqual(loaded_requests[0].auth.type, "cookie")
+        self.assertEqual(loaded_requests[0].name, "Legacy Auth")
+        self.assertEqual(loaded_requests[0].auth.type, "none")
         self.assertEqual(loaded_requests[0].auth_cookie_name, "session")
-        self.assertEqual(loaded_requests[0].auth_cookie_value, "secret")
-        self.assertEqual(loaded_requests[1].body.type, "raw")
-        self.assertEqual(loaded_requests[1].body_type, "raw")
-        self.assertEqual(loaded_requests[1].body_text, "<p>hello</p>")
-        self.assertEqual(
-            loaded_requests[1].raw_body_texts["javascript"],
-            "console.log('hi')",
-        )
+        self.assertEqual(loaded_requests[0].auth_cookie_value, "")
+        self.assertEqual(loaded_requests[1].name, "Legacy Body")
+        self.assertEqual(loaded_requests[1].body.type, "none")
+        self.assertEqual(loaded_requests[1].body_text, "")
+        self.assertEqual(loaded_requests[1].raw_body_texts, {})
 
     def test_export_collection_workspace_filters_transient_and_selected_collections(self) -> None:
         with TemporaryDirectory() as tmp_dir:

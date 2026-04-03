@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
-import sys
 from uuid import uuid4
 
 from piespector.domain.history import HistoryEntry
@@ -12,63 +10,10 @@ from piespector.domain.requests import (
     RequestBody,
     RequestDefinition,
     RequestKeyValue,
-    parse_headers_text,
-    parse_query_text,
 )
-from piespector.domain.workspace import (
-    CollectionDefinition,
-    FolderDefinition,
-)
+from piespector.domain.workspace import CollectionDefinition, FolderDefinition
 
-
-ENV_FILE_NAME = ".env"
-ENV_WORKSPACE_FILE_NAME = ".piespector.env.json"
-REQUESTS_FILE_NAME = ".piespector.requests.json"
-HISTORY_FILE_NAME = ".piespector.history.jsonl"
-APP_DATA_DIRECTORY_NAME = "piespector"
-
-
-def app_data_dir(base_dir: Path | None = None) -> Path:
-    if base_dir is not None:
-        return base_dir
-
-    home = Path.home()
-    if sys.platform == "darwin":
-        return home / "Library" / "Application Support" / APP_DATA_DIRECTORY_NAME
-    if sys.platform.startswith("win"):
-        appdata = os.environ.get("APPDATA", "").strip()
-        if appdata:
-            return Path(appdata).expanduser() / APP_DATA_DIRECTORY_NAME
-        return home / "AppData" / "Roaming" / APP_DATA_DIRECTORY_NAME
-
-    xdg_data_home = os.environ.get("XDG_DATA_HOME", "").strip()
-    if xdg_data_home:
-        return Path(xdg_data_home).expanduser() / APP_DATA_DIRECTORY_NAME
-    return home / ".local" / "share" / APP_DATA_DIRECTORY_NAME
-
-
-def ensure_parent_dir(path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-
-def env_file_path(base_dir: Path | None = None) -> Path:
-    root = app_data_dir(base_dir)
-    return root / ENV_FILE_NAME
-
-
-def env_workspace_path(base_dir: Path | None = None) -> Path:
-    root = app_data_dir(base_dir)
-    return root / ENV_WORKSPACE_FILE_NAME
-
-
-def requests_file_path(base_dir: Path | None = None) -> Path:
-    root = app_data_dir(base_dir)
-    return root / REQUESTS_FILE_NAME
-
-
-def history_file_path(base_dir: Path | None = None) -> Path:
-    root = app_data_dir(base_dir)
-    return root / HISTORY_FILE_NAME
+from .paths import ensure_parent_dir
 
 
 def load_env_pairs(path: Path) -> dict[str, str]:
@@ -203,6 +148,8 @@ def load_request_workspace(
     payload = json.loads(path.read_text(encoding="utf-8"))
     if isinstance(payload, list):
         return ([], [], _load_requests_payload(payload), set(), set())
+    if not isinstance(payload, dict):
+        return ([], [], [], set(), set())
 
     collections: list[CollectionDefinition] = []
     for item in payload.get("collections", []):
@@ -232,7 +179,7 @@ def load_request_workspace(
             )
         )
 
-    requests = _load_requests_payload(payload.get("requests", []))
+    requests = _load_requests_payload(payload.get("requests"))
     collection_ids = {collection.collection_id for collection in collections}
     folder_ids = {folder.folder_id for folder in folders}
 
@@ -267,6 +214,57 @@ def load_request_workspace(
 
 def load_requests(path: Path) -> list[RequestDefinition]:
     return load_request_workspace(path)[2]
+
+
+def save_request_workspace(
+    path: Path,
+    collections: list[CollectionDefinition],
+    folders: list[FolderDefinition],
+    requests: list[RequestDefinition],
+    collapsed_collection_ids: set[str] | None = None,
+    collapsed_folder_ids: set[str] | None = None,
+) -> None:
+    collection_ids = {collection.collection_id for collection in collections}
+    folder_ids = {folder.folder_id for folder in folders}
+    payload = {
+        "collections": [
+            {
+                "collection_id": collection.collection_id,
+                "name": collection.name,
+            }
+            for collection in collections
+        ],
+        "folders": [
+            {
+                "folder_id": folder.folder_id,
+                "name": folder.name,
+                "collection_id": folder.collection_id,
+                "parent_folder_id": folder.parent_folder_id,
+            }
+            for folder in folders
+        ],
+        "requests": [
+            _serialize_request_definition(request)
+            for request in requests
+            if not request.transient
+        ],
+        "collapsed_collection_ids": sorted(
+            collection_id
+            for collection_id in (collapsed_collection_ids or set())
+            if collection_id in collection_ids
+        ),
+        "collapsed_folder_ids": sorted(
+            folder_id
+            for folder_id in (collapsed_folder_ids or set())
+            if folder_id in folder_ids
+        ),
+    }
+    ensure_parent_dir(path)
+    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
+def save_requests(path: Path, requests: list[RequestDefinition]) -> None:
+    save_request_workspace(path, [], [], requests, set(), set())
 
 
 def export_collection_workspace(
@@ -369,73 +367,22 @@ def load_history_entries(path: Path) -> list[HistoryEntry]:
 
 
 def append_history_entry(path: Path, entry: HistoryEntry) -> None:
-    payload = {
-        "history_id": entry.history_id,
-        "created_at": entry.created_at,
-        "source_request_id": entry.source_request_id,
-        "source_request_name": entry.source_request_name,
-        "source_request_path": entry.source_request_path,
-        "method": entry.method,
-        "url": entry.url,
-        "auth_type": entry.auth_type,
-        "auth_location": entry.auth_location,
-        "auth_name": entry.auth_name,
-        "request_headers": [
-            {"key": key, "value": value}
-            for key, value in entry.request_headers
-        ],
-        "request_body": entry.request_body,
-        "request_body_type": entry.request_body_type,
-        "status_code": entry.status_code,
-        "elapsed_ms": entry.elapsed_ms,
-        "response_size": entry.response_size,
-        "response_headers": [
-            {"key": key, "value": value}
-            for key, value in entry.response_headers
-        ],
-        "response_body": entry.response_body,
-        "error": entry.error,
-    }
     ensure_parent_dir(path)
     with path.open("a", encoding="utf-8") as history_file:
-        history_file.write(json.dumps(payload) + "\n")
+        history_file.write(json.dumps(_serialize_history_entry(entry)) + "\n")
 
 
 def save_history_entries(path: Path, entries: list[HistoryEntry]) -> None:
     ensure_parent_dir(path)
     with path.open("w", encoding="utf-8") as history_file:
         for entry in reversed(entries):
-            payload = {
-                "history_id": entry.history_id,
-                "created_at": entry.created_at,
-                "source_request_id": entry.source_request_id,
-                "source_request_name": entry.source_request_name,
-                "source_request_path": entry.source_request_path,
-                "method": entry.method,
-                "url": entry.url,
-                "auth_type": entry.auth_type,
-                "auth_location": entry.auth_location,
-                "auth_name": entry.auth_name,
-                "request_headers": [
-                    {"key": key, "value": value}
-                    for key, value in entry.request_headers
-                ],
-                "request_body": entry.request_body,
-                "request_body_type": entry.request_body_type,
-                "status_code": entry.status_code,
-                "elapsed_ms": entry.elapsed_ms,
-                "response_size": entry.response_size,
-                "response_headers": [
-                    {"key": key, "value": value}
-                    for key, value in entry.response_headers
-                ],
-                "response_body": entry.response_body,
-                "error": entry.error,
-            }
-            history_file.write(json.dumps(payload) + "\n")
+            history_file.write(json.dumps(_serialize_history_entry(entry)) + "\n")
 
 
 def _load_requests_payload(payload: object) -> list[RequestDefinition]:
+    if not isinstance(payload, list):
+        return []
+
     requests: list[RequestDefinition] = []
     for item in payload:
         if not isinstance(item, dict):
@@ -448,21 +395,32 @@ def _load_requests_payload(payload: object) -> list[RequestDefinition]:
                 url=item.get("url", ""),
                 collection_id=_normalize_optional_id(item.get("collection_id")),
                 folder_id=_normalize_optional_id(item.get("folder_id")),
-                query_items=_load_request_items(
-                    item.get("query_items"),
-                    item.get("query_text", ""),
+                query_items=_load_request_items(item.get("query_items")),
+                header_items=_load_request_items(item.get("header_items")),
+                auth=_load_request_auth(item.get("auth")),
+                disabled_auto_headers=_load_disabled_auto_headers(
+                    item.get("disabled_auto_headers")
                 ),
-                header_items=_load_request_items(
-                    item.get("header_items"),
-                    item.get("headers_text", ""),
-                    is_headers=True,
-                ),
-                auth=_load_request_auth(item),
-                disabled_auto_headers=_load_disabled_auto_headers(item),
-                body=_load_request_body(item),
+                body=_load_request_body(item.get("body")),
             )
         )
     return requests
+
+
+def _serialize_request_definition(request: RequestDefinition) -> dict[str, object]:
+    return {
+        "request_id": request.request_id,
+        "name": request.name,
+        "method": request.method,
+        "url": request.url,
+        "collection_id": request.collection_id,
+        "folder_id": request.folder_id,
+        "query_items": _serialize_request_items(request.query_items),
+        "header_items": _serialize_request_items(request.header_items),
+        "auth": _serialize_request_auth(request.auth),
+        "disabled_auto_headers": request.disabled_auto_headers,
+        "body": _serialize_request_body(request.body),
+    }
 
 
 def _load_history_entry(payload: dict[str, object]) -> HistoryEntry:
@@ -489,81 +447,34 @@ def _load_history_entry(payload: dict[str, object]) -> HistoryEntry:
     )
 
 
-def save_request_workspace(
-    path: Path,
-    collections: list[CollectionDefinition],
-    folders: list[FolderDefinition],
-    requests: list[RequestDefinition],
-    collapsed_collection_ids: set[str] | None = None,
-    collapsed_folder_ids: set[str] | None = None,
-) -> None:
-    collection_ids = {collection.collection_id for collection in collections}
-    folder_ids = {folder.folder_id for folder in folders}
-    persisted_requests = [request for request in requests if not request.transient]
-    payload = {
-        "collections": [
-            {
-                "collection_id": collection.collection_id,
-                "name": collection.name,
-            }
-            for collection in collections
+def _serialize_history_entry(entry: HistoryEntry) -> dict[str, object]:
+    return {
+        "history_id": entry.history_id,
+        "created_at": entry.created_at,
+        "source_request_id": entry.source_request_id,
+        "source_request_name": entry.source_request_name,
+        "source_request_path": entry.source_request_path,
+        "method": entry.method,
+        "url": entry.url,
+        "auth_type": entry.auth_type,
+        "auth_location": entry.auth_location,
+        "auth_name": entry.auth_name,
+        "request_headers": [
+            {"key": key, "value": value}
+            for key, value in entry.request_headers
         ],
-        "folders": [
-            {
-                "folder_id": folder.folder_id,
-                "name": folder.name,
-                "collection_id": folder.collection_id,
-                "parent_folder_id": folder.parent_folder_id,
-            }
-            for folder in folders
+        "request_body": entry.request_body,
+        "request_body_type": entry.request_body_type,
+        "status_code": entry.status_code,
+        "elapsed_ms": entry.elapsed_ms,
+        "response_size": entry.response_size,
+        "response_headers": [
+            {"key": key, "value": value}
+            for key, value in entry.response_headers
         ],
-        "requests": [
-            {
-                "request_id": request.request_id,
-                "name": request.name,
-                "method": request.method,
-                "url": request.url,
-                "collection_id": request.collection_id,
-                "folder_id": request.folder_id,
-                "query_items": [
-                    {
-                        "key": item.key,
-                        "value": item.value,
-                        "enabled": item.enabled,
-                    }
-                    for item in request.query_items
-                ],
-                "header_items": [
-                    {
-                        "key": item.key,
-                        "value": item.value,
-                        "enabled": item.enabled,
-                    }
-                    for item in request.header_items
-                ],
-                "auth": _serialize_request_auth(request.auth),
-                "disabled_auto_headers": request.disabled_auto_headers,
-                "body": _serialize_request_body(request.body),
-            }
-            for request in persisted_requests
-        ],
-        "collapsed_collection_ids": sorted(
-            collection_id
-            for collection_id in (collapsed_collection_ids or set())
-            if collection_id in collection_ids
-        ),
-        "collapsed_folder_ids": sorted(
-            folder_id
-            for folder_id in (collapsed_folder_ids or set())
-            if folder_id in folder_ids
-        ),
+        "response_body": entry.response_body,
+        "error": entry.error,
     }
-    ensure_parent_dir(path)
-    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-
-
-def save_requests(path: Path, requests: list[RequestDefinition]) -> None:
-    save_request_workspace(path, [], [], requests, set(), set())
 
 
 def _normalize_body_type(value: object) -> str:
@@ -622,9 +533,6 @@ def _format_env_value(value: str) -> str:
 
 def _load_request_items(
     items_payload: object,
-    fallback_text: str,
-    *,
-    is_headers: bool = False,
 ) -> list[RequestKeyValue]:
     if isinstance(items_payload, list):
         items: list[RequestKeyValue] = []
@@ -643,12 +551,7 @@ def _load_request_items(
             )
         return items
 
-    parser = parse_headers_text if is_headers else parse_query_text
-    return [
-        RequestKeyValue(key=key, value=value)
-        for key, value in parser(fallback_text)
-        if key.strip()
-    ]
+    return []
 
 
 def _load_body_text_map(payload: object) -> dict[str, str]:
@@ -661,288 +564,55 @@ def _load_body_text_map(payload: object) -> dict[str, str]:
     return body_texts
 
 
-def _load_disabled_auto_headers(item: dict[object, object]) -> list[str]:
-    disabled = item.get("disabled_auto_headers")
-    if isinstance(disabled, list):
-        return [str(value).strip() for value in disabled if str(value).strip()]
-    if item.get("auto_headers_enabled", True):
-        return []
-    return ["Accept", "User-Agent", "Content-Type"]
+def _load_disabled_auto_headers(payload: object) -> list[str]:
+    if isinstance(payload, list):
+        return [str(value).strip() for value in payload if str(value).strip()]
+    return []
 
 
-def _request_payload_value(
-    item: dict[object, object],
-    nested_key: str,
-    legacy_key: str,
-    default,
-    *,
-    nested_container: str,
-):
-    payload = item.get(nested_container)
-    if isinstance(payload, dict) and nested_key in payload:
-        return payload.get(nested_key, default)
-    return item.get(legacy_key, default)
+def _load_request_auth(payload: object) -> RequestAuth:
+    if not isinstance(payload, dict):
+        return RequestAuth()
 
-
-def _load_request_auth(item: dict[object, object]) -> RequestAuth:
     return RequestAuth(
-        type=_normalize_auth_type(
-            _request_payload_value(
-                item,
-                "type",
-                "auth_type",
-                "none",
-                nested_container="auth",
-            )
-        ),
-        basic_username=str(
-            _request_payload_value(
-                item,
-                "basic_username",
-                "auth_basic_username",
-                "",
-                nested_container="auth",
-            )
-        ),
-        basic_password=str(
-            _request_payload_value(
-                item,
-                "basic_password",
-                "auth_basic_password",
-                "",
-                nested_container="auth",
-            )
-        ),
-        bearer_prefix=str(
-            _request_payload_value(
-                item,
-                "bearer_prefix",
-                "auth_bearer_prefix",
-                "Bearer",
-                nested_container="auth",
-            )
-        ),
-        bearer_token=str(
-            _request_payload_value(
-                item,
-                "bearer_token",
-                "auth_bearer_token",
-                "",
-                nested_container="auth",
-            )
-        ),
-        api_key_name=str(
-            _request_payload_value(
-                item,
-                "api_key_name",
-                "auth_api_key_name",
-                "X-API-Key",
-                nested_container="auth",
-            )
-        ),
-        api_key_value=str(
-            _request_payload_value(
-                item,
-                "api_key_value",
-                "auth_api_key_value",
-                "",
-                nested_container="auth",
-            )
-        ),
+        type=_normalize_auth_type(payload.get("type", "none")),
+        basic_username=str(payload.get("basic_username", "")),
+        basic_password=str(payload.get("basic_password", "")),
+        bearer_prefix=str(payload.get("bearer_prefix", "Bearer")),
+        bearer_token=str(payload.get("bearer_token", "")),
+        api_key_name=str(payload.get("api_key_name", "X-API-Key")),
+        api_key_value=str(payload.get("api_key_value", "")),
         api_key_location=_normalize_auth_api_key_location(
-            _request_payload_value(
-                item,
-                "api_key_location",
-                "auth_api_key_location",
-                "header",
-                nested_container="auth",
-            )
+            payload.get("api_key_location", "header")
         ),
-        cookie_name=str(
-            _request_payload_value(
-                item,
-                "cookie_name",
-                "auth_cookie_name",
-                "session",
-                nested_container="auth",
-            )
-        ),
-        cookie_value=str(
-            _request_payload_value(
-                item,
-                "cookie_value",
-                "auth_cookie_value",
-                "",
-                nested_container="auth",
-            )
-        ),
-        custom_header_name=str(
-            _request_payload_value(
-                item,
-                "custom_header_name",
-                "auth_custom_header_name",
-                "X-Auth-Token",
-                nested_container="auth",
-            )
-        ),
-        custom_header_value=str(
-            _request_payload_value(
-                item,
-                "custom_header_value",
-                "auth_custom_header_value",
-                "",
-                nested_container="auth",
-            )
-        ),
-        oauth_token_url=str(
-            _request_payload_value(
-                item,
-                "oauth_token_url",
-                "auth_oauth_token_url",
-                "",
-                nested_container="auth",
-            )
-        ),
-        oauth_client_id=str(
-            _request_payload_value(
-                item,
-                "oauth_client_id",
-                "auth_oauth_client_id",
-                "",
-                nested_container="auth",
-            )
-        ),
-        oauth_client_secret=str(
-            _request_payload_value(
-                item,
-                "oauth_client_secret",
-                "auth_oauth_client_secret",
-                "",
-                nested_container="auth",
-            )
-        ),
+        cookie_name=str(payload.get("cookie_name", "session")),
+        cookie_value=str(payload.get("cookie_value", "")),
+        custom_header_name=str(payload.get("custom_header_name", "X-Auth-Token")),
+        custom_header_value=str(payload.get("custom_header_value", "")),
+        oauth_token_url=str(payload.get("oauth_token_url", "")),
+        oauth_client_id=str(payload.get("oauth_client_id", "")),
+        oauth_client_secret=str(payload.get("oauth_client_secret", "")),
         oauth_client_authentication=_normalize_auth_oauth_client_authentication(
-            _request_payload_value(
-                item,
-                "oauth_client_authentication",
-                "auth_oauth_client_authentication",
-                "basic-header",
-                nested_container="auth",
-            )
+            payload.get("oauth_client_authentication", "basic-header")
         ),
-        oauth_header_prefix=str(
-            _request_payload_value(
-                item,
-                "oauth_header_prefix",
-                "auth_oauth_header_prefix",
-                "Bearer",
-                nested_container="auth",
-            )
-        ),
-        oauth_scope=str(
-            _request_payload_value(
-                item,
-                "oauth_scope",
-                "auth_oauth_scope",
-                "",
-                nested_container="auth",
-            )
-        ),
+        oauth_header_prefix=str(payload.get("oauth_header_prefix", "Bearer")),
+        oauth_scope=str(payload.get("oauth_scope", "")),
     )
 
 
-def _load_request_body(item: dict[object, object]) -> RequestBody:
+def _load_request_body(payload: object) -> RequestBody:
+    if not isinstance(payload, dict):
+        return RequestBody()
+
     return RequestBody(
-        type=_normalize_body_type(
-            _request_payload_value(
-                item,
-                "type",
-                "body_type",
-                "none",
-                nested_container="body",
-            )
-        ),
-        raw_subtype=_normalize_raw_subtype(
-            _request_payload_value(
-                item,
-                "raw_subtype",
-                "raw_subtype",
-                "json",
-                nested_container="body",
-            )
-        ),
-        text=str(
-            _request_payload_value(
-                item,
-                "text",
-                "body_text",
-                "",
-                nested_container="body",
-            )
-        ),
-        raw_texts=_load_body_text_map(
-            _request_payload_value(
-                item,
-                "raw_texts",
-                "raw_body_texts",
-                None,
-                nested_container="body",
-            )
-        ),
-        graphql_text=str(
-            _request_payload_value(
-                item,
-                "graphql_text",
-                "graphql_body_text",
-                "",
-                nested_container="body",
-            )
-        ),
-        binary_file_path=str(
-            _request_payload_value(
-                item,
-                "binary_file_path",
-                "binary_file_path",
-                "",
-                nested_container="body",
-            )
-        ),
-        form_items=_load_request_items(
-            _request_payload_value(
-                item,
-                "form_items",
-                "body_form_items",
-                None,
-                nested_container="body",
-            ),
-            str(
-                _request_payload_value(
-                    item,
-                    "form_text",
-                    "body_form_text",
-                    "",
-                    nested_container="body",
-                )
-            ),
-        ),
-        urlencoded_items=_load_request_items(
-            _request_payload_value(
-                item,
-                "urlencoded_items",
-                "body_urlencoded_items",
-                None,
-                nested_container="body",
-            ),
-            str(
-                _request_payload_value(
-                    item,
-                    "urlencoded_text",
-                    "body_urlencoded_text",
-                    "",
-                    nested_container="body",
-                )
-            ),
-        ),
+        type=_normalize_body_type(payload.get("type", "none")),
+        raw_subtype=_normalize_raw_subtype(payload.get("raw_subtype", "json")),
+        text=str(payload.get("text", "")),
+        raw_texts=_load_body_text_map(payload.get("raw_texts")),
+        graphql_text=str(payload.get("graphql_text", "")),
+        binary_file_path=str(payload.get("binary_file_path", "")),
+        form_items=_load_request_items(payload.get("form_items")),
+        urlencoded_items=_load_request_items(payload.get("urlencoded_items")),
     )
 
 

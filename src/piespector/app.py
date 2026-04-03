@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
 import platform
 import shutil
 import subprocess
@@ -54,13 +53,10 @@ from piespector.screens.home.screen import HomeScreen
 from piespector.screen_refresh import ScreenRefreshCoordinator
 from piespector.state import PiespectorState
 from piespector.storage import (
-    app_data_dir,
-    env_workspace_path,
-    history_file_path,
+    discover_workspace_paths,
     load_env_workspace,
     load_history_entries,
     load_request_workspace,
-    requests_file_path,
 )
 from piespector.ui import APP_BINDINGS, APP_CSS
 from piespector.ui.command_palette import (
@@ -89,14 +85,11 @@ class PiespectorApp(App[None]):
     def __init__(self, *, persist_state: bool = False) -> None:
         super().__init__()
         self.state = PiespectorState()
-        self._legacy_env_workspace_path = Path.cwd() / ".piespector.env.json"
-        self._legacy_env_file_path = Path.cwd() / ".env"
-        self._legacy_requests_file_path = Path.cwd() / ".piespector.requests.json"
-        self._legacy_history_file_path = Path.cwd() / ".piespector.history.jsonl"
-        self._env_workspace_path = env_workspace_path()
-        self._requests_file_path = requests_file_path()
-        self._history_file_path = history_file_path()
-        self._log_file_path = app_data_dir() / ".piespector.log"
+        self._storage_paths = discover_workspace_paths()
+        self._env_workspace_path = self._storage_paths.env_workspace_path
+        self._requests_file_path = self._storage_paths.requests_path
+        self._history_file_path = self._storage_paths.history_path
+        self._log_file_path = self._storage_paths.log_path
         self.response_copy_keys = response_copy_keys()
         self.response_copy_hint = response_copy_hint()
         self._edit_path_completion_anchor = ""
@@ -171,57 +164,39 @@ class PiespectorApp(App[None]):
         self.screen.query(PiespectorHelpPanel).remove()
 
     def _load_env_workspace(self) -> None:
-        env_workspace_source = self._env_workspace_path
-        legacy_env_path: Path | None = self._legacy_env_file_path
-        if (
-            not self._env_workspace_path.exists()
-            and self._legacy_env_workspace_path.exists()
-        ):
-            env_workspace_source = self._legacy_env_workspace_path
-            legacy_env_path = None
         env_names, env_sets, selected_env_name = load_env_workspace(
-            env_workspace_source,
-            legacy_env_path,
+            self._storage_paths.env_workspace_source_path,
+            self._storage_paths.legacy_env_path,
         )
         self.state.env_names = env_names
         self.state.env_sets = env_sets
         self.state.selected_env_name = selected_env_name
         self.state.ensure_env_workspace()
-        if env_workspace_source != self._env_workspace_path:
+        if self._storage_paths.needs_env_workspace_migration:
             self._persist_env_pairs()
 
     def _load_history(self) -> None:
-        history_source_path = self._history_file_path
-        if (
-            not self._history_file_path.exists()
-            and self._legacy_history_file_path.exists()
-        ):
-            history_source_path = self._legacy_history_file_path
-        self.state.history_entries = load_history_entries(history_source_path)
-        if history_source_path != self._history_file_path:
+        self.state.history_entries = load_history_entries(
+            self._storage_paths.history_source_path
+        )
+        if self._storage_paths.needs_history_migration:
             self._persist_history_entries()
 
     def _load_request_workspace(self) -> None:
-        requests_source_path = self._requests_file_path
-        if (
-            not self._requests_file_path.exists()
-            and self._legacy_requests_file_path.exists()
-        ):
-            requests_source_path = self._legacy_requests_file_path
         (
             collections,
             folders,
             requests,
             collapsed_collection_ids,
             collapsed_folder_ids,
-        ) = load_request_workspace(requests_source_path)
+        ) = load_request_workspace(self._storage_paths.requests_source_path)
         self.state.collections = collections
         self.state.folders = folders
         self.state.requests = requests
         self.state.collapsed_collection_ids = collapsed_collection_ids
         self.state.collapsed_folder_ids = collapsed_folder_ids
         self.state.ensure_request_workspace()
-        if requests_source_path != self._requests_file_path:
+        if self._storage_paths.needs_requests_migration:
             self._persist_requests()
 
     def on_resize(self) -> None:
