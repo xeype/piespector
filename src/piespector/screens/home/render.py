@@ -110,6 +110,106 @@ def request_response_shortcuts_enabled(mode: str) -> bool:
     return mode in REQUEST_RESPONSE_SHORTCUT_MODES
 
 
+def body_preview_is_selected(
+    request: RequestDefinition | None,
+    state: PiespectorState,
+    *,
+    panel_selected: bool,
+) -> bool:
+    if request is None or not panel_selected or state.home_editor_tab != HOME_EDITOR_TAB_BODY:
+        return False
+
+    mode = effective_mode(state)
+    if mode != MODE_HOME_BODY_SELECT:
+        return False
+    if request.body_type == "raw":
+        return state.selected_body_index == 2
+    if request.body_type in BODY_KEY_VALUE_TYPES | {"none"}:
+        return False
+    return state.selected_body_index == 1
+
+
+def body_preview_dimensions(
+    body_preview: Static,
+    request: RequestDefinition,
+    body_type_select: Select,
+    body_raw_type_select: Select,
+) -> tuple[int | None, int | None]:
+    parent = body_preview.parent
+    app = getattr(body_preview, "app", None)
+    request_tabs = None
+    if app is not None and app.screen is not None:
+        try:
+            request_tabs = app.screen.query_one("#request-tabs", TabbedContent)
+        except NoMatches:
+            request_tabs = None
+    layout_key = "raw" if request.body_type == "raw" else "single"
+    cached_sizes = getattr(body_preview, "_piespector_preview_sizes", {})
+    if not isinstance(cached_sizes, dict):
+        cached_sizes = {}
+
+    preview_width = next(
+        (
+            value
+            for value in (
+                body_preview.region.width,
+                body_preview.size.width,
+                parent.region.width if parent is not None else 0,
+                parent.size.width if parent is not None else 0,
+                request_tabs.region.width if request_tabs is not None else 0,
+                request_tabs.size.width if request_tabs is not None else 0,
+            )
+            if value > 0
+        ),
+        None,
+    )
+
+    container_height = next(
+        (
+            value
+            for value in (
+                parent.region.height if parent is not None else 0,
+                parent.size.height if parent is not None else 0,
+                max(request_tabs.region.height - 2, 0) if request_tabs is not None else 0,
+                max(request_tabs.size.height - 2, 0) if request_tabs is not None else 0,
+            )
+            if value > 0
+        ),
+        None,
+    )
+    if container_height is None:
+        preview_height = next(
+            (
+                value
+                for value in (
+                    body_preview.region.height,
+                    body_preview.size.height,
+                )
+                if value > 0
+            ),
+            None,
+        )
+        if preview_width is None or preview_height is None:
+            return cached_sizes.get(layout_key, (preview_width, preview_height))
+        cached_sizes[layout_key] = (preview_width, preview_height)
+        body_preview._piespector_preview_sizes = cached_sizes
+        return (preview_width, preview_height)
+
+    occupied_height = 0
+    if body_type_select.display:
+        occupied_height += 1
+    if body_raw_type_select.display:
+        occupied_height += 1
+
+    preview_height = max(container_height - occupied_height, 3)
+    if preview_width is None:
+        return cached_sizes.get(layout_key, (preview_width, preview_height))
+
+    cached_sizes[layout_key] = (preview_width, preview_height)
+    body_preview._piespector_preview_sizes = cached_sizes
+    return (preview_width, preview_height)
+
+
 def sync_home_focus_highlights(
     state: PiespectorState,
     url_bar_container,
@@ -492,6 +592,7 @@ def refresh_home_request_content(
     set_selected(body_type_select, selection.body_type_selected)
     set_selected(body_raw_type_select, selection.body_raw_type_selected)
     set_selected(auth_option_select, selection.auth_option_selected)
+    set_selected(body_preview, False)
 
     if active_request is None:
         empty = Text(messages.HOME_NO_ACTIVE_REQUEST)
@@ -749,12 +850,25 @@ def refresh_home_request_content(
                 _deactivate_table_widget(body_table)
         return
 
+    preview_selected = body_preview_is_selected(
+        active_request,
+        state,
+        panel_selected=panel_selected,
+    )
+    preview_width, preview_height = body_preview_dimensions(
+        body_preview,
+        active_request,
+        body_type_select,
+        body_raw_type_select,
+    )
     body_preview.update(
         render_request_body_preview(
             active_request,
             state,
-            None,
+            preview_width,
             include_raw_selector=False,
+            panel_height=preview_height,
+            selected=preview_selected,
         )
     )
     if state.mode == MODE_HOME_BODY_EDIT and active_request.body_type == "binary":

@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import io
 import unittest
 from unittest.mock import patch
+
+from rich.console import Console
 
 from piespector.app import PiespectorApp
 from piespector.ui.rendering_helpers import (
@@ -46,6 +49,12 @@ class FakeTextArea:
         if value in {"graphql", "unknown-language"}:
             raise LanguageDoesNotExist("graphql unsupported")
         self._language = value
+
+
+def render_plain(renderable, *, width: int = 120) -> str:
+    console = Console(record=True, width=width, file=io.StringIO())
+    console.print(renderable)
+    return console.export_text()
 
 
 class AppUiTests(unittest.TestCase):
@@ -1693,6 +1702,72 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(app.screen.is_modal)
             self.assertIn('"ok"', editor.text)
 
+    async def test_body_text_editor_escape_restores_home_screen_visibility(self) -> None:
+        app = PiespectorApp()
+        app._persist_requests = lambda: None
+        app._load_request_workspace = lambda: None
+        request = RequestDefinition(
+            request_id="r1",
+            name="Upload",
+            body_type="raw",
+            raw_subtype="text",
+            body_text="initial body",
+        )
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+        app.state.home_editor_tab = "body"
+
+        async with app.run_test(size=(140, 40)) as pilot:
+            await pilot.pause()
+
+            app._open_body_text_editor(origin_mode="HOME_BODY_SELECT")
+            await pilot.pause()
+
+            home_screen = app.screen.query_one("#home-screen")
+            editor = app.screen.query_one("#body-editor", TextArea)
+            self.assertTrue(home_screen.has_class("hidden"))
+            self.assertFalse(editor.has_class("hidden"))
+
+            await pilot.press("escape")
+            await pilot.pause()
+
+            self.assertEqual(app.state.mode, "HOME_BODY_SELECT")
+            self.assertFalse(home_screen.has_class("hidden"))
+            self.assertTrue(editor.has_class("hidden"))
+
+    async def test_body_text_editor_ctrl_s_restores_home_screen_visibility(self) -> None:
+        app = PiespectorApp()
+        app._persist_requests = lambda: None
+        app._load_request_workspace = lambda: None
+        request = RequestDefinition(
+            request_id="r1",
+            name="Upload",
+            body_type="raw",
+            raw_subtype="text",
+            body_text="initial body",
+        )
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+        app.state.home_editor_tab = "body"
+
+        async with app.run_test(size=(140, 40)) as pilot:
+            await pilot.pause()
+
+            app._open_body_text_editor(origin_mode="HOME_BODY_SELECT")
+            await pilot.pause()
+
+            home_screen = app.screen.query_one("#home-screen")
+            editor = app.screen.query_one("#body-editor", TextArea)
+            editor.load_text("updated body")
+
+            await pilot.press("ctrl+s")
+            await pilot.pause()
+
+            self.assertEqual(request.body_text, "updated body")
+            self.assertEqual(app.state.mode, "HOME_BODY_SELECT")
+            self.assertFalse(home_screen.has_class("hidden"))
+            self.assertTrue(editor.has_class("hidden"))
+
     async def test_form_body_tab_uses_datatable_with_add_row(self) -> None:
         app = PiespectorApp()
         app._persist_requests = lambda: None
@@ -1720,6 +1795,161 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
             rendered_row = [getattr(cell, "plain", str(cell)) for cell in last_row]
             self.assertEqual(rendered_row[0], "+")
             self.assertEqual(rendered_row[2], "Add field")
+
+    async def test_selected_raw_body_preview_keeps_title_and_height(self) -> None:
+        app = PiespectorApp()
+        app._persist_requests = lambda: None
+        app._load_request_workspace = lambda: None
+        request = RequestDefinition(
+            request_id="r1",
+            name="Upload",
+            body_type="raw",
+            raw_subtype="json",
+        )
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+        app.state.home_editor_tab = "body"
+        app.state.mode = "HOME_BODY_SELECT"
+        app.state.selected_body_index = 1
+
+        async with app.run_test(size=(140, 40)) as pilot:
+            app._refresh_screen()
+            await pilot.pause()
+
+            body_preview = app.screen.query_one("#request-body-preview", Static)
+            self.assertTrue(body_preview.display)
+            width = max(body_preview.size.width or body_preview.region.width, 40)
+            before = render_plain(getattr(body_preview, "_Static__content"), width=width)
+            self.assertIn("Raw JSON", before)
+
+            app.state.selected_body_index = 2
+            app._refresh_screen()
+            await pilot.pause()
+
+            after = render_plain(getattr(body_preview, "_Static__content"), width=width)
+            self.assertIn("Raw JSON", after)
+            self.assertEqual(len(after.splitlines()), len(before.splitlines()))
+
+    async def test_switching_between_raw_requests_keeps_body_preview_size(self) -> None:
+        app = PiespectorApp()
+        app._persist_requests = lambda: None
+        app._load_request_workspace = lambda: None
+        first = RequestDefinition(
+            request_id="r1",
+            name="One",
+            body_type="raw",
+            raw_subtype="json",
+            body_text='{"a":1}',
+        )
+        second = RequestDefinition(
+            request_id="r2",
+            name="Two",
+            body_type="raw",
+            raw_subtype="json",
+            body_text='{"b":2}',
+        )
+        app.state.requests = [first, second]
+        app.state.open_request_ids = [first.request_id, second.request_id]
+        app.state.active_request_id = first.request_id
+        app.state.home_editor_tab = "body"
+        app.state.mode = "HOME_BODY_SELECT"
+        app.state.selected_body_index = 2
+
+        async with app.run_test(size=(140, 40)) as pilot:
+            app._refresh_screen()
+            await pilot.pause()
+
+            body_preview = app.screen.query_one("#request-body-preview", Static)
+            width = max(body_preview.size.width or body_preview.region.width, 40)
+            before = render_plain(getattr(body_preview, "_Static__content"), width=width)
+            self.assertIn("Raw JSON", before)
+
+            app.state.cycle_open_request(1)
+            app._refresh_screen()
+            await pilot.pause()
+
+            after = render_plain(getattr(body_preview, "_Static__content"), width=width)
+            self.assertIn("Raw JSON", after)
+            self.assertEqual(len(after.splitlines()), len(before.splitlines()))
+
+    async def test_closing_body_editor_does_not_resize_preview_on_followup_frame(self) -> None:
+        app = PiespectorApp()
+        app._persist_requests = lambda: None
+        app._load_request_workspace = lambda: None
+        request = RequestDefinition(
+            request_id="r1",
+            name="Upload",
+            body_type="raw",
+            raw_subtype="json",
+            body_text='{"test":"test"}',
+        )
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+        app.state.home_editor_tab = "body"
+        app.state.mode = "HOME_BODY_SELECT"
+        app.state.selected_body_index = 2
+
+        async with app.run_test(size=(140, 40)) as pilot:
+            app._refresh_screen()
+            await pilot.pause()
+
+            body_preview = app.screen.query_one("#request-body-preview", Static)
+            width = max(body_preview.size.width or body_preview.region.width, 40)
+            before = render_plain(getattr(body_preview, "_Static__content"), width=width)
+
+            app._open_body_text_editor(origin_mode="HOME_BODY_SELECT")
+            await pilot.pause()
+            await pilot.press("escape")
+            await pilot.pause()
+
+            after_close = render_plain(getattr(body_preview, "_Static__content"), width=width)
+            await pilot.pause()
+            after_settle = render_plain(getattr(body_preview, "_Static__content"), width=width)
+
+            self.assertEqual(len(after_close.splitlines()), len(before.splitlines()))
+            self.assertEqual(after_settle, after_close)
+
+    async def test_jumping_to_body_does_not_schedule_followup_preview_refresh(self) -> None:
+        app = PiespectorApp()
+        app._persist_requests = lambda: None
+        app._load_request_workspace = lambda: None
+        request = RequestDefinition(
+            request_id="r1",
+            name="Upload",
+            body_type="raw",
+            raw_subtype="json",
+            body_text='{"test":"test"}',
+        )
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+        scheduled: list[str] = []
+        original_call_after_refresh = app.call_after_refresh
+
+        def record_call_after_refresh(callback, *args, **kwargs):
+            scheduled.append(getattr(callback, "__name__", repr(callback)))
+            return original_call_after_refresh(callback, *args, **kwargs)
+
+        app.call_after_refresh = record_call_after_refresh
+
+        async with app.run_test(size=(140, 40)) as pilot:
+            app._refresh_screen()
+            await pilot.pause()
+
+            scheduled.clear()
+            await pilot.press("ctrl+o", "t")
+            await pilot.pause()
+
+            self.assertEqual(app.state.home_editor_tab, "body")
+            self.assertNotIn("refresh_home_request_panel", scheduled)
+
+            body_preview = app.screen.query_one("#request-body-preview", Static)
+            width = max(body_preview.size.width or body_preview.region.width, 40)
+            rendered = render_plain(getattr(body_preview, "_Static__content"), width=width)
+            self.assertIn("Raw JSON", rendered)
+            self.assertEqual(
+                len(rendered.splitlines()),
+                body_preview.size.height or body_preview.region.height,
+            )
 
     async def test_body_key_value_navigation_with_j_keeps_selector_and_rows_in_sync(self) -> None:
         app = PiespectorApp()

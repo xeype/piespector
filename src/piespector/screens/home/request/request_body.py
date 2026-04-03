@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from rich.console import Group, RenderableType
 from rich.panel import Panel
+from rich.style import Style
 from rich.syntax import Syntax
 from rich.text import Text
 
@@ -24,6 +25,8 @@ from piespector.ui.rendering_helpers import (
 )
 from piespector.state import PiespectorState
 from piespector.ui.selection import effective_mode
+
+_DEFAULT_SELECTED_BODY_PREVIEW_BORDER = "#33c7ff"
 
 
 def body_context_label(state: PiespectorState) -> str:
@@ -132,17 +135,27 @@ def render_request_body_preview(
     viewport_width: int | None,
     *,
     include_raw_selector: bool = True,
+    panel_height: int | None = None,
+    selected: bool = False,
 ) -> RenderableType:
     if request.body_type == "none":
         empty = Text()
         empty.append(messages.HOME_NO_BODY)
-        return Panel(empty)
+        panel_kwargs: dict[str, object] = {
+            "height": _body_preview_panel_height(panel_height),
+        }
+        border_style = _body_preview_border_style(state, selected=selected)
+        if border_style is not None:
+            panel_kwargs["border_style"] = border_style
+        return Panel(empty, **panel_kwargs)
 
     return render_body_text_preview(
         request,
         state,
         viewport_width,
         include_raw_selector=include_raw_selector,
+        panel_height=panel_height,
+        selected=selected,
     )
 
 
@@ -152,6 +165,8 @@ def render_body_text_preview(
     viewport_width: int | None,
     *,
     include_raw_selector: bool = True,
+    panel_height: int | None = None,
+    selected: bool = False,
 ) -> RenderableType:
     mode = effective_mode(state)
     content: list[RenderableType] = []
@@ -205,5 +220,33 @@ def render_body_text_preview(
     else:
         title = f"Raw {request.raw_subtype.upper()}"
 
-    content.append(Panel(renderable, title=title))
+    panel_kwargs: dict[str, object] = {
+        "title": title,
+        "height": _body_preview_panel_height(panel_height),
+    }
+    border_style = _body_preview_border_style(state, selected=selected)
+    if border_style is not None:
+        panel_kwargs["border_style"] = border_style
+    content.append(Panel(renderable, **panel_kwargs))
     return Group(*content)
+
+
+def _body_preview_panel_height(panel_height: int | None) -> int | None:
+    if panel_height is None or panel_height <= 0:
+        return None
+    return max(panel_height, 3)
+
+
+def _body_preview_border_style(
+    state: PiespectorState,
+    *,
+    selected: bool,
+) -> Style | None:
+    if not selected:
+        return None
+    app = getattr(state, "_app", None) or getattr(state, "app", None)
+    accent = getattr(app, "theme_variables", {}).get(
+        "accent",
+        _DEFAULT_SELECTED_BODY_PREVIEW_BORDER,
+    )
+    return Style(color=accent, bold=True)
