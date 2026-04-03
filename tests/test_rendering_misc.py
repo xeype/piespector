@@ -10,11 +10,16 @@ from piespector.domain.editor import (
     RESPONSE_TAB_TO_JUMP_KEY,
     RESPONSE_TABS,
 )
-from piespector.rendering import render_viewport
+from piespector.screens.env.render import render_env_viewport
+from piespector.screens.help.render import render_help_viewport
+from piespector.screens.history.render import render_history_viewport
 from piespector.ui.command_line_content import build_command_line_text
 from piespector.screens.home.jump_titles import render_jump_hint_line, render_jump_panel_title
 from piespector.screens.home.messages import response_caption
-from piespector.screens.home.render import render_home_editor as _render_home_editor
+from piespector.screens.home.render import (
+    render_home_editor as _render_home_editor,
+    render_home_viewport,
+)
 from piespector.screens.home.response_panel import (
     render_request_response,
     render_response_summary_line,
@@ -45,7 +50,7 @@ class RenderingMiscTests(unittest.TestCase):
     def test_render_home_viewport_empty_state(self) -> None:
         state = PiespectorState(current_tab="home")
 
-        rendered = render_plain(render_viewport(state, viewport_height=20, viewport_width=120))
+        rendered = render_plain(render_home_viewport(state, viewport_height=20, viewport_width=120))
 
         self.assertIn("No collections or requests yet.", rendered)
         self.assertIn("Ctrl+P", rendered)
@@ -54,7 +59,7 @@ class RenderingMiscTests(unittest.TestCase):
     def test_render_history_viewport_empty_state(self) -> None:
         state = PiespectorState(current_tab="history")
 
-        rendered = render_plain(render_viewport(state, viewport_height=20, viewport_width=120))
+        rendered = render_plain(render_history_viewport(state, viewport_height=20, viewport_width=120))
 
         self.assertIn("No history yet.", rendered)
         self.assertIn("Ctrl+P", rendered)
@@ -63,7 +68,7 @@ class RenderingMiscTests(unittest.TestCase):
     def test_render_help_viewport_history_context(self) -> None:
         state = PiespectorState(current_tab="help", help_source_tab="history", help_source_mode="NORMAL")
 
-        rendered = render_plain(render_viewport(state, viewport_height=24, viewport_width=120))
+        rendered = render_plain(render_help_viewport(state))
 
         self.assertIn("Context History", rendered)
         self.assertIn("j/k entries, / search, e or Enter detail mode, ctrl+p commands", rendered)
@@ -81,7 +86,7 @@ class RenderingMiscTests(unittest.TestCase):
         state.ensure_request_workspace()
         state._set_selected_sidebar_by_request_id(request.request_id)
 
-        rendered = render_plain(render_viewport(state, viewport_height=24, viewport_width=140), width=140)
+        rendered = render_plain(render_help_viewport(state), width=140)
         commands_section = rendered.split("Keys", 1)[0]
 
         self.assertIn("Opened from Home Request Select", rendered)
@@ -93,7 +98,7 @@ class RenderingMiscTests(unittest.TestCase):
     def test_render_help_viewport_home_normal_context_lists_s_send(self) -> None:
         state = PiespectorState(current_tab="help", help_source_tab="home", help_source_mode="NORMAL")
 
-        rendered = render_plain(render_viewport(state, viewport_height=24, viewport_width=140), width=140)
+        rendered = render_plain(render_help_viewport(state), width=140)
 
         self.assertIn("c close opened request", rendered)
         self.assertIn("/ search, s send", rendered)
@@ -101,14 +106,14 @@ class RenderingMiscTests(unittest.TestCase):
     def test_render_help_viewport_env_select_context_shows_current_keys(self) -> None:
         state = PiespectorState(current_tab="help", help_source_tab="env", help_source_mode="ENV_SELECT")
 
-        rendered = render_plain(render_viewport(state, viewport_height=24, viewport_width=140), width=140)
+        rendered = render_plain(render_help_viewport(state), width=140)
 
         self.assertIn("Context Env", rendered)
         self.assertIn("h/l or j/k key-value fields, e or Enter edit, a add, d delete, Esc back", rendered)
 
     def test_render_env_viewport_empty_and_populated_states(self) -> None:
         empty_state = PiespectorState(current_tab="env")
-        empty_rendered = render_plain(render_viewport(empty_state, viewport_height=20, viewport_width=120))
+        empty_rendered = render_plain(render_env_viewport(empty_state, viewport_height=20))
 
         self.assertIn("No registered values.", empty_rendered)
         self.assertIn("Ctrl+P", empty_rendered)
@@ -120,7 +125,7 @@ class RenderingMiscTests(unittest.TestCase):
         populated_state.selected_env_name = "Default"
         populated_state.env_pairs = populated_state.env_sets["Default"]
 
-        populated_rendered = render_plain(render_viewport(populated_state, viewport_height=20, viewport_width=120))
+        populated_rendered = render_plain(render_env_viewport(populated_state, viewport_height=20))
 
         self.assertIn("API_URL", populated_rendered)
         self.assertIn("https://example.com", populated_rendered)
@@ -150,7 +155,7 @@ class RenderingMiscTests(unittest.TestCase):
         state._set_selected_sidebar_by_request_id(request.request_id)
         state.open_selected_request(pin=True)
 
-        rendered = render_plain(render_viewport(state, viewport_height=24, viewport_width=140), width=140)
+        rendered = render_plain(render_home_viewport(state, viewport_height=24, viewport_width=140), width=140)
 
         self.assertIn("200 OK   12.3 ms   17 B", rendered)
         self.assertNotIn("Status 200", rendered)
@@ -215,7 +220,7 @@ class RenderingMiscTests(unittest.TestCase):
         state.ensure_request_workspace()
         state.open_selected_request(pin=True)
 
-        rendered = render_plain(render_viewport(state, viewport_height=24, viewport_width=140), width=140)
+        rendered = render_plain(render_home_viewport(state, viewport_height=24, viewport_width=140), width=140)
 
         self.assertIn("https://example.com/health", rendered)
         self.assertNotIn("Env Default", rendered)
@@ -331,7 +336,7 @@ class RenderingMiscTests(unittest.TestCase):
         state.active_request_id = None
         state.preview_request_id = None
 
-        rendered = render_plain(render_viewport(state, viewport_height=24, viewport_width=140), width=140)
+        rendered = render_plain(render_home_viewport(state, viewport_height=24, viewport_width=140), width=140)
 
         self.assertIn("No active request.", rendered)
         self.assertNotIn("Response", rendered)
@@ -608,7 +613,7 @@ class RenderingMiscTests(unittest.TestCase):
             )
         ]
 
-        rendered = render_plain(render_viewport(state, viewport_height=24, viewport_width=140), width=140)
+        rendered = render_plain(render_history_viewport(state, viewport_height=24, viewport_width=140), width=140)
 
         self.assertIn("Health", rendered)
         self.assertIn("GET", rendered)

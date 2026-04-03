@@ -22,7 +22,7 @@ from piespector.domain.modes import (
 from piespector.http_client import validate_raw_body
 from piespector.interactions.keys import KEY_ESCAPE, KEY_SAVE, KEY_TAB
 from piespector.placeholders import apply_placeholder_completion, auto_pair_placeholder, placeholder_match
-from piespector.rendering import (
+from piespector.ui.rendering_helpers import (
     detect_text_syntax_language,
     format_response_body,
     request_body_syntax_language,

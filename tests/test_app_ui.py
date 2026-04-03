@@ -4,7 +4,7 @@ import unittest
 from unittest.mock import patch
 
 from piespector.app import PiespectorApp
-from piespector.rendering import (
+from piespector.ui.rendering_helpers import (
     detect_text_syntax_language,
     request_body_syntax_language,
     text_area_syntax_language,
