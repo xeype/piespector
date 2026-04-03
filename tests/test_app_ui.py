@@ -1721,6 +1721,88 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(rendered_row[0], "+")
             self.assertEqual(rendered_row[2], "Add field")
 
+    async def test_body_key_value_navigation_with_j_keeps_selector_and_rows_in_sync(self) -> None:
+        app = PiespectorApp()
+        app._persist_requests = lambda: None
+        app._load_request_workspace = lambda: None
+        request = RequestDefinition(
+            request_id="r1",
+            name="Upload",
+            body_type="form-data",
+            body_form_items=[RequestKeyValue(key="file", value="@payload.bin")],
+        )
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+        app.state.home_editor_tab = "body"
+        app.state.enter_home_section_select_mode()
+
+        async with app.run_test(size=(140, 40)) as pilot:
+            app._refresh_screen()
+            await pilot.pause()
+
+            table = app.screen.query_one("#request-body-table", DataTable)
+            self.assertEqual(app.state.selected_body_index, 0)
+            self.assertFalse(table.has_focus)
+
+            await pilot.press("j")
+            await pilot.pause()
+            self.assertEqual(app.state.mode, "HOME_BODY_SELECT")
+            self.assertEqual(app.state.selected_body_index, 0)
+            self.assertFalse(table.has_focus)
+
+            await pilot.press("j")
+            await pilot.pause()
+            self.assertEqual(app.state.selected_body_index, 1)
+            self.assertTrue(table.has_focus)
+
+            await pilot.press("j")
+            await pilot.pause()
+            self.assertEqual(app.state.selected_body_index, 2)
+            self.assertTrue(table.has_focus)
+
+            await pilot.press("j")
+            await pilot.pause()
+            self.assertEqual(app.state.selected_body_index, 0)
+            self.assertFalse(table.has_focus)
+
+    async def test_body_key_value_navigation_with_k_returns_to_selector_then_section_select(self) -> None:
+        app = PiespectorApp()
+        app._persist_requests = lambda: None
+        app._load_request_workspace = lambda: None
+        request = RequestDefinition(
+            request_id="r1",
+            name="Upload",
+            body_type="form-data",
+            body_form_items=[RequestKeyValue(key="file", value="@payload.bin")],
+        )
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+        app.state.home_editor_tab = "body"
+        app.state.mode = "HOME_BODY_SELECT"
+        app.state.selected_body_index = 2
+
+        async with app.run_test(size=(140, 40)) as pilot:
+            app._refresh_screen()
+            await pilot.pause()
+
+            table = app.screen.query_one("#request-body-table", DataTable)
+            self.assertTrue(table.has_focus)
+
+            await pilot.press("k")
+            await pilot.pause()
+            self.assertEqual(app.state.selected_body_index, 1)
+            self.assertTrue(table.has_focus)
+
+            await pilot.press("k")
+            await pilot.pause()
+            self.assertEqual(app.state.selected_body_index, 0)
+            self.assertFalse(table.has_focus)
+
+            await pilot.press("k")
+            await pilot.pause()
+            self.assertEqual(app.state.mode, "HOME_SECTION_SELECT")
+            self.assertFalse(table.has_focus)
+
     async def test_status_bar_uses_footer_widget_for_mode_hints_and_env(self) -> None:
         app = PiespectorApp()
         app._load_request_workspace = lambda: None

@@ -294,6 +294,16 @@ class HomeScreen(PiespectorScreen):
         return False
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
+        app = self.app
+        if (
+            app is not None
+            and event.control.id == "request-body-table"
+            and (
+                app.state.mode != MODE_HOME_BODY_SELECT
+                or app.state.selected_body_index <= 0
+            )
+        ):
+            return
         self._sync_request_table_row(event.control, event.cursor_row)
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
