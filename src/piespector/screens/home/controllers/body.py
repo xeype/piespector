@@ -72,9 +72,7 @@ class HomeBodyController(HomeControllerBase):
             return
 
         if event.key == KEY_SPACE:
-            toggled_key = self.state.toggle_selected_body_field()
-            if toggled_key is not None:
-                self.app._persist_requests()
+            self.state.toggle_selected_body_field()
             self.app._refresh_screen()
             event.stop()
             return
@@ -97,9 +95,7 @@ class HomeBodyController(HomeControllerBase):
             return
 
         if event.key == KEY_DELETE_ROW:
-            deleted_key = self.state.delete_selected_body_field()
-            if deleted_key is not None:
-                self.app._persist_requests()
+            self.state.delete_selected_body_field()
             self.app._refresh_screen()
             event.stop()
             return
@@ -126,8 +122,7 @@ class HomeBodyController(HomeControllerBase):
             return
 
         if event.key in UP_KEYS | ARROW_LEFT_KEYS:
-            if self.state.cycle_body_type(-1) is not None:
-                self.app._persist_requests()
+            self.state.cycle_body_type(-1)
             self.app._refresh_screen()
             event.stop()
             return
@@ -148,8 +143,7 @@ class HomeBodyController(HomeControllerBase):
             return
 
         if event.key in DOWN_KEYS | ARROW_RIGHT_KEYS:
-            if self.state.cycle_body_type(1) is not None:
-                self.app._persist_requests()
+            self.state.cycle_body_type(1)
             self.app._refresh_screen()
             event.stop()
 
@@ -171,15 +165,13 @@ class HomeBodyController(HomeControllerBase):
             return
 
         if event.key in UP_KEYS | ARROW_LEFT_KEYS:
-            if self.state.cycle_raw_subtype(-1) is not None:
-                self.app._persist_requests()
+            self.state.cycle_raw_subtype(-1)
             self.app._refresh_screen()
             event.stop()
             return
 
         if event.key in DOWN_KEYS | ARROW_RIGHT_KEYS:
-            if self.state.cycle_raw_subtype(1) is not None:
-                self.app._persist_requests()
+            self.state.cycle_raw_subtype(1)
             self.app._refresh_screen()
             event.stop()
             return
@@ -206,8 +198,6 @@ class HomeBodyController(HomeControllerBase):
             return
 
         if event.key == KEY_ENTER:
-            saved_key = self.state.save_body_selection()
-            if saved_key is not None:
-                self.app._persist_requests()
+            self.state.save_body_selection()
             self.app._refresh_screen()
             event.stop()

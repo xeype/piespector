@@ -282,15 +282,13 @@ class HomeScreen(PiespectorScreen):
     def on_tree_node_expanded(self, event: Tree.NodeExpanded) -> None:
         if not self._sync_sidebar_selection(event):
             return
-        if self.app.state.set_selected_sidebar_node_expanded(True):
-            self.app._persist_requests()
+        self.app.state.set_selected_sidebar_node_expanded(True)
         self.app._refresh_screen()
 
     def on_tree_node_collapsed(self, event: Tree.NodeCollapsed) -> None:
         if not self._sync_sidebar_selection(event):
             return
-        if self.app.state.set_selected_sidebar_node_expanded(False):
-            self.app._persist_requests()
+        self.app.state.set_selected_sidebar_node_expanded(False)
         self.app._refresh_screen()
 
     def _sync_request_table_row(self, table: DataTable, cursor_row: int) -> bool:
@@ -368,20 +366,18 @@ class HomeScreen(PiespectorScreen):
             return
 
         if event.select.id == "method-select" and app.state.mode == MODE_HOME_REQUEST_METHOD_EDIT:
-            changed = app.state.save_home_method_selection(str(value))
+            app.state.save_home_method_selection(str(value))
         elif event.select.id == "auth-type-select" and app.state.mode == MODE_HOME_AUTH_TYPE_EDIT:
-            changed = app.state.save_home_auth_type_selection(str(value))
+            app.state.save_home_auth_type_selection(str(value))
         elif event.select.id == "auth-option-select" and app.state.mode == MODE_HOME_AUTH_LOCATION_EDIT:
-            changed = app.state.save_home_auth_option_selection(str(value))
+            app.state.save_home_auth_option_selection(str(value))
         elif event.select.id == "body-type-select" and app.state.mode == MODE_HOME_BODY_TYPE_EDIT:
-            changed = app.state.save_home_body_type_selection(str(value))
+            app.state.save_home_body_type_selection(str(value))
         elif event.select.id == "body-raw-type-select" and app.state.mode == MODE_HOME_BODY_RAW_TYPE_EDIT:
-            changed = app.state.save_home_body_raw_type_selection(str(value))
+            app.state.save_home_body_raw_type_selection(str(value))
         else:
             return
 
-        if changed is not None:
-            app._persist_requests()
         app.set_focus(None)
         app._refresh_screen()
         event.stop()
@@ -429,39 +425,36 @@ class HomeScreen(PiespectorScreen):
         if app is None:
             return
 
-        changed = None
         if event.input.id == "url-input" and app.state.mode == MODE_HOME_URL_EDIT:
-            changed = app.state.save_home_url_edit(event.value)
+            app.state.save_home_url_edit(event.value)
         elif (
             event.input.id == "request-overview-input"
             and app.state.mode == MODE_HOME_REQUEST_EDIT
         ):
-            changed = app.state.save_selected_request_field(event.value)
+            app.state.save_selected_request_field(event.value)
         elif (
             event.input.id == "request-params-input"
             and app.state.mode == MODE_HOME_PARAMS_EDIT
         ):
-            changed = app.state.save_selected_param_field(event.value)
+            app.state.save_selected_param_field(event.value)
         elif (
             event.input.id == "request-headers-input"
             and app.state.mode == MODE_HOME_HEADERS_EDIT
         ):
-            changed = app.state.save_selected_header_field(event.value)
+            app.state.save_selected_header_field(event.value)
         elif (
             event.input.id == "auth-field-input"
             and app.state.mode == MODE_HOME_AUTH_EDIT
         ):
-            changed = app.state.save_selected_auth_field(event.value)
+            app.state.save_selected_auth_field(event.value)
         elif (
             event.input.id == "request-body-input"
             and app.state.mode == MODE_HOME_BODY_EDIT
         ):
-            changed = app.state.save_body_selection(event.value)
+            app.state.save_body_selection(event.value)
         else:
             return
 
-        if changed is not None:
-            app._persist_requests()
         app.set_focus(None)
         app._refresh_screen()
         event.stop()

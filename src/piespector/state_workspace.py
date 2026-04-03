@@ -269,6 +269,7 @@ class WorkspaceStateMixin:
             self.clamp_selected_sidebar_index()
             self.active_request_id = None
             self.preview_request_id = None
+            self.notify_requests_mutated()
             return True
         if node.kind == "folder":
             if node.node_id in self.collapsed_folder_ids:
@@ -278,6 +279,7 @@ class WorkspaceStateMixin:
             self.clamp_selected_sidebar_index()
             self.active_request_id = None
             self.preview_request_id = None
+            self.notify_requests_mutated()
             return True
         return False
 
@@ -290,6 +292,7 @@ class WorkspaceStateMixin:
                 self.collapsed_collection_ids.add(node.node_id)
                 self.active_request_id = None
                 self.preview_request_id = None
+                self.notify_requests_mutated()
                 return True
             return False
         if node.kind == "folder":
@@ -297,6 +300,7 @@ class WorkspaceStateMixin:
                 self.collapsed_folder_ids.add(node.node_id)
                 self.active_request_id = None
                 self.preview_request_id = None
+                self.notify_requests_mutated()
                 return True
             return False
         request = self.get_selected_request()
@@ -309,12 +313,14 @@ class WorkspaceStateMixin:
             self._set_selected_sidebar_node("folder", folder.folder_id)
             self.active_request_id = None
             self.preview_request_id = None
+            self.notify_requests_mutated()
             return True
         if request.collection_id is not None:
             self.collapsed_collection_ids.add(request.collection_id)
             self._set_selected_sidebar_node("collection", request.collection_id)
             self.active_request_id = None
             self.preview_request_id = None
+            self.notify_requests_mutated()
             return True
         return False
 
@@ -367,6 +373,7 @@ class WorkspaceStateMixin:
             self.active_request_id = None
             self.preview_request_id = None
             self.clamp_selected_sidebar_index()
+            self.notify_requests_mutated()
         return changed
 
     def ensure_request_workspace(self) -> None:
@@ -651,6 +658,7 @@ class WorkspaceStateMixin:
         self.activate_request_by_index(len(self.requests) - 1, pin=True)
         self.mode = MODE_HOME_SECTION_SELECT
         self.message = ""
+        self.notify_requests_mutated()
         return request
 
     def replay_selected_history_entry(self) -> RequestDefinition | None:
@@ -781,6 +789,7 @@ class WorkspaceStateMixin:
             if redacted_omitted
             else "Replayed history into a temporary request."
         )
+        self.notify_requests_mutated()
         return replay
 
     def create_collection(self, name: str) -> CollectionDefinition:
@@ -793,6 +802,7 @@ class WorkspaceStateMixin:
         self.preview_request_id = None
         self.mode = MODE_NORMAL
         self.message = f"Created collection {name}."
+        self.notify_requests_mutated()
         return collection
 
     def create_folder(self, name: str) -> FolderDefinition | None:
@@ -816,6 +826,7 @@ class WorkspaceStateMixin:
         self.preview_request_id = None
         self.mode = MODE_NORMAL
         self.message = f"Created folder {name}."
+        self.notify_requests_mutated()
         return folder
 
     def move_request_to(
@@ -839,6 +850,7 @@ class WorkspaceStateMixin:
         if request.request_id in self.open_request_ids:
             self.preview_request_id = None
         self.message = f"Moved request {request.name}."
+        self.notify_requests_mutated()
         return True
 
     def rename_request(self, request_id: str, name: str) -> bool:
@@ -857,6 +869,7 @@ class WorkspaceStateMixin:
         self.current_tab = TAB_HOME
         self.mode = MODE_NORMAL
         self.message = f"Renamed request {new_name}."
+        self.notify_requests_mutated()
         return True
 
     def rename_collection(self, collection_id: str, name: str) -> bool:
@@ -875,6 +888,7 @@ class WorkspaceStateMixin:
         self.preview_request_id = None
         self.mode = MODE_NORMAL
         self.message = f"Renamed collection {new_name}."
+        self.notify_requests_mutated()
         return True
 
     def rename_folder(self, folder_id: str, name: str) -> bool:
@@ -893,6 +907,7 @@ class WorkspaceStateMixin:
         self.preview_request_id = None
         self.mode = MODE_NORMAL
         self.message = f"Renamed folder {new_name}."
+        self.notify_requests_mutated()
         return True
 
     def copy_request_to(
@@ -922,6 +937,7 @@ class WorkspaceStateMixin:
         self.activate_request_by_index(len(self.requests) - 1, pin=True)
         request_label = request.name.strip() or "request"
         self.message = f"Copied request {request_label}."
+        self.notify_requests_mutated()
         return copied
 
     def copy_folder_to(
@@ -983,6 +999,7 @@ class WorkspaceStateMixin:
         self.preview_request_id = None
         self.mode = MODE_NORMAL
         self.message = f"Copied folder {folder.name}."
+        self.notify_requests_mutated()
         return copied_root
 
     def copy_collection(self, collection_id: str) -> CollectionDefinition | None:
@@ -1037,6 +1054,7 @@ class WorkspaceStateMixin:
         self.preview_request_id = None
         self.mode = MODE_NORMAL
         self.message = f"Copied collection {collection.name}."
+        self.notify_requests_mutated()
         return copied_collection
 
     def import_collections(
@@ -1112,6 +1130,7 @@ class WorkspaceStateMixin:
             if len(imported_collections) == 1
             else f"Imported {len(imported_collections)} collections."
         )
+        self.notify_requests_mutated()
         return len(imported_collections)
 
     def move_folder_to(
@@ -1152,6 +1171,7 @@ class WorkspaceStateMixin:
         self.active_request_id = None
         self.preview_request_id = None
         self.message = f"Moved folder {folder.name}."
+        self.notify_requests_mutated()
         return True
 
     def _folder_chain_from_items(
@@ -1226,6 +1246,7 @@ class WorkspaceStateMixin:
 
         self.mode = MODE_NORMAL
         self.message = f"Deleted {deleted.name}."
+        self.notify_requests_mutated()
         return deleted
 
     def delete_selected_collection(self) -> CollectionDefinition | None:
@@ -1266,6 +1287,7 @@ class WorkspaceStateMixin:
         self.clamp_selected_sidebar_index()
         self.mode = MODE_NORMAL
         self.message = f"Deleted collection {collection.name}."
+        self.notify_requests_mutated()
         return collection
 
     def delete_selected_folder(self) -> FolderDefinition | None:
@@ -1299,6 +1321,7 @@ class WorkspaceStateMixin:
         self.clamp_selected_sidebar_index()
         self.mode = MODE_NORMAL
         self.message = f"Deleted folder {folder.name}."
+        self.notify_requests_mutated()
         return folder
 
     def _descendant_folder_ids(self, folder_id: str) -> set[str]:

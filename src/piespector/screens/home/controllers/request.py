@@ -108,9 +108,7 @@ class HomeRequestController(HomeControllerBase):
             return
 
         if event.key == KEY_ENTER:
-            updated_field = self.state.save_selected_request_field()
-            if updated_field is not None:
-                self.app._persist_requests()
+            self.state.save_selected_request_field()
             self.app._refresh_screen()
             event.stop()
 

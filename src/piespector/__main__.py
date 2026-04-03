@@ -21,7 +21,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> None:
     build_parser().parse_args(argv)
-    PiespectorApp().run()
+    PiespectorApp(persist_state=True).run()
 
 
 if __name__ == "__main__":

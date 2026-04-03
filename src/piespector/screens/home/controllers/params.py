@@ -71,9 +71,7 @@ class HomeParamsController(HomeControllerBase):
             return
 
         if event.key == KEY_SPACE:
-            toggled_key = self.state.toggle_selected_param()
-            if toggled_key is not None:
-                self.app._persist_requests()
+            self.state.toggle_selected_param()
             self.app._refresh_screen()
             event.stop()
             return
@@ -85,9 +83,7 @@ class HomeParamsController(HomeControllerBase):
             return
 
         if event.key == KEY_DELETE_ROW:
-            deleted_key = self.state.delete_selected_param()
-            if deleted_key is not None:
-                self.app._persist_requests()
+            self.state.delete_selected_param()
             self.app._refresh_screen()
             event.stop()
             return
@@ -112,8 +108,6 @@ class HomeParamsController(HomeControllerBase):
             return
 
         if event.key == KEY_ENTER:
-            saved_key = self.state.save_selected_param_field()
-            if saved_key is not None:
-                self.app._persist_requests()
+            self.state.save_selected_param_field()
             self.app._refresh_screen()
             event.stop()

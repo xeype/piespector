@@ -79,9 +79,7 @@ class HomeAuthController(HomeControllerBase):
             return
 
         if event.key == KEY_ENTER:
-            updated_field = self.state.save_selected_auth_field()
-            if updated_field is not None:
-                self.app._persist_requests()
+            self.state.save_selected_auth_field()
             self.app._refresh_screen()
             event.stop()
 
@@ -106,15 +104,13 @@ class HomeAuthController(HomeControllerBase):
             return
 
         if event.key in UP_KEYS | ARROW_LEFT_KEYS:
-            if self.state.cycle_auth_type(-1) is not None:
-                self.app._persist_requests()
+            self.state.cycle_auth_type(-1)
             self.app._refresh_screen()
             event.stop()
             return
 
         if event.key in DOWN_KEYS | ARROW_RIGHT_KEYS:
-            if self.state.cycle_auth_type(1) is not None:
-                self.app._persist_requests()
+            self.state.cycle_auth_type(1)
             self.app._refresh_screen()
             event.stop()
             return
@@ -152,11 +148,9 @@ class HomeAuthController(HomeControllerBase):
         if event.key in UP_KEYS | ARROW_LEFT_KEYS:
             field = self.state.selected_auth_field()
             if field is not None and field[0] == "auth_oauth_client_authentication":
-                updated = self.state.cycle_auth_oauth_client_authentication(-1)
+                self.state.cycle_auth_oauth_client_authentication(-1)
             else:
-                updated = self.state.cycle_auth_api_key_location(-1)
-            if updated is not None:
-                self.app._persist_requests()
+                self.state.cycle_auth_api_key_location(-1)
             self.app._refresh_screen()
             event.stop()
             return
@@ -164,11 +158,9 @@ class HomeAuthController(HomeControllerBase):
         if event.key in DOWN_KEYS | ARROW_RIGHT_KEYS:
             field = self.state.selected_auth_field()
             if field is not None and field[0] == "auth_oauth_client_authentication":
-                updated = self.state.cycle_auth_oauth_client_authentication(1)
+                self.state.cycle_auth_oauth_client_authentication(1)
             else:
-                updated = self.state.cycle_auth_api_key_location(1)
-            if updated is not None:
-                self.app._persist_requests()
+                self.state.cycle_auth_api_key_location(1)
             self.app._refresh_screen()
             event.stop()
             return

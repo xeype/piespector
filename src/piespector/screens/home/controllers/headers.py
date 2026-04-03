@@ -104,13 +104,10 @@ class HomeHeadersController(HomeControllerBase):
                 if header_name is not None:
                     self.state.toggle_auto_header(header_name)
                     self.state.clamp_selected_header_index(self.header_row_count())
-                    self.app._persist_requests()
                 self.app._refresh_screen()
                 event.stop()
                 return
-            toggled_key = self.state.toggle_selected_header()
-            if toggled_key is not None:
-                self.app._persist_requests()
+            self.state.toggle_selected_header()
             self.app._refresh_screen()
             event.stop()
             return
@@ -132,9 +129,7 @@ class HomeHeadersController(HomeControllerBase):
                 self.app._refresh_screen()
                 event.stop()
                 return
-            deleted_key = self.state.delete_selected_header()
-            if deleted_key is not None:
-                self.app._persist_requests()
+            self.state.delete_selected_header()
             self.app._refresh_screen()
             event.stop()
             return
@@ -159,8 +154,6 @@ class HomeHeadersController(HomeControllerBase):
             return
 
         if event.key == KEY_ENTER:
-            saved_key = self.state.save_selected_header_field()
-            if saved_key is not None:
-                self.app._persist_requests()
+            self.state.save_selected_header_field()
             self.app._refresh_screen()
             event.stop()

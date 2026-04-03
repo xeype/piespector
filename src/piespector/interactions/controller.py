@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from textual import events
+from textual.app import ScreenStackError
 
 from piespector.commands import run_command
 from piespector.domain.editor import (
@@ -13,11 +14,22 @@ from piespector.domain.editor import (
     HOME_EDITOR_TAB_REQUEST,
     REQUEST_EDITOR_JUMP_KEY_TO_TAB,
     RESPONSE_JUMP_KEY_TO_TAB,
+    TAB_ENV,
+    TAB_HISTORY,
     TAB_LABELS,
     TAB_HOME,
     TOP_BAR_JUMP_KEY_TO_TARGET,
 )
-from piespector.domain.modes import MODE_HOME_SECTION_SELECT, MODE_NORMAL
+from piespector.domain.modes import (
+    MODE_COMMAND,
+    MODE_CONFIRM,
+    MODE_ENV_EDIT,
+    MODE_ENV_SELECT,
+    MODE_HISTORY_RESPONSE_SELECT,
+    MODE_HOME_SECTION_SELECT,
+    MODE_JUMP,
+    MODE_NORMAL,
+)
 from piespector.interactions.keys import (
     CONFIRM_ACCEPT_KEYS,
     CONFIRM_CANCEL_KEYS,
@@ -27,6 +39,7 @@ from piespector.interactions.keys import (
     RIGHT_KEYS,
 )
 from piespector.search import activate_search_target
+from piespector.ui.jump_overlay import JumpOverlay
 
 if TYPE_CHECKING:
     from piespector.app import PiespectorApp
@@ -60,13 +73,9 @@ class InteractionController:
             return
 
         if self.state.confirm_action == "delete_collection":
-            deleted = self.state.delete_selected_collection()
-            if deleted is not None:
-                self.app._persist_requests()
+            self.state.delete_selected_collection()
         elif self.state.confirm_action == "delete_folder":
-            deleted = self.state.delete_selected_folder()
-            if deleted is not None:
-                self.app._persist_requests()
+            self.state.delete_selected_folder()
 
         self.state.leave_confirm_mode()
         self.app._refresh_screen()
@@ -160,13 +169,7 @@ class InteractionController:
         self.state.enter_home_response_select_mode(origin_mode=MODE_HOME_SECTION_SELECT)
 
     def run_command(self, raw_command: str) -> None:
-        before_env_pairs = dict(self.state.env_pairs)
-        before_requests = [request.request_id for request in self.state.requests]
         outcome = run_command(self.state, raw_command)
-        if outcome.save_env_pairs or self.state.env_pairs != before_env_pairs:
-            self.app._persist_env_pairs()
-        if outcome.save_requests or [request.request_id for request in self.state.requests] != before_requests:
-            self.app._persist_requests()
         if outcome.send_request:
             self.app._send_selected_request()
             return
@@ -177,8 +180,78 @@ class InteractionController:
 
     def open_search_target(self, target: SearchTarget) -> None:
         self.state.mode = MODE_NORMAL
-        if activate_search_target(self.state, target):
-            self.app._persist_requests()
-        else:
+        if not activate_search_target(self.state, target):
             self.state.message = f"Could not open {target.display}."
         self.app._refresh_screen()
+
+
+class EventRouter:
+    """Routes application key events to the appropriate controller."""
+
+    def __init__(self, app: PiespectorApp) -> None:
+        self.app = app
+
+    @property
+    def state(self):
+        return self.app.state
+
+    def handle_key(self, event: events.Key) -> None:
+        current_screen = self._current_screen()
+        if (
+            current_screen is not None
+            and current_screen.is_modal
+            and isinstance(current_screen, JumpOverlay)
+        ):
+            current_screen.on_key(event)
+            return
+
+        if self.state.mode == MODE_JUMP:
+            self.app.interaction_controller.handle_jump_key(event)
+            return
+
+        if self.state.mode == MODE_CONFIRM:
+            self.app.interaction_controller.handle_confirm_key(event)
+            return
+
+        if self.state.mode == MODE_COMMAND:
+            self.app.interaction_controller.handle_command_key(event)
+            return
+
+        if self.state.current_tab == TAB_HOME:
+            if self.app.home_controller.handle_request_response_shortcuts(event):
+                return
+            if (
+                self.state.mode == MODE_NORMAL
+                and self.app.home_controller.handle_home_view_key(event)
+            ):
+                return
+            self.app.home_controller.dispatch_key(self.state.mode, event)
+            return
+
+        if self.state.current_tab == TAB_ENV:
+            if (
+                self.state.mode == MODE_NORMAL
+                and self.app.env_controller.handle_env_view_key(event)
+            ):
+                return
+            if self.state.mode == MODE_ENV_SELECT:
+                self.app.env_controller.handle_env_select_key(event)
+                return
+            if self.state.mode == MODE_ENV_EDIT:
+                self.app.env_controller.handle_env_edit_key(event)
+                return
+
+        if self.state.current_tab == TAB_HISTORY:
+            if (
+                self.state.mode == MODE_NORMAL
+                and self.app.history_controller.handle_history_view_key(event)
+            ):
+                return
+            if self.state.mode == MODE_HISTORY_RESPONSE_SELECT:
+                self.app.history_controller.handle_history_response_select_key(event)
+
+    def _current_screen(self):
+        try:
+            return self.app.screen
+        except ScreenStackError:
+            return None

@@ -101,9 +101,7 @@ class EnvController:
             return
 
         if event.key == KEY_DELETE_ROW:
-            deleted_key = self.state.delete_selected_env_item()
-            if deleted_key is not None:
-                self.app._persist_env_pairs()
+            self.state.delete_selected_env_item()
             self.app._refresh_screen()
             event.stop()
             return
@@ -130,8 +128,6 @@ class EnvController:
             return
 
         if event.key == KEY_ENTER:
-            updated_key = self.state.save_selected_env_field()
-            if updated_key is not None:
-                self.app._persist_env_pairs()
+            self.state.save_selected_env_field()
             self.app._refresh_screen()
             event.stop()

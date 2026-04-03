@@ -144,6 +144,7 @@ def activate_search_target(state: PiespectorState, target: SearchTarget) -> bool
         state.active_request_id = None
         state.preview_request_id = None
         state.message = f"Opened collection {target.display}."
+        state.notify_requests_mutated()
         return True
 
     if target.kind == "folder":
@@ -158,6 +159,7 @@ def activate_search_target(state: PiespectorState, target: SearchTarget) -> bool
         state.active_request_id = None
         state.preview_request_id = None
         state.message = f"Opened folder {folder.name}."
+        state.notify_requests_mutated()
         return True
 
     request = state.get_request_by_id(target.request_id or target.node_id)
@@ -167,6 +169,7 @@ def activate_search_target(state: PiespectorState, target: SearchTarget) -> bool
     state._set_selected_sidebar_by_request_id(request.request_id)
     state.open_selected_request(pin=True)
     state.message = f"Opened request {request.name}."
+    state.notify_requests_mutated()
     return True
 
 

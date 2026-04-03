@@ -64,6 +64,7 @@ class HistoryStateMixin:
         self.history_entries.insert(0, entry)
         self.selected_history_index = 0
         self.history_scroll_offset = 0
+        self.notify_history_entry_appended(entry)
 
     def set_history_filter(self, raw_query: str) -> int:
         self.history_filter_query = raw_query.strip()

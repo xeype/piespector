@@ -40,8 +40,6 @@ class EnvScreen(PiespectorScreen):
         if app is None or event.input.id != "env-field-input" or app.state.mode != MODE_ENV_EDIT:
             return
         event.stop()
-        changed = app.state.save_selected_env_field(event.value)
-        if changed is not None:
-            app._persist_env_pairs()
+        app.state.save_selected_env_field(event.value)
         app.set_focus(None)
         app._refresh_screen()

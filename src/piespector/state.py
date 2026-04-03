@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Callable
 
 from piespector.domain.history import HistoryEntry, history_entry_matches
 from piespector.domain.requests import (
@@ -101,9 +102,26 @@ class PiespectorState(
         for field_name, value in history_kwargs.items():
             setattr(self.session.history, field_name, value)
         self._app = None
+        self._mutation_subscribers: dict[str, list[Callable[..., None]]] = {}
 
     def attach_app(self, app) -> None:
         self._app = app
+
+    def subscribe(self, topic: str, callback: Callable[..., None]) -> None:
+        self._mutation_subscribers.setdefault(topic, []).append(callback)
+
+    def _notify(self, topic: str, *args) -> None:
+        for callback in tuple(self._mutation_subscribers.get(topic, ())):
+            callback(*args)
+
+    def notify_requests_mutated(self) -> None:
+        self._notify("requests")
+
+    def notify_env_mutated(self) -> None:
+        self._notify("env")
+
+    def notify_history_entry_appended(self, entry: HistoryEntry) -> None:
+        self._notify("history_entry_appended", entry)
 
     def _screen_owner(self, group_name: str):
         app = getattr(self, "_app", None)

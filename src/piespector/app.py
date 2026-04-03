@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from copy import deepcopy
-from datetime import datetime
 from pathlib import Path
 import platform
 import shutil
@@ -42,22 +40,16 @@ from piespector.domain.editor import (
 from piespector.domain.modes import COMMAND_BLOCKED_MODES, REQUEST_RESPONSE_SHORTCUT_MODES
 from piespector.domain.modes import (
     MODE_COMMAND,
-    MODE_CONFIRM,
-    MODE_ENV_EDIT,
-    MODE_ENV_SELECT,
-    MODE_HISTORY_RESPONSE_SELECT,
     MODE_HOME_URL_EDIT,
-    MODE_JUMP,
     MODE_NORMAL,
 )
-from piespector.formatting import format_bytes
-from piespector.history import build_history_entry
 from piespector.http_client import (
-    perform_request,
     preview_request_url,
 )
-from piespector.interactions.controller import InteractionController
+from piespector.interactions.controller import EventRouter, InteractionController
 from piespector.interactions.keys import response_copy_hint, response_copy_keys
+from piespector.persistence import PersistenceManager
+from piespector.request_executor import RequestExecutor
 from piespector.screens.base import PiespectorScreen
 from piespector.screens.env import render as env_render
 from piespector.screens.env.controller import EnvController
@@ -75,21 +67,15 @@ from piespector.screens.home.render import (
     sync_home_focus_highlights,
 )
 from piespector.screens.home.screen import HomeScreen
-from piespector.search import request_path
 from piespector.state import PiespectorState
 from piespector.storage import (
     app_data_dir,
-    append_history_entry,
     env_workspace_path,
     history_file_path,
     load_env_workspace,
     load_history_entries,
     load_request_workspace,
     requests_file_path,
-    save_env_workspace,
-    save_history_entries,
-    ensure_parent_dir,
-    save_request_workspace,
 )
 from piespector.ui import APP_BINDINGS, APP_CSS
 from piespector.ui.command_line_content import build_command_line_text
@@ -117,7 +103,7 @@ class PiespectorApp(App[None]):
     COMMANDS = App.COMMANDS | {PiespectorCommandProvider}
     REQUEST_RESPONSE_SHORTCUT_MODES = REQUEST_RESPONSE_SHORTCUT_MODES
 
-    def __init__(self) -> None:
+    def __init__(self, *, persist_state: bool = False) -> None:
         super().__init__()
         self.state = PiespectorState()
         self._legacy_env_workspace_path = Path.cwd() / ".piespector.env.json"
@@ -132,15 +118,18 @@ class PiespectorApp(App[None]):
         self.response_copy_hint = response_copy_hint()
         self._edit_path_completion_anchor = ""
         self._edit_path_completion_index = -1
+        self.state.attach_app(self)
+        self.persistence_manager = PersistenceManager(self, enabled=persist_state)
+        self.request_executor = RequestExecutor(self)
         self.env_controller = EnvController(self)
         self.history_controller = HistoryController(self)
         self.home_controller = HomeController(self)
         self.interaction_controller = InteractionController(self)
+        self.event_router = EventRouter(self)
         self.overlay_controller = OverlayController(self)
         self._home_screen = HomeScreen()
         self._env_screen = EnvScreen()
         self._history_screen = HistoryScreen()
-        self.state.attach_app(self)
         self._screens_installed = False
 
     def on_mount(self) -> None:
@@ -214,12 +203,7 @@ class PiespectorApp(App[None]):
         self.state.selected_env_name = selected_env_name
         self.state.ensure_env_workspace()
         if env_workspace_source != self._env_workspace_path:
-            save_env_workspace(
-                self._env_workspace_path,
-                self.state.env_names,
-                self.state.env_sets,
-                self.state.selected_env_name,
-            )
+            self._persist_env_pairs()
 
     def _load_history(self) -> None:
         history_source_path = self._history_file_path
@@ -230,7 +214,7 @@ class PiespectorApp(App[None]):
             history_source_path = self._legacy_history_file_path
         self.state.history_entries = load_history_entries(history_source_path)
         if history_source_path != self._history_file_path:
-            save_history_entries(self._history_file_path, self.state.history_entries)
+            self._persist_history_entries()
 
     def _load_request_workspace(self) -> None:
         requests_source_path = self._requests_file_path
@@ -253,63 +237,13 @@ class PiespectorApp(App[None]):
         self.state.collapsed_folder_ids = collapsed_folder_ids
         self.state.ensure_request_workspace()
         if requests_source_path != self._requests_file_path:
-            save_request_workspace(
-                self._requests_file_path,
-                self.state.collections,
-                self.state.folders,
-                self.state.requests,
-                self.state.collapsed_collection_ids,
-                self.state.collapsed_folder_ids,
-            )
+            self._persist_requests()
 
     def on_resize(self) -> None:
         self._refresh_screen()
 
     def on_key(self, event: events.Key) -> None:
-        try:
-            current_screen = self.screen
-        except ScreenStackError:
-            current_screen = None
-        if current_screen is not None and current_screen.is_modal and isinstance(current_screen, JumpOverlay):
-            current_screen.on_key(event)
-            return
-
-        if self.state.mode == MODE_JUMP:
-            self.interaction_controller.handle_jump_key(event)
-            return
-
-        if self.state.mode == MODE_CONFIRM:
-            self.interaction_controller.handle_confirm_key(event)
-            return
-
-        if self.state.mode == MODE_COMMAND:
-            self.interaction_controller.handle_command_key(event)
-            return
-
-        if self.state.current_tab == TAB_HOME:
-            if self.home_controller.handle_request_response_shortcuts(event):
-                return
-            if self.state.mode == MODE_NORMAL and self.home_controller.handle_home_view_key(event):
-                return
-            self.home_controller.dispatch_key(self.state.mode, event)
-            return
-
-        if self.state.current_tab == TAB_ENV:
-            if self.state.mode == MODE_NORMAL and self.env_controller.handle_env_view_key(event):
-                return
-            if self.state.mode == MODE_ENV_SELECT:
-                self.env_controller.handle_env_select_key(event)
-                return
-            if self.state.mode == MODE_ENV_EDIT:
-                self.env_controller.handle_env_edit_key(event)
-                return
-
-        if self.state.current_tab == TAB_HISTORY:
-            if self.state.mode == MODE_NORMAL and self.history_controller.handle_history_view_key(event):
-                return
-            if self.state.mode == MODE_HISTORY_RESPONSE_SELECT:
-                self.history_controller.handle_history_response_select_key(event)
-                return
+        self.event_router.handle_key(event)
 
     def _autocomplete_body_editor_placeholder(self) -> bool:
         return self.overlay_controller.autocomplete_body_editor_placeholder()
@@ -502,29 +436,7 @@ class PiespectorApp(App[None]):
         return current_screen.query_one(selector, expect_type)
 
     def _send_selected_request(self) -> None:
-        if self.state.get_active_request() is None and self.state.get_selected_request() is not None:
-            self.state.open_selected_request()
-        request = self.state.get_active_request()
-        if request is None:
-            self.state.message = "No request selected."
-            self._refresh_screen()
-            return
-        self.state.pending_request_id = request.request_id
-        self.state.pending_request_spinner_tick = 0
-        self.state.response_scroll_offset = 0
-        request_definition = deepcopy(request)
-        request_env_pairs = dict(self.state.env_pairs)
-        source_request_path = request_path(self.state, request)
-        self._append_request_log(
-            f"START {request.method} {request.url or '<empty-url>'} name={request.name!r}"
-        )
-        self._refresh_screen()
-        self._perform_request_in_worker(
-            request.request_id,
-            request_definition,
-            request_env_pairs,
-            source_request_path,
-        )
+        self.request_executor.send_selected_request()
 
     @work(thread=True, exclusive=True, group="request-send", exit_on_error=False)
     def _perform_request_in_worker(
@@ -534,53 +446,12 @@ class PiespectorApp(App[None]):
         env_pairs: dict[str, str],
         source_request_path: str,
     ) -> None:
-        response = perform_request(
-            definition,
-            env_pairs,
-            timeout_seconds=self.REQUEST_TIMEOUT_SECONDS,
-        )
-        self.call_from_thread(
-            self._apply_request_result,
+        self.request_executor.perform_request_in_worker(
             request_id,
             definition,
             env_pairs,
             source_request_path,
-            response,
         )
-
-    def _apply_request_result(
-        self,
-        request_id: str,
-        definition,
-        env_pairs: dict[str, str],
-        source_request_path: str,
-        response,
-    ) -> None:
-        request = self.state.get_request_by_id(request_id)
-        self.state.pending_request_id = None
-        self.state.pending_request_spinner_tick = 0
-        self._record_history_entry(definition, env_pairs, source_request_path, response)
-        if request is None:
-            self._append_request_log(
-                f"END missing-request id={request_id} error={response.error or '<none>'}"
-            )
-            self._refresh_screen()
-            return
-
-        request.last_response = response
-        self.state.response_scroll_offset = 0
-        if response.error and response.status_code is None:
-            self.state.message = f"Request failed: {response.error}"
-            self._append_request_log(
-                f"END {request.method} {request.url or '<empty-url>'} failed error={response.error!r}"
-            )
-        else:
-            status = response.status_code or "-"
-            self.state.message = ""
-            self._append_request_log(
-                f"END {request.method} {request.url or '<empty-url>'} status={status} elapsed_ms={response.elapsed_ms or 0:.1f} size={format_bytes(response.body_length)}"
-            )
-        self._refresh_screen()
 
     def _refresh_screen(self) -> None:
         if not self._screens_installed:
@@ -931,44 +802,16 @@ class PiespectorApp(App[None]):
             return 4
 
     def _persist_env_pairs(self) -> None:
-        save_env_workspace(
-            self._env_workspace_path,
-            self.state.env_names,
-            self.state.env_sets,
-            self.state.selected_env_name,
-        )
+        self.persistence_manager.persist_env_workspace()
 
     def _persist_requests(self) -> None:
-        save_request_workspace(
-            self._requests_file_path,
-            self.state.collections,
-            self.state.folders,
-            self.state.requests,
-            self.state.collapsed_collection_ids,
-            self.state.collapsed_folder_ids,
-        )
+        self.persistence_manager.persist_request_workspace()
 
-    def _record_history_entry(
-        self,
-        definition,
-        env_pairs: dict[str, str],
-        source_request_path: str,
-        response,
-    ) -> None:
-        entry = build_history_entry(
-            definition,
-            env_pairs,
-            response,
-            source_request_path,
-        )
-        self.state.prepend_history_entry(entry)
-        append_history_entry(self._history_file_path, entry)
+    def _persist_history_entries(self) -> None:
+        self.persistence_manager.persist_history_entries()
 
-    def _append_request_log(self, message: str) -> None:
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        ensure_parent_dir(self._log_file_path)
-        with self._log_file_path.open("a", encoding="utf-8") as log_file:
-            log_file.write(f"[{timestamp}] {message}\n")
+    def _append_history_entry(self, entry) -> None:
+        self.persistence_manager.append_history_entry(entry)
 
     def _copy_text(self, text: str) -> bool:
         self.copy_to_clipboard(text)

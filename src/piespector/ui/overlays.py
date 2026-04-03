@@ -401,9 +401,7 @@ class OverlayController:
                 self.state.message = validation_error
                 self.app._refresh_screen()
                 return
-            updated_field = self.state.save_raw_body_text(editor.text)
-            if updated_field is not None:
-                self.app._persist_requests()
+            self.state.save_raw_body_text(editor.text)
         else:
             self.state.leave_home_body_text_editor_mode()
         self.app.set_focus(None)

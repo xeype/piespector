@@ -133,6 +133,7 @@ class HomeStateMixin:
         request.method = (value or "GET").upper()
         self.mode = self.home_top_bar_edit_return_mode or MODE_NORMAL
         self.message = "Updated Method."
+        self.notify_requests_mutated()
         return "method"
 
     def save_home_method_selection(self, value: str) -> str | None:
@@ -143,6 +144,7 @@ class HomeStateMixin:
         request.method = method if method in HTTP_METHODS else "GET"
         self.mode = self.home_top_bar_edit_return_mode or MODE_NORMAL
         self.message = "Updated Method."
+        self.notify_requests_mutated()
         return "method"
 
     def leave_home_method_edit_mode(self) -> None:
@@ -166,6 +168,7 @@ class HomeStateMixin:
         request.url = value or ""
         self.mode = self.home_top_bar_edit_return_mode or MODE_NORMAL
         self.message = "Updated URL."
+        self.notify_requests_mutated()
         return "url"
 
     def leave_home_url_edit_mode(self) -> None:
@@ -347,6 +350,7 @@ class HomeStateMixin:
         request.auth_type = value if value in values else AUTH_TYPE_OPTIONS[0][0]
         self.leave_home_auth_type_edit_mode()
         self.message = f"Auth type: {self.auth_type_label(request.auth_type)}."
+        self.notify_requests_mutated()
         return request.auth_type
 
     def save_home_auth_option_selection(self, value: str) -> str | None:
@@ -366,6 +370,7 @@ class HomeStateMixin:
                 "API key location: "
                 f"{self.auth_api_key_location_label(request.auth_api_key_location)}."
             )
+            self.notify_requests_mutated()
             return request.auth_api_key_location
 
         if field_name == "auth_oauth_client_authentication":
@@ -382,6 +387,7 @@ class HomeStateMixin:
                 "OAuth client authentication: "
                 f"{self.auth_oauth_client_authentication_label(request.auth_oauth_client_authentication)}."
             )
+            self.notify_requests_mutated()
             return request.auth_oauth_client_authentication
 
         return None
@@ -397,6 +403,7 @@ class HomeStateMixin:
         request.auth_type = values[(index + step) % len(values)]
         self.clamp_selected_auth_index()
         self.message = f"Auth type: {self.auth_type_label(request.auth_type)}."
+        self.notify_requests_mutated()
         return request.auth_type
 
     def cycle_auth_api_key_location(self, step: int) -> str | None:
@@ -411,6 +418,7 @@ class HomeStateMixin:
         self.message = (
             f"API key location: {self.auth_api_key_location_label(request.auth_api_key_location)}."
         )
+        self.notify_requests_mutated()
         return request.auth_api_key_location
 
     def cycle_auth_oauth_client_authentication(self, step: int) -> str | None:
@@ -426,6 +434,7 @@ class HomeStateMixin:
             "OAuth client authentication: "
             f"{self.auth_oauth_client_authentication_label(request.auth_oauth_client_authentication)}."
         )
+        self.notify_requests_mutated()
         return request.auth_oauth_client_authentication
 
     def save_selected_auth_field(self, value: str | None = None) -> str | None:
@@ -465,6 +474,7 @@ class HomeStateMixin:
         self.mode = MODE_HOME_AUTH_SELECT
         self.clamp_selected_auth_index()
         self.message = f"Updated {field_label.lower()}."
+        self.notify_requests_mutated()
         return field_name
 
     def get_active_request_body_items(self) -> list[RequestKeyValue]:
@@ -557,6 +567,7 @@ class HomeStateMixin:
             self.params_creating_new = False
             self.mode = MODE_HOME_PARAMS_SELECT
             self.message = f"Added param {new_key}."
+            self.notify_requests_mutated()
             return new_key
 
         self.clamp_selected_param_index()
@@ -577,6 +588,7 @@ class HomeStateMixin:
         self.mode = MODE_HOME_PARAMS_SELECT
         self.params_creating_new = False
         self.message = f"Updated {field_label.lower()}."
+        self.notify_requests_mutated()
         return updated
 
     def delete_selected_param(self) -> str | None:
@@ -592,6 +604,7 @@ class HomeStateMixin:
         self.clamp_selected_param_index()
         self.mode = MODE_HOME_PARAMS_SELECT
         self.message = f"Deleted param {key}."
+        self.notify_requests_mutated()
         return key
 
     def toggle_selected_param(self) -> str | None:
@@ -608,6 +621,7 @@ class HomeStateMixin:
         self.message = (
             f"{'Enabled' if item.enabled else 'Disabled'} param {item.key}."
         )
+        self.notify_requests_mutated()
         return item.key
 
     def clamp_selected_header_index(self, total_count: int | None = None) -> None:
@@ -690,6 +704,7 @@ class HomeStateMixin:
             self.headers_creating_new = False
             self.mode = MODE_HOME_HEADERS_SELECT
             self.message = f"Added header {new_key}."
+            self.notify_requests_mutated()
             return new_key
 
         self.clamp_selected_header_index()
@@ -710,6 +725,7 @@ class HomeStateMixin:
         self.mode = MODE_HOME_HEADERS_SELECT
         self.headers_creating_new = False
         self.message = f"Updated {field_label.lower()}."
+        self.notify_requests_mutated()
         return updated
 
     def delete_selected_header(self) -> str | None:
@@ -725,6 +741,7 @@ class HomeStateMixin:
         self.clamp_selected_header_index()
         self.mode = MODE_HOME_HEADERS_SELECT
         self.message = f"Deleted header {key}."
+        self.notify_requests_mutated()
         return key
 
     def toggle_selected_header(self) -> str | None:
@@ -741,6 +758,7 @@ class HomeStateMixin:
         self.message = (
             f"{'Enabled' if item.enabled else 'Disabled'} header {item.key}."
         )
+        self.notify_requests_mutated()
         return item.key
 
     def toggle_auto_header(self, header_name: str) -> bool | None:
@@ -755,9 +773,11 @@ class HomeStateMixin:
                 if name.lower() != normalized
             ]
             self.message = f"Enabled auto header {header_name}."
+            self.notify_requests_mutated()
             return True
         request.disabled_auto_headers.append(header_name)
         self.message = f"Disabled auto header {header_name}."
+        self.notify_requests_mutated()
         return False
 
     def body_type_label(self, body_type: str | None = None) -> str:
@@ -793,6 +813,7 @@ class HomeStateMixin:
         request.restore_active_body_text()
         self.selected_body_index = 0
         self.message = f"Body type: {self.body_type_label(request.body_type)}."
+        self.notify_requests_mutated()
         return request.body_type
 
     def cycle_raw_subtype(self, step: int) -> str | None:
@@ -807,6 +828,7 @@ class HomeStateMixin:
         request.raw_subtype = values[(index + step) % len(values)]
         request.restore_active_body_text()
         self.message = f"Raw format: {self.raw_subtype_label(request.raw_subtype)}."
+        self.notify_requests_mutated()
         return request.raw_subtype
 
     def save_home_body_type_selection(self, value: str) -> str | None:
@@ -820,6 +842,7 @@ class HomeStateMixin:
         self.selected_body_index = 0
         self.leave_home_body_type_edit_mode()
         self.message = f"Body type: {self.body_type_label(request.body_type)}."
+        self.notify_requests_mutated()
         return request.body_type
 
     def save_home_body_raw_type_selection(self, value: str) -> str | None:
@@ -832,6 +855,7 @@ class HomeStateMixin:
         request.restore_active_body_text()
         self.leave_home_body_raw_type_edit_mode()
         self.message = f"Raw format: {self.raw_subtype_label(request.raw_subtype)}."
+        self.notify_requests_mutated()
         return request.raw_subtype
 
     def clamp_selected_body_index(self) -> None:
@@ -1003,6 +1027,7 @@ class HomeStateMixin:
         request.sync_active_body_text()
         self._restore_home_body_parent_mode()
         self.message = "Updated body."
+        self.notify_requests_mutated()
         return "body_text"
 
     def save_body_selection(self, value: str | None = None) -> str | None:
@@ -1015,6 +1040,7 @@ class HomeStateMixin:
             request.sync_active_body_text()
             self._restore_home_body_parent_mode()
             self.message = "Updated binary file path."
+            self.notify_requests_mutated()
             return "body_text"
         if request.body_type in BODY_KEY_VALUE_TYPES:
             payload = raw.strip()
@@ -1041,6 +1067,7 @@ class HomeStateMixin:
                 self.selected_body_index = item_index + 1
             self._restore_home_body_parent_mode()
             self.message = f"Saved body field {key}."
+            self.notify_requests_mutated()
             return key
         return None
 
@@ -1057,6 +1084,7 @@ class HomeStateMixin:
         self.clamp_selected_body_index()
         self.mode = MODE_HOME_BODY_SELECT
         self.message = f"Deleted body field {key}."
+        self.notify_requests_mutated()
         return key
 
     def toggle_selected_body_field(self) -> str | None:
@@ -1073,6 +1101,7 @@ class HomeStateMixin:
         self.message = (
             f"{'Enabled' if item.enabled else 'Disabled'} body field {item.key}."
         )
+        self.notify_requests_mutated()
         return item.key
 
     def _restore_home_body_parent_mode(self) -> None:
@@ -1121,6 +1150,7 @@ class HomeStateMixin:
             current = "GET"
         index = HTTP_METHODS.index(current)
         request.method = HTTP_METHODS[(index + step) % len(HTTP_METHODS)]
+        self.notify_requests_mutated()
         return request.method
 
     def save_selected_request_field(self, value: str | None = None) -> str | None:
@@ -1134,6 +1164,7 @@ class HomeStateMixin:
         setattr(request, field_name, value)
         self.mode = MODE_HOME_REQUEST_SELECT
         self.message = f"Updated {field_label}."
+        self.notify_requests_mutated()
         return field_name
 
     def scroll_response(self, step: int) -> None:

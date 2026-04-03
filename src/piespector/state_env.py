@@ -42,6 +42,7 @@ class EnvStateMixin:
         self.selected_env_field_index = 0
         self.env_creating_new = False
         self.message = f"Selected env {self.selected_env_name}."
+        self.notify_env_mutated()
 
     def create_env_set(self, name: str) -> bool:
         self.ensure_env_workspace()
@@ -60,6 +61,7 @@ class EnvStateMixin:
         self.env_scroll_offset = 0
         self.mode = MODE_NORMAL
         self.message = f"Created env {env_name}."
+        self.notify_env_mutated()
         return True
 
     def rename_selected_env_set(self, name: str) -> bool:
@@ -81,6 +83,7 @@ class EnvStateMixin:
         self.selected_env_name = new_name
         self.env_pairs = pairs
         self.message = f"Renamed env {new_name}."
+        self.notify_env_mutated()
         return True
 
     def delete_selected_env_set(self) -> bool:
@@ -100,6 +103,7 @@ class EnvStateMixin:
         self.env_creating_new = False
         self.mode = MODE_NORMAL
         self.message = f"Deleted env {env_name}."
+        self.notify_env_mutated()
         return True
 
     def import_env_sets(
@@ -138,6 +142,7 @@ class EnvStateMixin:
             if len(imported_names) == 1
             else f"Imported {len(imported_names)} envs."
         )
+        self.notify_env_mutated()
         return len(imported_names)
 
     def _unique_env_set_name(self, base_name: str, used_names: set[str]) -> str:
@@ -268,6 +273,7 @@ class EnvStateMixin:
             self.env_creating_new = False
             self.mode = MODE_ENV_EDIT
             self.message = ""
+            self.notify_env_mutated()
             return new_key
 
         item = self.get_selected_env_item()
@@ -293,6 +299,7 @@ class EnvStateMixin:
             updated = key
         self.mode = MODE_ENV_SELECT
         self.message = f"Updated {field_label.lower()}."
+        self.notify_env_mutated()
         return updated
 
     def delete_env_key(self, key: str) -> bool:
@@ -305,6 +312,7 @@ class EnvStateMixin:
         self.mode = MODE_NORMAL
         self.selected_env_field_index = 0
         self.message = f"Deleted {key}."
+        self.notify_env_mutated()
         return True
 
     def delete_selected_env_item(self) -> str | None:

@@ -74,7 +74,6 @@ class HomeNavigationController(HomeControllerBase):
             tree = self.sidebar_tree()
             if tree is None:
                 if self.state.collapse_selected_context():
-                    self.app._persist_requests()
                     self.app._refresh_home_sidebar_panel()
                     event.stop()
                     return True
@@ -137,7 +136,6 @@ class HomeNavigationController(HomeControllerBase):
                     event.stop()
                     return True
                 if self.state.toggle_selected_sidebar_node():
-                    self.app._persist_requests()
                     self.app._refresh_home_sidebar_panel()
                     event.stop()
                     return True
