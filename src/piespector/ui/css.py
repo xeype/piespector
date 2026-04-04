@@ -101,8 +101,11 @@ Screen {
 
 Select.piespector-selected-element > SelectCurrent {
     background: $accent;
-    color: $text;
     text-style: bold;
+}
+
+Select.piespector-selected-element > SelectCurrent Static#label {
+    color: $button-color-foreground;
 }
 
 #open-request-tabs {
@@ -278,6 +281,14 @@ Select > SelectOverlay > .option-list--option-hover {
 #response-body-content,
 #response-headers-content {
     height: 1fr;
+}
+
+#request-overview-content {
+    color: $text-muted;
+}
+
+#request-overview-content:hover {
+    color: $text;
 }
 
 #auth-type-select.piespector-selected-element > SelectCurrent,
