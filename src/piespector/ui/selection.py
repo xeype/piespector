@@ -51,4 +51,4 @@ def _resolve_app(subject):
 
 @lru_cache(maxsize=64)
 def _cached_selected_element_style(color: str, background: str) -> Style:
-    return Style(color=color, bgcolor=background, bold=True)
+    return Style(color=color, bgcolor=background)

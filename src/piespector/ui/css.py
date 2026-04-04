@@ -61,7 +61,6 @@ Screen {
     & > .tree--cursor {
         color: $text;
         background: $accent;
-        text-style: bold;
     }
 
     & > .tree--guides-selected {
@@ -75,7 +74,7 @@ Screen {
         & > .tree--cursor {
             color: $text;
             background: $accent;
-            text-style: bold;
+            text-style: none;
         }
 
         & > .tree--guides-selected {
@@ -101,7 +100,6 @@ Screen {
 
 Select.piespector-selected-element > SelectCurrent {
     background: $accent;
-    text-style: bold;
 }
 
 Select.piespector-selected-element > SelectCurrent Static#label {
@@ -185,7 +183,7 @@ Select > SelectOverlay > .option-list--option-highlighted,
 Select > SelectOverlay:focus > .option-list--option-highlighted {
     color: $text;
     background: $accent;
-    text-style: bold;
+    text-style: none;
 }
 
 Select > SelectOverlay > .option-list--option-hover {
@@ -235,7 +233,6 @@ Select > SelectOverlay > .option-list--option-hover {
 #request-tabs ContentTabs:focus .-active {
     color: $text;
     background: $accent;
-    text-style: bold;
 }
 
 #request-tabs ContentTab:focus {
@@ -246,7 +243,6 @@ Select > SelectOverlay > .option-list--option-hover {
 #request-tabs ContentTab.-active:focus {
     color: $text;
     background: $accent;
-    text-style: bold;
     background-tint: 0%;
 }
 
@@ -341,7 +337,6 @@ Select > SelectOverlay > .option-list--option-hover {
 #response-tabs Tab.-active:focus {
     color: $text;
     background: $accent;
-    text-style: bold;
     background-tint: 0%;
 }
 
@@ -353,7 +348,6 @@ Select > SelectOverlay > .option-list--option-hover {
 #response-tabs:focus .-active {
     color: $text;
     background: $accent;
-    text-style: bold;
 }
 
 #response-panel.piespector-tab-select #response-tabs Tab.-active {
@@ -413,7 +407,6 @@ Select > SelectOverlay > .option-list--option-hover {
     & > .tree--cursor {
         color: $text;
         background: $accent;
-        text-style: bold;
     }
 
     & > .tree--guides-selected {
@@ -427,7 +420,7 @@ Select > SelectOverlay > .option-list--option-hover {
         & > .tree--cursor {
             color: $text;
             background: $accent;
-            text-style: bold;
+            text-style: none;
         }
 
         & > .tree--guides-selected {
@@ -518,7 +511,6 @@ DataTable {
     & > .datatable--fixed-cursor {
         color: $text;
         background: $accent;
-        text-style: bold;
     }
 
     &:focus {
@@ -529,7 +521,7 @@ DataTable {
         & > .datatable--fixed-cursor {
             color: $text;
             background: $accent;
-            text-style: bold;
+            text-style: none;
         }
     }
 }
@@ -571,7 +563,6 @@ TextArea {
     margin: 0 1 0 0;
     color: $footer-key-foreground;
     background: transparent;
-    text-style: bold;
 }
 
 #status-line .piespector-footer__context {
@@ -584,7 +575,6 @@ TextArea {
     margin: 0 1 0 0;
     color: $footer-key-foreground;
     background: transparent;
-    text-style: bold;
 }
 
 #status-line .piespector-footer__env-value {
@@ -606,7 +596,6 @@ TextArea {
     width: auto;
     color: $footer-key-foreground;
     background: transparent;
-    text-style: bold;
 }
 
 #command-line-content {
