@@ -150,7 +150,6 @@ Select.piespector-selected-element > SelectCurrent {
     padding: 0 1;
 }
 
-#method-select > SelectCurrent:hover,
 #method-select.piespector-selected-element > SelectCurrent {
     outline: solid $accent;
 }
@@ -281,27 +280,9 @@ Select > SelectOverlay > .option-list--option-hover {
     height: 1fr;
 }
 
-#request-overview-content:hover,
-#request-auth-content:hover,
-#request-body-preview:hover,
-#request-params-table:hover,
-#request-headers-table:hover,
-#request-body-table:hover,
-#request-overview-input:hover,
-#auth-field-input:hover,
-#request-params-input:hover,
-#request-headers-input:hover,
-#request-body-input:hover {
-    outline: solid $accent;
-}
-
-#auth-type-select > SelectCurrent:hover,
 #auth-type-select.piespector-selected-element > SelectCurrent,
-#auth-option-select > SelectCurrent:hover,
 #auth-option-select.piespector-selected-element > SelectCurrent,
-#body-type-select > SelectCurrent:hover,
 #body-type-select.piespector-selected-element > SelectCurrent,
-#body-raw-type-select > SelectCurrent:hover,
 #body-raw-type-select.piespector-selected-element > SelectCurrent {
     outline: solid $accent;
 }
