@@ -494,10 +494,6 @@ def _sync_input_widget(
 def _deactivate_table_widget(table: DataTable) -> None:
     if not table.has_focus:
         return
-    app = table.app
-    if app is not None:
-        app.set_focus(None)
-        return
     table.blur()
 
 

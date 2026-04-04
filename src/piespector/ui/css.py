@@ -59,12 +59,11 @@ Screen {
     scrollbar-size: 1 1;
 
     & > .tree--cursor {
-        color: $text;
-        background: $accent;
+        background: transparent;
     }
 
     & > .tree--guides-selected {
-        color: $accent;
+        color: $text-muted;
     }
 
     &:focus {

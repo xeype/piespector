@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from rich.style import Style
 from textual import events
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.widgets import ContentSwitcher, DataTable, Input, Select, Static, Tab, TabbedContent, TabPane, Tabs, Tree
+from textual.widgets._tree import TreeNode
 
 from piespector.domain.editor import (
     AUTH_API_KEY_LOCATION_OPTIONS,
@@ -49,6 +51,11 @@ from piespector.ui.select import PiespectorSelect
 
 class SidebarTree(Tree, inherit_bindings=False):
     BINDINGS = []
+
+    def render_label(self, node: TreeNode, base_style: Style, style: Style) -> object:
+        if not self.has_focus:
+            style = Style.null()
+        return super().render_label(node, base_style, style)
 
 
 class HomeScreen(PiespectorScreen):

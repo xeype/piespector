@@ -49,6 +49,7 @@ from piespector.screens.env.screen import EnvScreen
 from piespector.screens.history.controller import HistoryController
 from piespector.screens.history.screen import HistoryScreen
 from piespector.screens.home.controller import HomeController
+from piespector.screens.home.selection import home_selection
 from piespector.screens.home.screen import HomeScreen
 from piespector.screen_refresh import ScreenRefreshCoordinator
 from piespector.state import PiespectorState
@@ -446,7 +447,8 @@ class PiespectorApp(App[None]):
                 self.set_focus(url_input)
                 return
 
-        self.set_focus(None)
+        if home_selection(self.state).panel != "sidebar":
+            self.set_focus(None)
         for widget_id in (
             "method-select",
             "auth-type-select",
