@@ -283,13 +283,6 @@ Select > SelectOverlay > .option-list--option-hover {
     height: 1fr;
 }
 
-#request-overview-content {
-    color: $text-muted;
-}
-
-#request-overview-content:hover {
-    color: $text;
-}
 
 #auth-type-select.piespector-selected-element > SelectCurrent,
 #auth-option-select.piespector-selected-element > SelectCurrent,
