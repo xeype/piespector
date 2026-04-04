@@ -56,6 +56,7 @@ class ScreenRefreshCoordinator:
             "_env_visible_rows": self.env_visible_rows,
             "_has_live_screen": self.has_live_screen,
             "_history_detail_scroll_step": self.history_detail_scroll_step,
+            "_history_detail_visible_rows": self.history_detail_visible_rows,
             "_history_visible_rows": self.history_visible_rows,
             "_home_request_list_visible_rows": self.home_request_list_visible_rows,
             "_home_response_scroll_step": self.home_response_scroll_step,
@@ -307,10 +308,20 @@ class ScreenRefreshCoordinator:
         )
 
     def refresh_history_screen(self) -> None:
+        try:
+            history_sidebar_subtitle = self.app._query_current("#history-sidebar-subtitle", Static)
+        except NoMatches:
+            history_sidebar_subtitle = None
+        visible_rows = self.app._history_detail_visible_rows()
         history_render.refresh_history_widgets(
             self.state,
             self.app._query_current("#history-list", DataTable),
             self.app._query_current("#history-detail", Static),
+            self.app._query_current("#history-sidebar-container"),
+            self.app._query_current("#history-detail-container"),
+            history_sidebar_subtitle=history_sidebar_subtitle,
+            request_visible_rows=visible_rows,
+            response_visible_rows=visible_rows,
         )
 
     def refresh_overlay_editors(self) -> None:
@@ -353,6 +364,14 @@ class ScreenRefreshCoordinator:
             return max(history_list.size.height - 2, 6)
         except NoMatches:
             return 14
+
+    def history_detail_visible_rows(self) -> int:
+        try:
+            detail = self.app._query_current("#history-detail", Static)
+            # subtract ~10 rows for summary block + tab label rows + separators
+            return max((detail.size.height - 10) // 2, 4)
+        except NoMatches:
+            return 8
 
     def home_request_list_visible_rows(self) -> int:
         try:

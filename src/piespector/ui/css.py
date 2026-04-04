@@ -397,9 +397,7 @@ Select > SelectOverlay > .option-list--option-hover {
 }
 
 #env-sidebar-container {
-    width: 36;
-    min-width: 28;
-    max-width: 46;
+    width: 1fr;
     height: 1fr;
     border: solid $surface-lighten-2;
     border-title-align: left;
@@ -476,19 +474,39 @@ Select > SelectOverlay > .option-list--option-hover {
 }
 
 #history-sidebar-container {
-    width: 42;
-    min-width: 38;
-    max-width: 52;
+    width: 1fr;
     height: 1fr;
+    border: solid $surface-lighten-2;
+    border-title-align: left;
+    border-title-color: $text-muted;
+    padding: 0 1;
+}
+
+#history-sidebar-container.piespector-focus-frame {
+    border: solid $accent;
+    border-title-color: $text;
 }
 
 #history-list {
     height: 1fr;
 }
 
+#history-sidebar-subtitle {
+    dock: bottom;
+}
+
 #history-detail-container {
     height: 1fr;
     width: 1fr;
+    border: solid $surface-lighten-2;
+    border-title-align: left;
+    border-title-color: $text-muted;
+    padding: 0 1;
+}
+
+#history-detail-container.piespector-focus-frame {
+    border: solid $accent;
+    border-title-color: $text;
 }
 
 #history-detail {

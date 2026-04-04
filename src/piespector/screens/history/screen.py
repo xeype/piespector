@@ -24,6 +24,7 @@ class HistoryScreen(PiespectorScreen):
         with Horizontal(id="history-screen"):
             with Vertical(id="history-sidebar-container"):
                 yield DataTable(id="history-list", cursor_type="row", zebra_stripes=True)
+                yield Static("", classes="panel-subtitle", id="history-sidebar-subtitle")
             with Vertical(id="history-detail-container"):
                 yield Static("", id="history-detail")
 
@@ -32,3 +33,5 @@ class HistoryScreen(PiespectorScreen):
         history_list = self.query_one("#history-list", DataTable)
         history_list.add_columns("When", "Meta", "Name")
         self.disable_focus("history-list")
+        self.query_one("#history-sidebar-container").border_title = "History"
+        self.query_one("#history-detail-container").border_title = "Detail"

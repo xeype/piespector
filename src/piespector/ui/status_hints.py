@@ -173,8 +173,9 @@ TAB_HINTS: dict[str, tuple[HintItem, ...]] = {
     ),
     TAB_HISTORY: (
         ("j/k", "entries"),
-        (KEY_WORKSPACE_SEARCH, "search"),
-        ("e", "response"),
+        ("r", "replay"),
+        ("e", "inspect"),
+        (KEY_WORKSPACE_SEARCH, "workspace"),
         (KEY_COMMAND_PALETTE, "commands"),
     ),
     TAB_HELP: (

@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from textual import events
 
-from piespector.domain.editor import HISTORY_DETAIL_BLOCK_REQUEST
+from piespector.domain.editor import HISTORY_DETAIL_BLOCK_REQUEST, TAB_HOME, TAB_LABELS
 from piespector.domain.modes import MODE_HISTORY_RESPONSE_SELECT
 from piespector.interactions.keys import (
     DOWN_KEYS,
@@ -18,6 +18,8 @@ from piespector.interactions.keys import (
     RIGHT_KEYS,
     UP_KEYS,
 )
+
+KEY_REPLAY = "r"
 if TYPE_CHECKING:
     from piespector.app import PiespectorApp
 
@@ -39,6 +41,14 @@ class HistoryController:
 
         if event.key in UP_KEYS:
             self.state.select_history_entry(-1)
+            self.app._refresh_screen()
+            event.stop()
+            return True
+
+        if event.key == KEY_REPLAY:
+            replayed = self.state.replay_selected_history_entry()
+            if replayed is not None:
+                self.state.switch_tab(TAB_HOME, TAB_LABELS[TAB_HOME])
             self.app._refresh_screen()
             event.stop()
             return True

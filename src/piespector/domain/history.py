@@ -27,6 +27,9 @@ class HistoryEntry:
     error: str = ""
 
 
+_BODY_SEARCH_LIMIT = 4096
+
+
 def history_entry_matches(entry: HistoryEntry, raw_query: str) -> bool:
     query = raw_query.strip().lower()
     if not query:
@@ -46,5 +49,7 @@ def history_entry_matches(entry: HistoryEntry, raw_query: str) -> bool:
         f"{request_path} {url}",
         f"{entry.method} {status} {request_name} {url}",
         f"{entry.method} {status} {request_path} {url}",
+        entry.response_body[:_BODY_SEARCH_LIMIT],
+        entry.request_body[:_BODY_SEARCH_LIMIT],
     )
     return any(query in value.lower() for value in haystacks if value)
