@@ -158,6 +158,30 @@ class PiespectorSearchProvider(PiespectorProvider):
             )
 
 
+class PiespectorHistorySearchProvider(PiespectorProvider):
+    def _entry_display(self, entry) -> str:
+        from piespector.search import history_search_display
+        return history_search_display(entry)
+
+    def _entry_callback(self, entry):
+        return lambda e=entry: self.piespector_app.navigate_to_history_entry(e.history_id)
+
+    async def discover(self):
+        for entry in self.piespector_app.state.history_entries:
+            display = self._entry_display(entry)
+            yield DiscoveryHit(display, self._entry_callback(entry), text=display, help="Navigate to this history entry.")
+
+    async def search(self, query: str):
+        from piespector.search import history_search_display
+        matcher = self.matcher(query)
+        state = self.piespector_app.state
+        for entry in state.history_entries:
+            display = history_search_display(entry)
+            score = matcher.match(display)
+            if score > 0:
+                yield Hit(score, matcher.highlight(display), self._entry_callback(entry), text=display, help="Navigate to this history entry.")
+
+
 class PiespectorThemeProvider(PiespectorProvider):
     @property
     def commands(self) -> list[tuple[str, object]]:

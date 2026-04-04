@@ -175,7 +175,7 @@ TAB_HINTS: dict[str, tuple[HintItem, ...]] = {
         ("j/k", "entries"),
         ("r", "replay"),
         ("e", "inspect"),
-        (KEY_WORKSPACE_SEARCH, "workspace"),
+        (KEY_WORKSPACE_SEARCH, "search"),
         (KEY_COMMAND_PALETTE, "commands"),
     ),
     TAB_HELP: (

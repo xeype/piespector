@@ -62,6 +62,7 @@ from piespector.ui import APP_BINDINGS, APP_CSS
 from piespector.ui.command_palette import (
     PiespectorPalette,
     PiespectorCommandProvider,
+    PiespectorHistorySearchProvider,
     PiespectorSearchProvider,
     PiespectorThemeProvider,
 )
@@ -219,12 +220,11 @@ class PiespectorApp(App[None]):
         } and self.state.mode in COMMAND_BLOCKED_MODES:
             return False
 
-        if (
-            action == "enter_jump_mode"
-            and self.state.mode in COMMAND_BLOCKED_MODES
-            and self.state.mode != MODE_HOME_URL_EDIT
-        ):
-            return False
+        if action == "enter_jump_mode":
+            if self.state.current_tab != TAB_HOME:
+                return False
+            if self.state.mode in COMMAND_BLOCKED_MODES and self.state.mode != MODE_HOME_URL_EDIT:
+                return False
 
         if action in {
             "home_browse_up",
@@ -292,6 +292,13 @@ class PiespectorApp(App[None]):
         self.open_command_palette()
 
     def open_search_palette(self) -> None:
+        if self.state.current_tab == TAB_HISTORY:
+            self.open_palette(
+                providers=[PiespectorHistorySearchProvider],
+                placeholder="Search history by method, name, URL, status…",
+                palette_id="--history-search",
+            )
+            return
         self.open_palette(
             providers=[PiespectorSearchProvider],
             placeholder="Search collections, folders, and requests…",
@@ -300,6 +307,15 @@ class PiespectorApp(App[None]):
 
     def action_search_workspace(self) -> None:
         self.open_search_palette()
+
+    def navigate_to_history_entry(self, history_id: str) -> None:
+        for index, entry in enumerate(self.state.history_entries):
+            if entry.history_id == history_id:
+                self.state.history_filter_query = ""
+                self.state.selected_history_index = index
+                self.state.history_scroll_offset = 0
+                break
+        self._refresh_screen()
 
     def action_show_home(self) -> None:
         self.state.switch_tab(TAB_HOME, TAB_LABELS[TAB_HOME])

@@ -397,7 +397,9 @@ Select > SelectOverlay > .option-list--option-hover {
 }
 
 #env-sidebar-container {
-    width: 1fr;
+    width: 36;
+    min-width: 28;
+    max-width: 48;
     height: 1fr;
     border: solid $surface-lighten-2;
     border-title-align: left;
