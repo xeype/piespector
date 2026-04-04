@@ -73,6 +73,7 @@ from piespector.screens.home.request.request_auth import (
     render_request_auth_editor,
 )
 from piespector.screens.home.request.request_body import (
+    RequestBodyTable,
     body_context_label,
     refresh_request_body_table,
     render_request_body_preview,
@@ -82,8 +83,8 @@ from piespector.screens.home.request.request_metadata import (
     render_request_overview_fields,
     request_label,
 )
-from piespector.screens.home.request.header_editor import refresh_request_headers_table
-from piespector.screens.home.request.query_editor import refresh_request_params_table
+from piespector.screens.home.request.header_editor import RequestHeadersTable, refresh_request_headers_table
+from piespector.screens.home.request.query_editor import RequestParamsTable, refresh_request_params_table
 from piespector.screens.home.request.dropdown import sync_select_widget
 from piespector.screens.home.request.url_bar import render_request_url_preview
 from piespector.screens.home.request.url_bar import render_top_url_bar
@@ -580,11 +581,11 @@ def refresh_home_request_content(
     note = tabs.query_one("#request-content-note", Static)
     body_type_select = tabs.query_one("#body-type-select", Select)
     body_raw_type_select = tabs.query_one("#body-raw-type-select", Select)
-    params_table = tabs.query_one("#request-params-table", DataTable)
+    params_table = tabs.query_one("#request-params-table", RequestParamsTable)
     params_input = tabs.query_one("#request-params-input", Input)
-    headers_table = tabs.query_one("#request-headers-table", DataTable)
+    headers_table = tabs.query_one("#request-headers-table", RequestHeadersTable)
     headers_input = tabs.query_one("#request-headers-input", Input)
-    body_table = tabs.query_one("#request-body-table", DataTable)
+    body_table = tabs.query_one("#request-body-table", RequestBodyTable)
     body_input = tabs.query_one("#request-body-input", Input)
     body_preview = tabs.query_one("#request-body-preview", Static)
 
@@ -822,22 +823,29 @@ def refresh_home_request_content(
         body_table.display = True
         body_preview.display = False
         items = state.get_active_request_body_items()
-        item_index = state.selected_body_index - 1
+        field_name, field_label = state.selected_body_field()
         if state.mode == MODE_HOME_BODY_EDIT:
-            if item_index < 0 or item_index >= len(items):
+            item_index = state.selected_body_index - 1
+            if state.body_creating_new:
                 body_initial = ""
-            else:
+            elif 0 <= item_index < len(items):
                 item = items[item_index]
-                body_initial = f"{item.key}={item.value}" if item.value else item.key
+                body_initial = item.key if field_name == "key" else item.value
+            else:
+                body_initial = ""
             _sync_input_widget(
                 body_input,
                 body_initial,
                 display=True,
-                placeholder="KEY=value",
+                placeholder=f"Body {field_label.lower()}",
                 focus_token=(
-                    "body-field",
-                    active_request.request_id,
-                    state.selected_body_index,
+                    (
+                        "body-field",
+                        active_request.request_id,
+                        state.body_creating_new,
+                        state.selected_body_index,
+                        state.selected_body_field_index,
+                    )
                 ),
             )
         else:

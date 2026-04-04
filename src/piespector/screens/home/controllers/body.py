@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from textual import events
 
+from piespector.domain.editor import BODY_KEY_VALUE_TYPES
 from piespector.domain.modes import (
     MODE_HOME_BODY_EDIT,
     MODE_HOME_BODY_RAW_TYPE_EDIT,
@@ -12,6 +13,8 @@ from piespector.interactions.keys import (
     ARROW_LEFT_KEYS,
     ARROW_RIGHT_KEYS,
     DOWN_KEYS,
+    FIELD_NEXT_KEYS,
+    FIELD_PREVIOUS_KEYS,
     KEY_ADD,
     KEY_DELETE_ROW,
     KEY_ENTER,
@@ -69,6 +72,30 @@ class HomeBodyController(HomeControllerBase):
             self.move_request_block(1)
             self.app._refresh_screen()
             event.stop()
+            return
+
+        if event.key in FIELD_PREVIOUS_KEYS:
+            request = self.state.get_active_request()
+            if (
+                request is not None
+                and request.body_type in BODY_KEY_VALUE_TYPES
+                and 0 < self.state.selected_body_index <= len(self.state.get_active_request_body_items())
+            ):
+                self.state.cycle_body_field(-1)
+                self.app._refresh_home_request_panel()
+                event.stop()
+            return
+
+        if event.key in FIELD_NEXT_KEYS:
+            request = self.state.get_active_request()
+            if (
+                request is not None
+                and request.body_type in BODY_KEY_VALUE_TYPES
+                and 0 < self.state.selected_body_index <= len(self.state.get_active_request_body_items())
+            ):
+                self.state.cycle_body_field(1)
+                self.app._refresh_home_request_panel()
+                event.stop()
             return
 
         if event.key == KEY_ADD:

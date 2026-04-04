@@ -55,6 +55,8 @@ class HomeStateMixin:
         self.selected_param_index = 0
         self.selected_header_index = 0
         self.selected_body_index = 0
+        self.selected_body_field_index = 0
+        self.body_creating_new = False
         self._clamp_selected_request_field_index()
 
     def cycle_home_editor_tab(self, step: int) -> None:
@@ -66,6 +68,8 @@ class HomeStateMixin:
         self.selected_param_index = 0
         self.selected_header_index = 0
         self.selected_body_index = 0
+        self.selected_body_field_index = 0
+        self.body_creating_new = False
         self._clamp_selected_request_field_index()
 
     def enter_home_section_select_mode(self) -> None:
@@ -489,15 +493,13 @@ class HomeStateMixin:
 
     def clamp_selected_param_index(self) -> None:
         item_count = len(self.get_active_request_params())
-        max_index = max(0, item_count - 1)
+        max_index = item_count  # item_count is the add-row position
         self.selected_param_index = max(0, min(self.selected_param_index, max_index))
 
     def select_param_row(self, step: int) -> None:
         item_count = len(self.get_active_request_params())
-        if item_count == 0:
-            self.selected_param_index = 0
-            return
-        self.selected_param_index = (self.selected_param_index + step) % item_count
+        total = item_count + 1  # include add row
+        self.selected_param_index = (self.selected_param_index + step) % total
 
     def cycle_param_field(self, step: int) -> None:
         self.selected_param_field_index = (self.selected_param_field_index + step) % 2
@@ -626,15 +628,13 @@ class HomeStateMixin:
 
     def clamp_selected_header_index(self, total_count: int | None = None) -> None:
         item_count = total_count if total_count is not None else len(self.get_active_request_headers())
-        max_index = max(0, item_count - 1)
+        max_index = item_count  # item_count is the add-row position
         self.selected_header_index = max(0, min(self.selected_header_index, max_index))
 
     def select_header_row(self, step: int, total_count: int | None = None) -> None:
         item_count = total_count if total_count is not None else len(self.get_active_request_headers())
-        if item_count == 0:
-            self.selected_header_index = 0
-            return
-        self.selected_header_index = (self.selected_header_index + step) % item_count
+        total = item_count + 1  # include add row
+        self.selected_header_index = (self.selected_header_index + step) % total
 
     def cycle_header_field(self, step: int) -> None:
         self.selected_header_field_index = (self.selected_header_field_index + step) % 2
@@ -812,6 +812,8 @@ class HomeStateMixin:
         request.body_type = values[(index + step) % len(values)]
         request.restore_active_body_text()
         self.selected_body_index = 0
+        self.selected_body_field_index = 0
+        self.body_creating_new = False
         self.message = f"Body type: {self.body_type_label(request.body_type)}."
         self.notify_requests_mutated()
         return request.body_type
@@ -840,6 +842,8 @@ class HomeStateMixin:
         request.body_type = value if value in values else BODY_TYPE_OPTIONS[0][0]
         request.restore_active_body_text()
         self.selected_body_index = 0
+        self.selected_body_field_index = 0
+        self.body_creating_new = False
         self.leave_home_body_type_edit_mode()
         self.message = f"Body type: {self.body_type_label(request.body_type)}."
         self.notify_requests_mutated()
@@ -862,6 +866,8 @@ class HomeStateMixin:
         request = self.get_active_request()
         if request is None:
             self.selected_body_index = 0
+            self.selected_body_field_index = 0
+            self.body_creating_new = False
             return
         if request.body_type == "raw":
             min_index = 0
@@ -876,11 +882,21 @@ class HomeStateMixin:
             min_index = 0
             max_index = 0
         self.selected_body_index = max(min_index, min(self.selected_body_index, max_index))
+        if request.body_type in BODY_KEY_VALUE_TYPES:
+            self.selected_body_field_index = max(
+                0,
+                min(self.selected_body_field_index, 1),
+            )
+        else:
+            self.selected_body_field_index = 0
+            self.body_creating_new = False
 
     def select_body_row(self, step: int) -> None:
         request = self.get_active_request()
         if request is None:
             self.selected_body_index = 0
+            self.selected_body_field_index = 0
+            self.body_creating_new = False
             return
         if request.body_type == "raw":
             min_index = 0
@@ -904,6 +920,14 @@ class HomeStateMixin:
         current_index = options.index(current)
         self.selected_body_index = options[(current_index + step) % len(options)]
 
+    def cycle_body_field(self, step: int) -> None:
+        self.selected_body_field_index = (self.selected_body_field_index + step) % 2
+
+    def selected_body_field(self) -> tuple[str, str]:
+        if self.selected_body_field_index == 0:
+            return ("key", "Key")
+        return ("value", "Value")
+
     def enter_home_body_select_mode(self, origin_mode: str | None = None) -> None:
         request = self.get_active_request()
         if request is None:
@@ -914,6 +938,7 @@ class HomeStateMixin:
         self.pin_active_request()
         self.home_body_select_return_mode = origin_mode or self.mode
         self.mode = MODE_HOME_BODY_SELECT
+        self.body_creating_new = False
         self.clamp_selected_body_index()
         self.message = ""
 
@@ -996,8 +1021,16 @@ class HomeStateMixin:
         if request.body_type in BODY_KEY_VALUE_TYPES:
             items = self.get_active_request_body_items()
             item_index = self.selected_body_index - 1
-            if creating or item_index < 0 or item_index >= len(items):
+            self.body_creating_new = creating or item_index < 0 or item_index >= len(items)
+            if self.body_creating_new:
                 self.selected_body_index = len(items) + 1
+                self.selected_body_field_index = 0
+            elif not items:
+                self.mode = MODE_HOME_BODY_SELECT
+                self.message = "Nothing to edit."
+                return
+        else:
+            self.body_creating_new = False
         self.message = ""
 
     def leave_home_body_edit_mode(self) -> None:
@@ -1043,32 +1076,46 @@ class HomeStateMixin:
             self.notify_requests_mutated()
             return "body_text"
         if request.body_type in BODY_KEY_VALUE_TYPES:
-            payload = raw.strip()
-            if not payload:
-                self.message = "Use KEY=value"
-                return None
-            if "=" in payload:
-                key, val = payload.split("=", 1)
-            else:
-                key, val = payload, ""
-            key = key.strip()
-            val = val.strip()
-            if not key:
-                self.message = "Use KEY=value"
-                return None
             items = self.get_active_request_body_items()
+            field_name, field_label = self.selected_body_field()
+            current_value = raw
+            if self.body_creating_new:
+                if field_name != "key":
+                    return None
+                new_key = current_value.strip()
+                if not new_key:
+                    self.message = "Key cannot be empty."
+                    return None
+                items.append(RequestKeyValue(key=new_key, value=""))
+                self.selected_body_index = len(items)
+                self.selected_body_field_index = 0
+                self.body_creating_new = False
+                self._restore_home_body_parent_mode()
+                self.message = f"Added body field {new_key}."
+                self.notify_requests_mutated()
+                return new_key
+
             item_index = self.selected_body_index - 1
             if item_index < 0 or item_index >= len(items):
-                items.append(RequestKeyValue(key=key, value=val))
-                self.selected_body_index = len(items)
+                self.message = "Nothing to edit."
+                return None
+            item = items[item_index]
+            if field_name == "key":
+                new_key = current_value.strip()
+                if not new_key:
+                    self.message = "Key cannot be empty."
+                    return None
+                item.key = new_key
+                updated = new_key
             else:
-                items[item_index].key = key
-                items[item_index].value = val
-                self.selected_body_index = item_index + 1
+                item.value = current_value
+                updated = item.key
+            self.selected_body_index = item_index + 1
+            self.body_creating_new = False
             self._restore_home_body_parent_mode()
-            self.message = f"Saved body field {key}."
+            self.message = f"Updated body {field_label.lower()}."
             self.notify_requests_mutated()
-            return key
+            return updated
         return None
 
     def delete_selected_body_field(self) -> str | None:
@@ -1107,14 +1154,17 @@ class HomeStateMixin:
     def _restore_home_body_parent_mode(self) -> None:
         if self.home_body_content_return_mode == MODE_HOME_BODY_RAW_TYPE_EDIT:
             self.mode = MODE_HOME_BODY_RAW_TYPE_EDIT
+            self.body_creating_new = False
             self.message = ""
             return
         if self.home_body_content_return_mode == MODE_HOME_BODY_TYPE_EDIT:
             self.mode = MODE_HOME_BODY_TYPE_EDIT
+            self.body_creating_new = False
             self.message = ""
             return
         self.clamp_selected_body_index()
         self.mode = MODE_HOME_BODY_SELECT
+        self.body_creating_new = False
         self.message = ""
 
     def select_request_field(self, step: int) -> None:

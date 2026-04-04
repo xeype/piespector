@@ -205,7 +205,8 @@ def status_hint_items(state: PiespectorState) -> list[HintItem]:
         request = state.get_active_request()
         if request is not None and request.body_type in BODY_KEY_VALUE_TYPES:
             hints.insert(3, ("a", "add"))
-            hints.insert(4, ("d", "delete"))
+            hints.insert(4, ("H/L", "fields"))
+            hints.insert(5, ("d", "delete"))
         else:
             hints = [item for item in hints if item[0] != "space"]
         return hints

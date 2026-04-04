@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from rich.text import Text
 
 from piespector.domain.editor import (
+    BODY_KEY_VALUE_TYPES,
     HOME_SIDEBAR_JUMP_KEY,
     HOME_SIDEBAR_LABEL,
     REQUEST_EDITOR_JUMP_BINDINGS,
@@ -123,6 +124,13 @@ def command_line_content(state: PiespectorState) -> CommandLineContent | None:
 
     if state.mode == MODE_HOME_BODY_EDIT:
         request = state.get_active_request()
+        if request is not None and request.body_type in BODY_KEY_VALUE_TYPES:
+            if state.body_creating_new:
+                return CommandLineContent("New body key. Enter saves, Esc cancels.")
+            _field_name, field_label = state.selected_body_field()
+            return CommandLineContent(
+                f"Editing body {field_label.lower()}. Enter saves, Esc cancels."
+            )
         return CommandLineContent(
             "Editing path. Enter saves, Esc cancels."
             if request is not None and request.body_type == "binary"

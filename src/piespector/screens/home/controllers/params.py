@@ -83,18 +83,22 @@ class HomeParamsController(HomeControllerBase):
             return
 
         if event.key == KEY_SPACE:
-            self.state.toggle_selected_param()
-            self.app._refresh_screen()
-            event.stop()
+            if self.state.selected_param_index < len(self.state.get_active_request_params()):
+                self.state.toggle_selected_param()
+                self.app._refresh_screen()
+                event.stop()
             return
 
         if event.key in OPEN_KEYS:
-            self.state.enter_home_params_edit_mode()
+            creating = self.state.selected_param_index >= len(self.state.get_active_request_params())
+            self.state.enter_home_params_edit_mode(creating=creating)
             self.app._refresh_screen()
             event.stop()
             return
 
         if event.key == KEY_DELETE_ROW:
+            if self.state.selected_param_index >= len(self.state.get_active_request_params()):
+                return
             self.state.delete_selected_param()
             self.app._refresh_screen()
             event.stop()

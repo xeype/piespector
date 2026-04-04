@@ -38,11 +38,22 @@ class HomeHeadersController(HomeControllerBase):
             preview_auto_headers(request, self.state.env_pairs)
         )
 
+    def selected_header_row_is_add(self) -> bool:
+        request = self.state.get_active_request()
+        if request is None:
+            return True
+        auto_headers = preview_auto_headers(request, self.state.env_pairs)
+        total = len(request.header_items) + len(auto_headers)
+        return self.state.selected_header_index >= total
+
     def selected_header_row_is_auto(self) -> bool:
         request = self.state.get_active_request()
         if request is None:
             return False
-        return self.state.selected_header_index >= len(request.header_items)
+        return (
+            not self.selected_header_row_is_add()
+            and self.state.selected_header_index >= len(request.header_items)
+        )
 
     def selected_auto_header_name(self) -> str | None:
         request = self.state.get_active_request()
@@ -111,6 +122,8 @@ class HomeHeadersController(HomeControllerBase):
             return
 
         if event.key == KEY_SPACE:
+            if self.selected_header_row_is_add():
+                return
             if self.selected_header_row_is_auto():
                 header_name = self.selected_auto_header_name()
                 if header_name is not None:
@@ -125,6 +138,11 @@ class HomeHeadersController(HomeControllerBase):
             return
 
         if event.key in OPEN_KEYS:
+            if self.selected_header_row_is_add():
+                self.state.enter_home_headers_edit_mode(creating=True)
+                self.app._refresh_screen()
+                event.stop()
+                return
             if self.selected_header_row_is_auto():
                 self.state.message = messages.HOME_AUTO_HEADER_EDIT
                 self.app._refresh_screen()
@@ -136,6 +154,8 @@ class HomeHeadersController(HomeControllerBase):
             return
 
         if event.key == KEY_DELETE_ROW:
+            if self.selected_header_row_is_add():
+                return
             if self.selected_header_row_is_auto():
                 self.state.message = messages.HOME_AUTO_HEADER_DELETE
                 self.app._refresh_screen()

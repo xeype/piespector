@@ -123,6 +123,20 @@ class RenderingMiscTests(unittest.TestCase):
         self.assertIn("Params: h/l tabs, j/k rows, H/L fields, e or Enter edit", rendered)
         self.assertNotIn("left/right fields", rendered)
 
+    def test_render_help_viewport_home_body_context_uses_shift_field_keys(self) -> None:
+        state = PiespectorState(
+            current_tab="help",
+            help_source_tab="home",
+            help_source_mode="HOME_BODY_SELECT",
+        )
+        request = RequestDefinition(request_id="r1", body_type="form-data")
+        state.requests = [request]
+        state.active_request_id = request.request_id
+
+        rendered = render_plain(render_help_viewport(state), width=160)
+
+        self.assertIn("Body: h/l tabs, j/k rows, H/L fields, e or Enter open or edit", rendered)
+
     def test_render_env_viewport_empty_and_populated_states(self) -> None:
         empty_state = PiespectorState(current_tab="env")
         empty_rendered = render_plain(render_env_viewport(empty_state, viewport_height=20))
@@ -651,9 +665,14 @@ class UiAndScrollbarTests(unittest.TestCase):
     def test_status_hints_use_shift_field_keys_for_params_and_headers(self) -> None:
         params_state = PiespectorState(current_tab="home", mode="HOME_PARAMS_SELECT")
         headers_state = PiespectorState(current_tab="home", mode="HOME_HEADERS_SELECT")
+        body_state = PiespectorState(current_tab="home", mode="HOME_BODY_SELECT")
+        request = RequestDefinition(body_type="form-data")
+        body_state.requests = [request]
+        body_state.active_request_id = request.request_id
 
         self.assertIn(("H/L", "fields"), status_hint_items(params_state))
         self.assertIn(("H/L", "fields"), status_hint_items(headers_state))
+        self.assertIn(("H/L", "fields"), status_hint_items(body_state))
 
     def test_css_uses_native_widget_scrollbars(self) -> None:
         self.assertIn("DataTable {", APP_CSS)
@@ -681,6 +700,26 @@ class UiAndScrollbarTests(unittest.TestCase):
         self.assertRegex(
             APP_CSS,
             r"#sidebar-tree \{[\s\S]*?&:focus \{[\s\S]*?background: \$background;[\s\S]*?background-tint: 0%;",
+        )
+
+    def test_data_table_uses_app_background(self) -> None:
+        self.assertRegex(
+            APP_CSS,
+            r"DataTable \{[\s\S]*?background: \$background;",
+        )
+        self.assertRegex(
+            APP_CSS,
+            r"DataTable \{[\s\S]*?& > \.datatable--odd-row,[\s\S]*?& > \.datatable--even-row \{[\s\S]*?background: \$background;",
+        )
+        self.assertRegex(
+            APP_CSS,
+            r"DataTable \{[\s\S]*?&:focus \{[\s\S]*?background: \$background;[\s\S]*?background-tint: 0%;",
+        )
+
+    def test_request_body_table_styles_add_row_separately(self) -> None:
+        self.assertRegex(
+            APP_CSS,
+            r"#request-body-table > \.request-body-table--add-row \{[\s\S]*?background: \$surface-darken-1 40%;",
         )
 
     def test_sidebar_container_is_slightly_wider(self) -> None:

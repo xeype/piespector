@@ -44,7 +44,7 @@ def render_help_viewport(state: PiespectorState) -> RenderableType:
 
     navigation = Text()
     navigation.append(f"{HELP_SECTION_KEYS}\n")
-    for line in help_key_lines(source_tab, source_mode):
+    for line in help_key_lines(source_tab, source_mode, state):
         navigation.append(f"  {line}\n")
 
     imports = Text()

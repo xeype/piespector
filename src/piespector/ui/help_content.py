@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from piespector.domain.editor import TAB_ENV, TAB_HISTORY, TAB_HOME
+from piespector.domain.editor import BODY_KEY_VALUE_TYPES, TAB_ENV, TAB_HISTORY, TAB_HOME
 from piespector.domain.modes import (
     HOME_MODES,
     MODE_ENV_EDIT,
@@ -142,8 +142,14 @@ def help_command_context_mode(source_tab: str, source_mode: str) -> str:
     return MODE_NORMAL
 
 
-def help_key_lines(source_tab: str, source_mode: str) -> tuple[str, ...]:
+def help_key_lines(source_tab: str, source_mode: str, state=None) -> tuple[str, ...]:
     if source_tab == TAB_HOME:
+        if source_mode == MODE_HOME_BODY_SELECT and state is not None:
+            request = state.get_active_request()
+            if request is not None and request.body_type in BODY_KEY_VALUE_TYPES:
+                return (
+                    "Body: h/l tabs, j/k rows, H/L fields, e or Enter open or edit, a add for form bodies, d delete, space toggle, s send, v response, ctrl+u/d response scroll, Esc back",
+                )
         return HOME_HELP_KEY_LINES.get(source_mode, HOME_HELP_KEY_LINES[MODE_NORMAL])
     if source_tab == TAB_ENV:
         return ENV_HELP_KEY_LINES.get(source_mode, ENV_HELP_KEY_LINES[MODE_NORMAL])

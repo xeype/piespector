@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from rich.console import Group, RenderableType
+from rich.style import Style
 from rich.text import Text
 
 from textual.widgets import DataTable
+from textual.widgets._data_table import RowDoesNotExist, RowKey
 
 from piespector.domain.modes import MODE_HOME_HEADERS_EDIT, MODE_HOME_HEADERS_SELECT
 from piespector.domain.requests import RequestDefinition
@@ -13,8 +15,39 @@ from piespector.state import PiespectorState
 from piespector.ui.selection import effective_mode, selected_element_style
 
 
+class RequestHeadersTable(DataTable):
+    COMPONENT_CLASSES = DataTable.COMPONENT_CLASSES | {"request-headers-table--add-row"}
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._add_row_key: RowKey | None = None
+
+    def clear(self, columns: bool = False) -> RequestHeadersTable:
+        self._add_row_key = None
+        return super().clear(columns=columns)
+
+    def set_add_row_key(self, row_key: RowKey | None) -> None:
+        self._add_row_key = row_key
+        self.refresh()
+
+    def _get_row_style(self, row_index: int, base_style: Style) -> Style:
+        row_style = super()._get_row_style(row_index, base_style)
+        if self._add_row_key is None:
+            return row_style
+        try:
+            add_row_index = self.get_row_index(self._add_row_key)
+        except RowDoesNotExist:
+            self._add_row_key = None
+            return row_style
+        if row_index == add_row_index:
+            row_style += self.get_component_styles(
+                "request-headers-table--add-row"
+            ).rich_style
+        return row_style
+
+
 def refresh_request_headers_table(
-    table: DataTable,
+    table: RequestHeadersTable,
     request: RequestDefinition,
     state: PiespectorState,
 ) -> None:
@@ -59,9 +92,12 @@ def refresh_request_headers_table(
             Text(value or "-"),
         )
 
-    table.cursor_type = "row" if total_count else "none"
-    if total_count:
-        table.move_cursor(row=state.selected_header_index, column=0, animate=False)
+    add_row_key = table.add_row("+", "", Text("Add header"), "")
+    table.set_add_row_key(add_row_key)
+
+    table.cursor_type = "row"
+    row_index = max(0, min(state.selected_header_index, table.row_count - 1))
+    table.move_cursor(row=row_index, column=0, animate=False)
 
 
 def render_request_headers_fallback(

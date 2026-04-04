@@ -400,7 +400,13 @@ Select > SelectOverlay > .option-list--option-hover {
 
 DataTable {
     height: 1fr;
+    background: $background;
     scrollbar-size: 1 1;
+
+    & > .datatable--odd-row,
+    & > .datatable--even-row {
+        background: $background;
+    }
 
     & > .datatable--cursor,
     & > .datatable--fixed-cursor {
@@ -410,6 +416,9 @@ DataTable {
     }
 
     &:focus {
+        background: $background;
+        background-tint: 0%;
+
         & > .datatable--cursor,
         & > .datatable--fixed-cursor {
             color: $text;
@@ -417,6 +426,12 @@ DataTable {
             text-style: bold;
         }
     }
+}
+
+#request-params-table > .request-params-table--add-row,
+#request-headers-table > .request-headers-table--add-row,
+#request-body-table > .request-body-table--add-row {
+    background: $surface-darken-1 40%;
 }
 
 TextArea {

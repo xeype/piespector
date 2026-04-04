@@ -481,6 +481,26 @@ class AppUiTests(unittest.TestCase):
         self.assertEqual(request.header_items[0].key, "X-Trace-Id")
         self.assertEqual(request.header_items[0].value, "")
 
+    def test_creating_body_field_keeps_focus_on_new_row_key(self) -> None:
+        app = PiespectorApp()
+        request = RequestDefinition(body_type="form-data", body_form_items=[])
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+        app.state.mode = "HOME_BODY_SELECT"
+        app.state.selected_body_index = 0
+        app.state.selected_body_field_index = 0
+        app.state.enter_home_body_edit_mode(creating=True, origin_mode="HOME_BODY_SELECT")
+
+        saved_key = app.state.save_body_selection("file")
+
+        self.assertEqual(saved_key, "file")
+        self.assertEqual(app.state.mode, "HOME_BODY_SELECT")
+        self.assertEqual(app.state.selected_body_index, 1)
+        self.assertEqual(app.state.selected_body_field_index, 0)
+        self.assertFalse(app.state.body_creating_new)
+        self.assertEqual(request.body_form_items[0].key, "file")
+        self.assertEqual(request.body_form_items[0].value, "")
+
     def test_headers_select_shift_l_keeps_headers_block_and_moves_field(self) -> None:
         app = PiespectorApp()
         request = RequestDefinition(
@@ -499,6 +519,28 @@ class AppUiTests(unittest.TestCase):
         self.assertEqual(app.state.home_editor_tab, "headers")
         self.assertEqual(app.state.selected_header_field_index, 1)
         self.assertEqual(app.state.mode, "HOME_HEADERS_SELECT")
+        self.assertTrue(event.stopped)
+
+    def test_body_select_shift_l_keeps_body_block_and_moves_field(self) -> None:
+        app = PiespectorApp()
+        request = RequestDefinition(
+            body_type="form-data",
+            body_form_items=[RequestKeyValue(key="file", value="@payload.bin")],
+        )
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+        app.state.home_editor_tab = "body"
+        app.state.mode = "HOME_BODY_SELECT"
+        app.state.selected_body_index = 1
+        app.state.selected_body_field_index = 0
+        event = FakeKeyEvent("L")
+
+        with patch.object(app, "_refresh_home_request_panel"):
+            app.home_controller.body.handle_home_body_select_key(event)
+
+        self.assertEqual(app.state.home_editor_tab, "body")
+        self.assertEqual(app.state.selected_body_field_index, 1)
+        self.assertEqual(app.state.mode, "HOME_BODY_SELECT")
         self.assertTrue(event.stopped)
 
     def test_headers_select_k_on_first_row_returns_to_section_select(self) -> None:
@@ -1234,7 +1276,7 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
 
             table = app.screen.query_one("#request-params-table", DataTable)
             self.assertTrue(table.display)
-            self.assertEqual(table.row_count, 2)
+            self.assertEqual(table.row_count, 3)  # 2 params + add row
             self.assertEqual(table.cursor_row, 1)
             first_row = table.get_row_at(0)
             rendered_row = [getattr(cell, "plain", str(cell)) for cell in first_row]
@@ -1873,6 +1915,37 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
             rendered_row = [getattr(cell, "plain", str(cell)) for cell in last_row]
             self.assertEqual(rendered_row[0], "+")
             self.assertEqual(rendered_row[2], "Add field")
+
+    async def test_form_body_add_row_enter_opens_body_key_editor(self) -> None:
+        app = PiespectorApp()
+        app._persist_requests = lambda: None
+        app._load_request_workspace = lambda: None
+        request = RequestDefinition(
+            request_id="r1",
+            name="Upload",
+            body_type="form-data",
+            body_form_items=[RequestKeyValue(key="file", value="@payload.bin")],
+        )
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+        app.state.home_editor_tab = "body"
+        app.state.mode = "HOME_BODY_SELECT"
+        app.state.selected_body_index = 2
+        app.state.selected_body_field_index = 1
+
+        async with app.run_test(size=(140, 40)) as pilot:
+            app._refresh_screen()
+            await pilot.pause()
+
+            await pilot.press("enter")
+            await pilot.pause()
+
+            body_input = app.screen.query_one("#request-body-input", Input)
+            self.assertEqual(app.state.mode, "HOME_BODY_EDIT")
+            self.assertTrue(app.state.body_creating_new)
+            self.assertEqual(app.state.selected_body_field_index, 0)
+            self.assertTrue(body_input.display)
+            self.assertEqual(body_input.placeholder, "Body key")
 
     async def test_selected_raw_body_preview_keeps_title_and_height(self) -> None:
         app = PiespectorApp()

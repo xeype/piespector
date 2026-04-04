@@ -7,6 +7,7 @@ from rich.syntax import Syntax
 from rich.text import Text
 
 from textual.widgets import DataTable
+from textual.widgets._data_table import RowDoesNotExist, RowKey
 
 from piespector.domain.editor import BODY_KEY_VALUE_TYPES
 from piespector.domain.modes import (
@@ -24,9 +25,40 @@ from piespector.ui.rendering_helpers import (
     request_body_syntax_language,
 )
 from piespector.state import PiespectorState
-from piespector.ui.selection import effective_mode
+from piespector.ui.selection import effective_mode, selected_element_style
 
 _DEFAULT_SELECTED_BODY_PREVIEW_BORDER = "#33c7ff"
+
+
+class RequestBodyTable(DataTable):
+    COMPONENT_CLASSES = DataTable.COMPONENT_CLASSES | {"request-body-table--add-row"}
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._add_row_key: RowKey | None = None
+
+    def clear(self, columns: bool = False) -> RequestBodyTable:
+        self._add_row_key = None
+        return super().clear(columns=columns)
+
+    def set_add_row_key(self, row_key: RowKey | None) -> None:
+        self._add_row_key = row_key
+        self.refresh()
+
+    def _get_row_style(self, row_index: int, base_style: Style) -> Style:
+        row_style = super()._get_row_style(row_index, base_style)
+        if self._add_row_key is None:
+            return row_style
+        try:
+            add_row_index = self.get_row_index(self._add_row_key)
+        except RowDoesNotExist:
+            self._add_row_key = None
+            return row_style
+        if row_index == add_row_index:
+            row_style += self.get_component_styles(
+                "request-body-table--add-row"
+            ).rich_style
+        return row_style
 
 
 def body_context_label(state: PiespectorState) -> str:
@@ -78,16 +110,43 @@ def render_request_body_editor(
 
 
 def refresh_request_body_table(
-    table: DataTable,
+    table: RequestBodyTable,
     request: RequestDefinition,
     state: PiespectorState,
 ) -> None:
+    mode = effective_mode(state)
     items = state.get_active_request_body_items()
     add_label = "Add field" if request.body_type == "form-data" else "Add parameter"
     state.clamp_selected_body_index()
 
+    header_selected = mode in {MODE_HOME_BODY_SELECT, MODE_HOME_BODY_EDIT} and (
+        (
+            0 < state.selected_body_index <= len(items)
+            and not state.body_creating_new
+        )
+        or state.body_creating_new
+    )
+    key_header = Text(
+        "Key",
+        style=selected_element_style(
+            state,
+            selected=header_selected and state.selected_body_field_index == 0,
+        ),
+    )
+    value_header = Text(
+        "Value",
+        style=selected_element_style(
+            state,
+            selected=(
+                header_selected
+                and not state.body_creating_new
+                and state.selected_body_field_index == 1
+            ),
+        ),
+    )
+
     table.clear(columns=True)
-    table.add_columns("#", "On", "Key", "Value")
+    table.add_columns("#", "On", key_header, value_header)
 
     for index, item in enumerate(items, start=1):
         table.add_row(
@@ -97,7 +156,8 @@ def refresh_request_body_table(
             Text(item.value or "-"),
         )
 
-    table.add_row("+", "", Text(add_label), "")
+    add_row_key = table.add_row("+", "", Text(add_label), "")
+    table.set_add_row_key(add_row_key)
 
     if state.selected_body_index == 0:
         table.cursor_type = "none"

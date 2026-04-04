@@ -39,6 +39,9 @@ from piespector.commands import filesystem_path_completions
 from piespector.placeholders import apply_placeholder_completion
 from piespector.screens.home import messages
 from piespector.screens.base import PiespectorScreen
+from piespector.screens.home.request.header_editor import RequestHeadersTable
+from piespector.screens.home.request.query_editor import RequestParamsTable
+from piespector.screens.home.request.request_body import RequestBodyTable
 from piespector.ui.input import PiespectorInput
 from piespector.ui.select import PiespectorSelect
 
@@ -115,7 +118,7 @@ class HomeScreen(PiespectorScreen):
                                     select_on_focus=False,
                                 )
                             with TabPane("Params", id=HOME_EDITOR_TAB_PARAMS):
-                                yield DataTable(
+                                yield RequestParamsTable(
                                     id="request-params-table",
                                     cursor_type="row",
                                     zebra_stripes=True,
@@ -128,7 +131,7 @@ class HomeScreen(PiespectorScreen):
                                 )
                             with TabPane("Headers", id=HOME_EDITOR_TAB_HEADERS):
                                 yield Static("", id="request-content-note")
-                                yield DataTable(
+                                yield RequestHeadersTable(
                                     id="request-headers-table",
                                     cursor_type="row",
                                     zebra_stripes=True,
@@ -154,7 +157,7 @@ class HomeScreen(PiespectorScreen):
                                     value=RAW_SUBTYPE_OPTIONS[1][0],
                                     compact=True,
                                 )
-                                yield DataTable(
+                                yield RequestBodyTable(
                                     id="request-body-table",
                                     cursor_type="row",
                                     zebra_stripes=True,
@@ -314,12 +317,22 @@ class HomeScreen(PiespectorScreen):
         self._sync_request_table_row(event.control, event.cursor_row)
 
         if event.control.id == "request-params-table":
-            app.state.enter_home_params_edit_mode()
+            request = app.state.get_active_request()
+            params = request.query_items if request is not None else []
+            if event.cursor_row >= len(params):
+                app.state.enter_home_params_edit_mode(creating=True)
+            else:
+                app.state.enter_home_params_edit_mode()
         elif event.control.id == "request-headers-table":
             request = app.state.get_active_request()
             if request is None:
                 return
-            if app.state.selected_header_index >= len(request.header_items):
+            from piespector.request_builder import preview_auto_headers
+            auto_headers = preview_auto_headers(request, app.state.env_pairs)
+            total = len(request.header_items) + len(auto_headers)
+            if event.cursor_row >= total:
+                app.state.enter_home_headers_edit_mode(creating=True)
+            elif app.state.selected_header_index >= len(request.header_items):
                 app.state.message = messages.HOME_AUTO_HEADER_EDIT
             else:
                 app.state.enter_home_headers_edit_mode()

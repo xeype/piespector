@@ -30,6 +30,7 @@ class HomeScreenState:
     selected_header_index: int = 0
     selected_header_field_index: int = 0
     selected_body_index: int = 0
+    selected_body_field_index: int = 0
     home_top_bar_return_mode: str = MODE_NORMAL
     home_top_bar_edit_return_mode: str = MODE_NORMAL
     selected_top_bar_field: str = "method"
@@ -41,6 +42,7 @@ class HomeScreenState:
     home_response_select_return_mode: str = MODE_NORMAL
     params_creating_new: bool = False
     headers_creating_new: bool = False
+    body_creating_new: bool = False
 
 
 @dataclass
