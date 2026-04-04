@@ -83,9 +83,12 @@ def refresh_request_params_table(
     add_row_key = table.add_row("+", "", Text("Add parameter"), "")
     table.set_add_row_key(add_row_key)
 
-    table.cursor_type = "row"
-    row_index = max(0, min(state.selected_param_index, table.row_count - 1))
-    table.move_cursor(row=row_index, column=0, animate=False)
+    if mode in {MODE_HOME_PARAMS_SELECT, MODE_HOME_PARAMS_EDIT}:
+        table.cursor_type = "row"
+        row_index = max(0, min(state.selected_param_index, table.row_count - 1))
+        table.move_cursor(row=row_index, column=0, animate=False)
+    else:
+        table.cursor_type = "none"
 
 
 def render_request_params_fallback(
