@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from piespector.domain.history import HistoryEntry
 from piespector.domain.requests import (
+    EnvVariable,
     RequestAuth,
     RequestBody,
     RequestDefinition,
@@ -53,10 +54,18 @@ def export_env_pairs(path: Path, env_pairs: dict[str, str]) -> None:
 
 
 def import_env_sets(path: Path) -> tuple[list[str], dict[str, dict[str, str]]]:
+    """Import env sets as plain key/value dicts (used for merging into state)."""
     if path.suffix.lower() == ".json":
-        env_names, env_sets, _selected_env_name = load_env_workspace(path, None)
+        env_names, env_sets_rich, _selected_env_name = load_env_workspace(path, None)
         if env_names:
-            return (env_names, env_sets)
+            # Convert list[EnvVariable] → dict[str, str] for import API
+            return (
+                env_names,
+                {
+                    name: {v.key: v.value for v in variables}
+                    for name, variables in env_sets_rich.items()
+                },
+            )
 
     env_name = path.stem.strip() or "Imported"
     return ([env_name], {env_name: load_env_pairs(path)})
@@ -65,31 +74,22 @@ def import_env_sets(path: Path) -> tuple[list[str], dict[str, dict[str, str]]]:
 def load_env_workspace(
     path: Path,
     legacy_env_path: Path | None = None,
-) -> tuple[list[str], dict[str, dict[str, str]], str]:
+) -> tuple[list[str], dict[str, list[EnvVariable]], str]:
     if path.exists():
         payload = json.loads(path.read_text(encoding="utf-8"))
         if isinstance(payload, dict):
             raw_envs = payload.get("envs", [])
             env_order: list[str] = []
-            env_sets: dict[str, dict[str, str]] = {}
+            env_sets: dict[str, list[EnvVariable]] = {}
             for item in raw_envs:
                 if not isinstance(item, dict):
                     continue
                 name = str(item.get("name", "")).strip()
                 if not name or name in env_sets:
                     continue
-                raw_pairs = item.get("pairs", {})
-                pairs = (
-                    {
-                        str(key): str(value)
-                        for key, value in raw_pairs.items()
-                        if str(key).strip()
-                    }
-                    if isinstance(raw_pairs, dict)
-                    else {}
-                )
+                variables = _load_env_variables(item)
                 env_order.append(name)
-                env_sets[name] = pairs
+                env_sets[name] = variables
             if env_order:
                 selected_env_name = str(payload.get("selected_env_name", "")).strip()
                 if selected_env_name not in env_sets:
@@ -98,21 +98,54 @@ def load_env_workspace(
 
     if legacy_env_path is not None and legacy_env_path.exists():
         pairs = load_env_pairs(legacy_env_path)
-        return (["Default"], {"Default": pairs}, "Default")
+        variables = [EnvVariable(key=k, value=v) for k, v in pairs.items() if k]
+        return (["Default"], {"Default": variables}, "Default")
 
-    return (["Default"], {"Default": {}}, "Default")
+    return (["Default"], {"Default": []}, "Default")
+
+
+def _load_env_variables(item: dict) -> list[EnvVariable]:
+    """Load env variables from a JSON env object, supporting both old and new formats."""
+    # New format: variables list
+    raw_variables = item.get("variables")
+    if isinstance(raw_variables, list):
+        result: list[EnvVariable] = []
+        for v in raw_variables:
+            if not isinstance(v, dict):
+                continue
+            key = str(v.get("key", "")).strip()
+            if not key:
+                continue
+            result.append(EnvVariable(
+                key=key,
+                value=str(v.get("value", "")),
+                sensitive=bool(v.get("sensitive", False)),
+                description=str(v.get("description", "")),
+            ))
+        return result
+
+    # Legacy format: pairs dict
+    raw_pairs = item.get("pairs", {})
+    if isinstance(raw_pairs, dict):
+        return [
+            EnvVariable(key=str(k).strip(), value=str(v))
+            for k, v in raw_pairs.items()
+            if str(k).strip()
+        ]
+
+    return []
 
 
 def save_env_workspace(
     path: Path,
     env_order: list[str],
-    env_sets: dict[str, dict[str, str]],
+    env_sets: dict[str, list[EnvVariable]],
     selected_env_name: str,
 ) -> None:
     ordered_names = [name for name in env_order if name in env_sets]
     if not ordered_names:
         ordered_names = ["Default"]
-        env_sets = {"Default": {}}
+        env_sets = {"Default": []}
         selected_env_name = "Default"
     if selected_env_name not in env_sets:
         selected_env_name = ordered_names[0]
@@ -121,10 +154,15 @@ def save_env_workspace(
         "envs": [
             {
                 "name": name,
-                "pairs": {
-                    key: value
-                    for key, value in env_sets.get(name, {}).items()
-                },
+                "variables": [
+                    {
+                        "key": v.key,
+                        "value": v.value,
+                        "sensitive": v.sensitive,
+                        "description": v.description,
+                    }
+                    for v in env_sets.get(name, [])
+                ],
             }
             for name in ordered_names
         ],

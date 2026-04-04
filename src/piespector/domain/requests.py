@@ -15,6 +15,14 @@ class ResponseSummary:
 
 
 @dataclass
+class EnvVariable:
+    key: str
+    value: str = ""
+    sensitive: bool = False
+    description: str = ""
+
+
+@dataclass
 class RequestKeyValue:
     key: str
     value: str = ""

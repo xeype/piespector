@@ -43,11 +43,6 @@ Screen {
     border-title-color: $text;
 }
 
-#sidebar-container:hover {
-    border: solid $accent;
-    border-title-color: $text;
-}
-
 #sidebar-title,
 #request-title,
 #response-title {
@@ -65,7 +60,7 @@ Screen {
 
     & > .tree--cursor {
         color: $text;
-        background: $accent-darken-2;
+        background: $accent;
         text-style: bold;
     }
 
@@ -79,7 +74,7 @@ Screen {
 
         & > .tree--cursor {
             color: $text;
-            background: $accent-darken-2;
+            background: $accent;
             text-style: bold;
         }
 
@@ -105,7 +100,7 @@ Screen {
 }
 
 Select.piespector-selected-element > SelectCurrent {
-    background: $accent-darken-2;
+    background: $accent;
     color: $text;
     text-style: bold;
 }
@@ -122,6 +117,11 @@ Select.piespector-selected-element > SelectCurrent {
 
 #open-request-tabs Tab:hover {
     color: $text;
+}
+
+#open-request-tabs Tab:focus {
+    background-tint: 0%;
+    outline: none;
 }
 
 #open-request-tabs .-active {
@@ -182,12 +182,12 @@ Select > SelectOverlay > .option-list--option-hover {
 Select > SelectOverlay > .option-list--option-highlighted,
 Select > SelectOverlay:focus > .option-list--option-highlighted {
     color: $text;
-    background: $accent-darken-2;
+    background: $accent;
     text-style: bold;
 }
 
 Select > SelectOverlay > .option-list--option-hover {
-    background: $accent-darken-2;
+    background: $accent;
 }
 
 #url-bar-subtitle {
@@ -225,15 +225,32 @@ Select > SelectOverlay > .option-list--option-hover {
     color: $text;
 }
 
+#request-tabs ContentTabs:focus {
+    background-tint: 0%;
+    outline: none;
+}
+
 #request-tabs ContentTabs:focus .-active {
     color: $text;
-    background: $accent-darken-2;
+    background: $accent;
     text-style: bold;
+}
+
+#request-tabs ContentTab:focus {
+    background-tint: 0%;
+    outline: none;
+}
+
+#request-tabs ContentTab.-active:focus {
+    color: $text;
+    background: $accent;
+    text-style: bold;
+    background-tint: 0%;
 }
 
 #request-panel.piespector-tab-select #request-tabs ContentTab.-active {
     background: $accent;
-    color: $background;
+    color: $text;
 }
 
 #request-tabs Underline > .underline--bar {
@@ -331,15 +348,32 @@ Select > SelectOverlay > .option-list--option-hover {
     color: $text;
 }
 
+#response-tabs Tab:focus {
+    background-tint: 0%;
+    outline: none;
+}
+
+#response-tabs Tab.-active:focus {
+    color: $text;
+    background: $accent;
+    text-style: bold;
+    background-tint: 0%;
+}
+
+#response-tabs:focus {
+    background-tint: 0%;
+    outline: none;
+}
+
 #response-tabs:focus .-active {
     color: $text;
-    background: $accent-darken-2;
+    background: $accent;
     text-style: bold;
 }
 
 #response-panel.piespector-tab-select #response-tabs Tab.-active {
     background: $accent;
-    color: $background;
+    color: $text;
 }
 
 #response-tabs Underline > .underline--bar {
@@ -359,14 +393,81 @@ Select > SelectOverlay > .option-list--option-hover {
 
 #env-screen {
     height: 1fr;
+    layout: horizontal;
 }
 
-#env-select {
-    margin: 0 0 1 0;
+#env-sidebar-container {
+    width: 36;
+    min-width: 28;
+    max-width: 46;
+    height: 1fr;
+    border: solid $surface-lighten-2;
+    border-title-align: left;
+    border-title-color: $text-muted;
+    padding: 0 1;
+}
+
+#env-sidebar-container.piespector-focus-frame {
+    border: solid $accent;
+    border-title-color: $text;
+}
+
+#env-sidebar-title {
+    display: none;
+}
+
+#env-sidebar-subtitle {
+    dock: bottom;
+}
+
+#env-sidebar-tree {
+    height: 1fr;
+    background: $background;
+    scrollbar-size: 1 1;
+
+    & > .tree--cursor {
+        color: $text;
+        background: $accent;
+        text-style: bold;
+    }
+
+    & > .tree--guides-selected {
+        color: $accent;
+    }
+
+    &:focus {
+        background: $background;
+        background-tint: 0%;
+
+        & > .tree--cursor {
+            color: $text;
+            background: $accent;
+            text-style: bold;
+        }
+
+        & > .tree--guides-selected {
+            color: $accent;
+        }
+    }
+}
+
+#env-main {
+    height: 1fr;
+    width: 1fr;
+    border: solid $surface-lighten-2;
+    padding: 0 1;
+}
+
+#env-main.piespector-focus-frame {
+    border: solid $accent;
 }
 
 #env-table {
     height: 1fr;
+}
+
+#env-table > .env-table--add-row {
+    background: $surface-darken-1 40%;
 }
 
 #history-screen {
@@ -411,7 +512,7 @@ DataTable {
     & > .datatable--cursor,
     & > .datatable--fixed-cursor {
         color: $text;
-        background: $accent-darken-2;
+        background: $accent;
         text-style: bold;
     }
 
@@ -422,7 +523,7 @@ DataTable {
         & > .datatable--cursor,
         & > .datatable--fixed-cursor {
             color: $text;
-            background: $accent-darken-2;
+            background: $accent;
             text-style: bold;
         }
     }

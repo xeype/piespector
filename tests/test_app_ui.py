@@ -71,7 +71,7 @@ class AppUiTests(unittest.TestCase):
         self.assertIsNotNone(style)
         self.assertEqual(
             style.bgcolor.name,
-            app.theme_variables["accent-darken-2"].lower(),
+            app.theme_variables["accent"].lower(),
         )
 
     def test_auth_text_field_save_returns_to_auth_rows(self) -> None:
@@ -1638,7 +1638,7 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
 
             self.assertEqual(
                 style.bgcolor.name,
-                app.theme_variables["accent-darken-2"].lower(),
+                app.theme_variables["accent"].lower(),
             )
 
     async def test_open_request_tabs_underline_uses_theme_accent(self) -> None:

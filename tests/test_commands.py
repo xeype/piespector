@@ -8,6 +8,7 @@ from tempfile import TemporaryDirectory
 import unittest
 
 from piespector.commands import command_completion, command_completion_matches, help_commands, run_command
+from piespector.domain.requests import EnvVariable
 from piespector.state import (
     CollectionDefinition,
     FolderDefinition,
@@ -145,7 +146,7 @@ class CommandTests(unittest.TestCase):
     def test_env_import_creates_new_env_set_instead_of_merging(self) -> None:
         state = PiespectorState(current_tab="env")
         state.env_names = ["Default"]
-        state.env_sets = {"Default": {"EXISTING": "x"}}
+        state.env_sets = {"Default": [EnvVariable(key="EXISTING", value="x")]}
         state.selected_env_name = "Default"
         state.ensure_env_workspace()
         with TemporaryDirectory() as tmp_dir:
@@ -157,7 +158,8 @@ class CommandTests(unittest.TestCase):
         self.assertTrue(outcome.save_env_pairs)
         self.assertEqual(state.selected_env_name, "staging")
         self.assertEqual(state.env_pairs, {"A": "1", "B": "two"})
-        self.assertEqual(state.env_sets["Default"], {"EXISTING": "x"})
+        self.assertEqual(state.env_sets["Default"][0].key, "EXISTING")
+        self.assertEqual(state.env_sets["Default"][0].value, "x")
 
     def test_page_only_commands_are_blocked_in_request_editor_context(self) -> None:
         state = PiespectorState(current_tab="home", mode="HOME_SECTION_SELECT", command_context_mode="HOME_SECTION_SELECT")

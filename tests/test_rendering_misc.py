@@ -10,7 +10,6 @@ from piespector.domain.editor import (
     RESPONSE_TAB_TO_JUMP_KEY,
     RESPONSE_TABS,
 )
-from piespector.screens.env.render import render_env_viewport
 from piespector.screens.help.render import render_help_viewport
 from piespector.screens.history.render import render_history_viewport
 from piespector.ui.command_line_content import build_command_line_text
@@ -109,7 +108,7 @@ class RenderingMiscTests(unittest.TestCase):
         rendered = render_plain(render_help_viewport(state), width=140)
 
         self.assertIn("Context Env", rendered)
-        self.assertIn("h/l or j/k key-value fields, e or Enter edit, a add, d delete, Esc back", rendered)
+        self.assertIn("h/l fields (Variable/Value/Sensitive/Description), e edit, a add, d delete, Esc back", rendered)
 
     def test_render_help_viewport_home_params_context_uses_shift_field_keys(self) -> None:
         state = PiespectorState(
@@ -136,26 +135,6 @@ class RenderingMiscTests(unittest.TestCase):
         rendered = render_plain(render_help_viewport(state), width=160)
 
         self.assertIn("Body: h/l tabs, j/k rows, H/L fields, e or Enter open or edit", rendered)
-
-    def test_render_env_viewport_empty_and_populated_states(self) -> None:
-        empty_state = PiespectorState(current_tab="env")
-        empty_rendered = render_plain(render_env_viewport(empty_state, viewport_height=20))
-
-        self.assertIn("No registered values.", empty_rendered)
-        self.assertIn("Ctrl+P", empty_rendered)
-        self.assertIn("set KEY=value", empty_rendered)
-
-        populated_state = PiespectorState(current_tab="env")
-        populated_state.env_names = ["Default"]
-        populated_state.env_sets = {"Default": {"API_URL": "https://example.com"}}
-        populated_state.selected_env_name = "Default"
-        populated_state.env_pairs = populated_state.env_sets["Default"]
-
-        populated_rendered = render_plain(render_env_viewport(populated_state, viewport_height=20))
-
-        self.assertIn("API_URL", populated_rendered)
-        self.assertIn("https://example.com", populated_rendered)
-        self.assertIn("Rows 1-1 of 1", populated_rendered)
 
     def test_render_home_response_pretty_prints_json_body(self) -> None:
         collection = CollectionDefinition(collection_id="c1", name="Desserts")
@@ -757,7 +736,7 @@ class UiAndScrollbarTests(unittest.TestCase):
     def test_css_highlights_active_request_and_response_tabs(self) -> None:
         self.assertRegex(
             APP_CSS,
-            r"#request-tabs ContentTabs:focus \.-active \{[\s\S]*?background: \$accent-darken-2;[\s\S]*?text-style: bold;",
+            r"#request-tabs ContentTabs:focus \.-active \{[\s\S]*?background: \$accent;[\s\S]*?text-style: bold;",
         )
         self.assertRegex(
             APP_CSS,
@@ -765,7 +744,7 @@ class UiAndScrollbarTests(unittest.TestCase):
         )
         self.assertRegex(
             APP_CSS,
-            r"#response-tabs:focus \.-active \{[\s\S]*?background: \$accent-darken-2;[\s\S]*?text-style: bold;",
+            r"#response-tabs:focus \.-active \{[\s\S]*?background: \$accent;[\s\S]*?text-style: bold;",
         )
         self.assertRegex(
             APP_CSS,
@@ -775,11 +754,11 @@ class UiAndScrollbarTests(unittest.TestCase):
     def test_css_uses_selected_element_color_for_tree_and_table_cursors(self) -> None:
         self.assertRegex(
             APP_CSS,
-            r"#sidebar-tree \{[\s\S]*?& > \.tree--cursor \{[\s\S]*?color: \$text;[\s\S]*?background: \$accent-darken-2;[\s\S]*?text-style: bold;",
+            r"#sidebar-tree \{[\s\S]*?& > \.tree--cursor \{[\s\S]*?color: \$text;[\s\S]*?background: \$accent;[\s\S]*?text-style: bold;",
         )
         self.assertRegex(
             APP_CSS,
-            r"DataTable \{[\s\S]*?& > \.datatable--cursor,[\s\S]*?& > \.datatable--fixed-cursor \{[\s\S]*?color: \$text;[\s\S]*?background: \$accent-darken-2;[\s\S]*?text-style: bold;",
+            r"DataTable \{[\s\S]*?& > \.datatable--cursor,[\s\S]*?& > \.datatable--fixed-cursor \{[\s\S]*?color: \$text;[\s\S]*?background: \$accent;[\s\S]*?text-style: bold;",
         )
 
     def test_css_uses_blue_block_highlight_for_home_hover_targets(self) -> None:

@@ -74,7 +74,7 @@ def mode_and_context(state: PiespectorState) -> tuple[str, str]:
     if state.current_tab == TAB_ENV:
         env_label = state.active_env_label()
         item = state.get_selected_env_item()
-        env_key = item[0] if item is not None else "No values"
+        env_key = item.key if item is not None else "No values"
         _field_name, field_label = state.selected_env_field()
         if state.mode == MODE_ENV_EDIT:
             if state.env_creating_new:

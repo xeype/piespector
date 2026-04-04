@@ -41,6 +41,7 @@ class CoreStateMixin:
         self.confirm_target_id = None
 
     def switch_tab(self, tab_id: str, label: str | None = None) -> None:
+        self.mode = MODE_NORMAL
         self.current_tab = tab_id
         if tab_id == TAB_HOME:
             self.ensure_request_workspace()

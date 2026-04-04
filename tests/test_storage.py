@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from piespector import storage
 from piespector.storage import paths as storage_paths
+from piespector.domain.requests import EnvVariable
 from piespector.state import (
     CollectionDefinition,
     FolderDefinition,
@@ -227,7 +228,9 @@ class StorageTests(unittest.TestCase):
             )
 
         self.assertEqual(env_names, ["Default"])
-        self.assertEqual(env_sets, {"Default": {"API_URL": "https://example.com"}})
+        self.assertEqual(len(env_sets["Default"]), 1)
+        self.assertEqual(env_sets["Default"][0].key, "API_URL")
+        self.assertEqual(env_sets["Default"][0].value, "https://example.com")
         self.assertEqual(selected_env_name, "Default")
 
     def test_save_env_workspace_normalizes_missing_selected_env(self) -> None:
@@ -237,13 +240,15 @@ class StorageTests(unittest.TestCase):
             storage.save_env_workspace(
                 path,
                 ["Prod", "Staging"],
-                {"Prod": {"API_URL": "https://prod.example.com"}},
+                {"Prod": [EnvVariable(key="API_URL", value="https://prod.example.com")]},
                 "Missing",
             )
             env_names, env_sets, selected_env_name = storage.load_env_workspace(path)
 
         self.assertEqual(env_names, ["Prod"])
-        self.assertEqual(env_sets, {"Prod": {"API_URL": "https://prod.example.com"}})
+        self.assertEqual(len(env_sets["Prod"]), 1)
+        self.assertEqual(env_sets["Prod"][0].key, "API_URL")
+        self.assertEqual(env_sets["Prod"][0].value, "https://prod.example.com")
         self.assertEqual(selected_env_name, "Prod")
 
     def test_import_env_sets_loads_workspace_json(self) -> None:

@@ -367,10 +367,17 @@ def refresh_home_url_bar(
         return
 
     method_select.can_focus = state.mode == MODE_HOME_REQUEST_METHOD_EDIT
+    mode = effective_mode(state)
+    method_selected = mode in {MODE_HOME_REQUEST_METHOD_SELECT, MODE_HOME_REQUEST_METHOD_EDIT}
+
+    if method_selected:
+        method_options = tuple((method, Text(method)) for method in HTTP_METHODS)
+    else:
+        method_options = tuple((method, Text(method, style=method_color(method))) for method in HTTP_METHODS)
 
     sync_select_widget(
         method_select,
-        tuple((method, Text(method, style=method_color(method))) for method in HTTP_METHODS),
+        method_options,
         active_request.method.upper(),
         auto_open_token=(
             ("method-select", active_request.request_id, state.mode)
@@ -379,12 +386,6 @@ def refresh_home_url_bar(
         ),
     )
     method_select.display = True
-    try:
-        method_select.query_one("#label").styles.color = method_color(active_request.method)
-    except NoMatches:
-        pass
-
-    mode = effective_mode(state)
     if mode == MODE_HOME_URL_EDIT:
         url_display.display = False
         _sync_input_widget(

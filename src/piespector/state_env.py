@@ -2,6 +2,15 @@ from __future__ import annotations
 
 from piespector.domain.editor import TAB_ENV
 from piespector.domain.modes import MODE_ENV_EDIT, MODE_ENV_SELECT, MODE_NORMAL
+from piespector.domain.requests import EnvVariable
+
+ENV_FIELD_COUNT = 4
+ENV_FIELDS = [
+    ("key", "Variable"),
+    ("value", "Value"),
+    ("description", "Description"),
+    ("sensitive", "Sensitive"),
+]
 
 
 class EnvStateMixin:
@@ -9,16 +18,20 @@ class EnvStateMixin:
         if not self.env_names:
             self.env_names = ["Default"]
         if not self.env_sets:
-            self.env_sets = {"Default": {}}
+            self.env_sets = {"Default": []}
         for name in list(self.env_names):
-            self.env_sets.setdefault(name, {})
+            self.env_sets.setdefault(name, [])
         self.env_names = [name for name in self.env_names if name in self.env_sets]
         if not self.env_names:
             self.env_names = ["Default"]
-            self.env_sets = {"Default": {}}
+            self.env_sets = {"Default": []}
         if self.selected_env_name not in self.env_sets:
             self.selected_env_name = self.env_names[0]
-        self.env_pairs = self.env_sets[self.selected_env_name]
+        self._refresh_env_pairs()
+
+    def _refresh_env_pairs(self) -> None:
+        items = self.env_sets.get(self.selected_env_name, [])
+        self.env_pairs = {v.key: v.value for v in items if v.key}
 
     def active_env_label(self) -> str:
         self.ensure_env_workspace()
@@ -36,13 +49,23 @@ class EnvStateMixin:
         self.selected_env_name = self.env_names[
             (current_index + step) % len(self.env_names)
         ]
-        self.env_pairs = self.env_sets[self.selected_env_name]
+        self._refresh_env_pairs()
         self.selected_env_index = 0
         self.env_scroll_offset = 0
         self.selected_env_field_index = 0
         self.env_creating_new = False
         self.message = f"Selected env {self.selected_env_name}."
         self.notify_env_mutated()
+
+    def select_env_by_name(self, name: str) -> None:
+        self.ensure_env_workspace()
+        if name in self.env_sets:
+            self.selected_env_name = name
+            self._refresh_env_pairs()
+            self.selected_env_index = 0
+            self.env_scroll_offset = 0
+            self.selected_env_field_index = 0
+            self.env_creating_new = False
 
     def create_env_set(self, name: str) -> bool:
         self.ensure_env_workspace()
@@ -54,9 +77,9 @@ class EnvStateMixin:
             self.message = f"Env {env_name} already exists."
             return False
         self.env_names.append(env_name)
-        self.env_sets[env_name] = {}
+        self.env_sets[env_name] = []
         self.selected_env_name = env_name
-        self.env_pairs = self.env_sets[env_name]
+        self._refresh_env_pairs()
         self.selected_env_index = 0
         self.env_scroll_offset = 0
         self.mode = MODE_NORMAL
@@ -77,11 +100,11 @@ class EnvStateMixin:
         if new_name in self.env_sets:
             self.message = f"Env {new_name} already exists."
             return False
-        pairs = self.env_sets.pop(old_name, {})
-        self.env_sets[new_name] = pairs
+        variables = self.env_sets.pop(old_name, [])
+        self.env_sets[new_name] = variables
         self.env_names = [new_name if item == old_name else item for item in self.env_names]
         self.selected_env_name = new_name
-        self.env_pairs = pairs
+        self._refresh_env_pairs()
         self.message = f"Renamed env {new_name}."
         self.notify_env_mutated()
         return True
@@ -96,7 +119,7 @@ class EnvStateMixin:
         self.env_names = [name for name in self.env_names if name != env_name]
         self.env_sets.pop(env_name, None)
         self.selected_env_name = self.env_names[min(current_index, len(self.env_names) - 1)]
-        self.env_pairs = self.env_sets[self.selected_env_name]
+        self._refresh_env_pairs()
         self.selected_env_index = 0
         self.env_scroll_offset = 0
         self.selected_env_field_index = 0
@@ -122,7 +145,9 @@ class EnvStateMixin:
             pairs = env_sets.get(original_name, {})
             unique_name = self._unique_env_set_name(original_name, used_names)
             self.env_names.append(unique_name)
-            self.env_sets[unique_name] = dict(pairs)
+            self.env_sets[unique_name] = [
+                EnvVariable(key=k, value=v) for k, v in pairs.items() if k
+            ]
             imported_names.append(unique_name)
 
         if not imported_names:
@@ -130,7 +155,7 @@ class EnvStateMixin:
             return 0
 
         self.selected_env_name = imported_names[0]
-        self.env_pairs = self.env_sets[self.selected_env_name]
+        self._refresh_env_pairs()
         self.selected_env_index = 0
         self.env_scroll_offset = 0
         self.selected_env_field_index = 0
@@ -166,16 +191,17 @@ class EnvStateMixin:
                 return proposed
             numbered += 1
 
-    def get_env_items(self) -> list[tuple[str, str]]:
+    def get_env_items(self) -> list[EnvVariable]:
         self.ensure_env_workspace()
-        return list(self.env_pairs.items())
+        return list(self.env_sets.get(self.selected_env_name, []))
 
     def clamp_selected_env_index(self) -> None:
         items = self.get_env_items()
         if not items:
             self.selected_env_index = 0
             return
-        self.selected_env_index = max(0, min(self.selected_env_index, len(items) - 1))
+        # Allow index == len(items) for the "Add variable" row
+        self.selected_env_index = max(0, min(self.selected_env_index, len(items)))
 
     def clamp_env_scroll_offset(self, visible_rows: int) -> None:
         item_count = len(self.get_env_items())
@@ -184,10 +210,9 @@ class EnvStateMixin:
 
     def select_env_row(self, step: int) -> None:
         items = self.get_env_items()
-        if not items:
-            self.selected_env_index = 0
-            return
-        self.selected_env_index = (self.selected_env_index + step) % len(items)
+        # +1 to include the "Add variable" row
+        row_count = len(items) + 1
+        self.selected_env_index = (self.selected_env_index + step) % row_count
 
     def ensure_env_selection_visible(self, visible_rows: int) -> None:
         self.clamp_selected_env_index()
@@ -211,18 +236,25 @@ class EnvStateMixin:
         self.clamp_selected_env_index()
 
     def cycle_env_field(self, step: int) -> None:
-        self.selected_env_field_index = (self.selected_env_field_index + step) % 2
+        self.selected_env_field_index = (self.selected_env_field_index + step) % ENV_FIELD_COUNT
 
     def selected_env_field(self) -> tuple[str, str]:
-        if self.selected_env_field_index == 0:
-            return ("key", "Key")
-        return ("value", "Value")
+        return ENV_FIELDS[self.selected_env_field_index % ENV_FIELD_COUNT]
 
     def enter_env_edit_mode(self) -> None:
+        items = self.get_env_items()
+        if self.selected_env_index >= len(items):
+            self.enter_env_create_mode()
+            return
         item = self.get_selected_env_item()
         if item is None:
             self.message = "Nothing to edit."
             self.mode = MODE_NORMAL
+            return
+        field_name, _ = self.selected_env_field()
+        if field_name == "sensitive":
+            # Toggle directly without opening text input
+            self.toggle_selected_env_sensitive()
             return
         self.mode = MODE_ENV_EDIT
         self.message = ""
@@ -245,69 +277,108 @@ class EnvStateMixin:
         self.selected_env_field_index = 0
         self.env_creating_new = False
 
-    def get_selected_env_item(self) -> tuple[str, str] | None:
+    def get_selected_env_item(self) -> EnvVariable | None:
         items = self.get_env_items()
         if not items:
             return None
         self.clamp_selected_env_index()
+        if self.selected_env_index >= len(items):
+            return None
         return items[self.selected_env_index]
+
+    def toggle_selected_env_sensitive(self) -> None:
+        items = self.env_sets.get(self.selected_env_name, [])
+        if not items:
+            return
+        self.clamp_selected_env_index()
+        if self.selected_env_index >= len(items):
+            return
+        item = items[self.selected_env_index]
+        item.sensitive = not item.sensitive
+        self._refresh_env_pairs()
+        self.mode = MODE_ENV_SELECT
+        self.message = f"Sensitive {'on' if item.sensitive else 'off'}."
+        self.notify_env_mutated()
 
     def save_selected_env_field(self, value: str | None = None) -> str | None:
         self.ensure_env_workspace()
         field_name, field_label = self.selected_env_field()
         raw = value or ""
+
         if self.env_creating_new:
             if field_name != "key":
                 return None
             new_key = raw.strip()
             if not new_key:
-                self.message = "Key cannot be empty."
+                self.message = "Variable cannot be empty."
                 return None
-            if new_key in self.env_pairs:
-                self.message = f"Key {new_key} already exists."
+            items = self.env_sets.get(self.selected_env_name, [])
+            if any(v.key == new_key for v in items):
+                self.message = f"Variable {new_key!r} already exists."
                 return None
-            self.env_pairs[new_key] = ""
-            self.env_sets[self.selected_env_name] = self.env_pairs
-            self.selected_env_index = max(0, len(self.env_pairs) - 1)
-            self.selected_env_field_index = 1
+            items.append(EnvVariable(key=new_key))
+            self.env_sets[self.selected_env_name] = items
+            self.selected_env_index = len(items) - 1
+            self.selected_env_field_index = 1  # advance to value field
             self.env_creating_new = False
             self.mode = MODE_ENV_EDIT
+            self._refresh_env_pairs()
             self.message = ""
             self.notify_env_mutated()
             return new_key
 
-        item = self.get_selected_env_item()
-        if item is None:
+        items = self.env_sets.get(self.selected_env_name, [])
+        if not items:
             return None
-        key, existing_value = item
+        self.clamp_selected_env_index()
+        if self.selected_env_index >= len(items):
+            return None
+        item = items[self.selected_env_index]
+
         if field_name == "key":
             new_key = raw.strip()
             if not new_key:
-                self.message = "Key cannot be empty."
+                self.message = "Variable cannot be empty."
                 return None
-            if new_key != key and new_key in self.env_pairs:
-                self.message = f"Key {new_key} already exists."
+            if new_key != item.key and any(v.key == new_key for v in items):
+                self.message = f"Variable {new_key!r} already exists."
                 return None
-            items = self.get_env_items()
-            items[self.selected_env_index] = (new_key, existing_value)
-            self.env_pairs = dict(items)
-            self.env_sets[self.selected_env_name] = self.env_pairs
-            updated = new_key
-        else:
-            self.env_pairs[key] = raw
-            self.env_sets[self.selected_env_name] = self.env_pairs
-            updated = key
+            item.key = new_key
+        elif field_name == "value":
+            item.value = raw
+        elif field_name == "description":
+            item.description = raw
+        # sensitive is toggled via toggle_selected_env_sensitive
+
+        self._refresh_env_pairs()
         self.mode = MODE_ENV_SELECT
         self.message = f"Updated {field_label.lower()}."
         self.notify_env_mutated()
-        return updated
+        return item.key
+
+    def upsert_env_variable(self, key: str, value: str) -> None:
+        """Add or update an env variable (used by the set command)."""
+        self.ensure_env_workspace()
+        items = self.env_sets.get(self.selected_env_name, [])
+        for item in items:
+            if item.key == key:
+                item.value = value
+                self._refresh_env_pairs()
+                self.notify_env_mutated()
+                return
+        items.append(EnvVariable(key=key, value=value))
+        self.env_sets[self.selected_env_name] = items
+        self._refresh_env_pairs()
+        self.notify_env_mutated()
 
     def delete_env_key(self, key: str) -> bool:
         self.ensure_env_workspace()
-        if key not in self.env_pairs:
+        items = self.env_sets.get(self.selected_env_name, [])
+        new_items = [v for v in items if v.key != key]
+        if len(new_items) == len(items):
             return False
-        del self.env_pairs[key]
-        self.env_sets[self.selected_env_name] = self.env_pairs
+        self.env_sets[self.selected_env_name] = new_items
+        self._refresh_env_pairs()
         self.clamp_selected_env_index()
         self.mode = MODE_NORMAL
         self.selected_env_field_index = 0
@@ -319,11 +390,10 @@ class EnvStateMixin:
         item = self.get_selected_env_item()
         if item is None:
             return None
-        key, _ = item
+        key = item.key
         deleted = self.delete_env_key(key)
         if not deleted:
             return None
-        if self.env_pairs:
-            self.mode = MODE_NORMAL
-            self.message = "Deleted row."
+        self.mode = MODE_ENV_SELECT
+        self.message = "Deleted row."
         return key

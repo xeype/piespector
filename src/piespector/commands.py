@@ -893,10 +893,10 @@ def run_command(state: PiespectorState, raw_command: str) -> CommandOutcome:
             state.message = "Usage: set KEY=value"
             return CommandOutcome()
 
-        state.env_pairs[key] = value
+        state.upsert_env_variable(key, value)
         state.message = f"Saved {key}."
         state.current_tab = TAB_ENV
-        state.selected_env_index = max(0, len(state.env_pairs) - 1)
+        state.selected_env_index = max(0, len(state.get_env_items()) - 1)
         return CommandOutcome(save_env_pairs=True)
 
     if normalized_tokens[:1] in {("del",), ("delete",)} and len(tokens) > 1:

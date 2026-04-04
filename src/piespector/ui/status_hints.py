@@ -167,10 +167,8 @@ TAB_HINTS: dict[str, tuple[HintItem, ...]] = {
         (KEY_COMMAND_PALETTE, "commands"),
     ),
     TAB_ENV: (
-        ("h/l", "envs"),
-        ("j/k", "rows"),
-        ("a", "add"),
-        ("e", "edit"),
+        ("j/k", "envs"),
+        ("e", "table"),
         (KEY_COMMAND_PALETTE, "commands"),
     ),
     TAB_HISTORY: (

@@ -299,9 +299,11 @@ class ScreenRefreshCoordinator:
             env_input = None
         env_render.refresh_env_widgets(
             self.state,
-            self.app._query_current("#env-select", Select),
+            self.app._query_current("#env-sidebar-tree", Tree),
             self.app._query_current("#env-table", DataTable),
             env_input,
+            self.app._query_current("#env-sidebar-container"),
+            self.app._query_current("#env-main"),
         )
 
     def refresh_history_screen(self) -> None:

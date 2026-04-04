@@ -139,9 +139,11 @@ def command_line_content(state: PiespectorState) -> CommandLineContent | None:
 
     if state.mode == MODE_ENV_EDIT:
         if state.env_creating_new:
-            return CommandLineContent("New env key. Enter saves, Esc cancels.")
+            if state.message:
+                return CommandLineContent(state.message)
+            return CommandLineContent("New env variable. Enter saves, Esc cancels.")
         item = state.get_selected_env_item()
-        key = item[0] if item is not None else ""
+        key = item.key if item is not None else ""
         field_name, _field_label = state.selected_env_field()
         label = "Editing key. Enter saves, Esc cancels." if field_name == "key" else f"Editing {key}. Enter saves, Esc cancels."
         return CommandLineContent(label)

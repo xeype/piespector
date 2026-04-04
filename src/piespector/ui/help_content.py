@@ -110,11 +110,11 @@ HOME_HELP_KEY_LINES = {
 
 ENV_HELP_KEY_LINES = {
     MODE_NORMAL: (
-        "Env: h/l env sets, j/k rows, e or Enter open key-value fields, a add, ctrl+p commands",
+        "Env: j/k navigate env sets, e or Enter open variables table, ctrl+p commands",
         "Import creates new env sets instead of merging into the selected one.",
     ),
     MODE_ENV_SELECT: (
-        "Env rows: h/l or j/k key-value fields, e or Enter edit, a add, d delete, Esc back",
+        "Env variables: h/l fields (Variable/Value/Sensitive/Description), e edit, a add, d delete, Esc back",
         "Import creates new env sets instead of merging into the selected one.",
     ),
     MODE_ENV_EDIT: (

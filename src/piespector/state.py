@@ -5,6 +5,7 @@ from typing import Callable
 
 from piespector.domain.history import HistoryEntry, history_entry_matches
 from piespector.domain.requests import (
+    EnvVariable,
     RequestAuth,
     RequestBody,
     RequestDefinition,
@@ -44,8 +45,8 @@ class PiespectorState(
     collapsed_folder_ids: set[str] = field(default_factory=set)
     requests: list[RequestDefinition] = field(default_factory=list)
     env_names: list[str] = field(default_factory=lambda: ["Default"])
-    env_sets: dict[str, dict[str, str]] = field(
-        default_factory=lambda: {"Default": {}}
+    env_sets: dict[str, list[EnvVariable]] = field(
+        default_factory=lambda: {"Default": []}
     )
     selected_env_name: str = "Default"
     history_entries: list[HistoryEntry] = field(default_factory=list)
@@ -100,7 +101,7 @@ class PiespectorState(
         self.collapsed_folder_ids = kwargs.pop("collapsed_folder_ids", set())
         self.requests = kwargs.pop("requests", [])
         self.env_names = kwargs.pop("env_names", ["Default"])
-        self.env_sets = kwargs.pop("env_sets", {"Default": {}})
+        self.env_sets = kwargs.pop("env_sets", {"Default": []})
         self.selected_env_name = kwargs.pop("selected_env_name", "Default")
         self.history_entries = kwargs.pop("history_entries", [])
 

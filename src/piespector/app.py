@@ -442,6 +442,11 @@ class PiespectorApp(App[None]):
                 self._query_current(f"#{widget_id}", Select).blur()
             except NoMatches:
                 pass
+        for widget_id in ("open-request-tabs", "request-tabs", "response-tabs"):
+            try:
+                self._query_current(f"#{widget_id}").blur()
+            except NoMatches:
+                pass
 
     def _sync_command_input(self, command_input: Input) -> None:
         suggestions = self._command_suggestions()

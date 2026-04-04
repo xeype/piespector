@@ -1,28 +1,115 @@
 from __future__ import annotations
 
-from rich import box
-from rich.align import Align
-from rich.console import Group, RenderableType
-from rich.panel import Panel
-from rich.table import Table
 from rich.text import Text
 
-from textual.widgets import DataTable, Input, Select, Static
+from textual.widgets import DataTable, Input, Tree
+from textual.widgets._data_table import RowKey
 
-from piespector.domain.editor import TAB_ENV
 from piespector.domain.modes import MODE_ENV_EDIT, MODE_ENV_SELECT, MODE_NORMAL
 from piespector.state import PiespectorState
-from piespector.ui.selection import selected_element_style
-
-
-def env_visible_rows(viewport_height: int | None) -> int:
-    if viewport_height is None:
-        return 20
-    return max(viewport_height - 6, 1)
+from piespector.ui.selection import FOCUS_FRAME_CLASS, selected_element_style
 
 
 # ================================================================
-#  Widget-based refresh
+#  Sidebar tree
+# ================================================================
+
+def refresh_env_sidebar_tree(
+    tree: Tree,
+    state: PiespectorState,
+) -> None:
+    signature = tuple(state.env_names)
+    if getattr(tree, "_piespector_signature", None) == signature:
+        return
+    tree._piespector_signature = signature
+    tree.clear()
+    tree.root.expand()
+    for index, env_name in enumerate(state.env_names):
+        tree.root.add_leaf(env_name, data=index)
+
+
+def sync_env_sidebar_cursor(
+    tree: Tree,
+    state: PiespectorState,
+) -> None:
+    env_names = state.env_names
+    if not env_names:
+        return
+    try:
+        selected_index = env_names.index(state.selected_env_name)
+    except ValueError:
+        selected_index = 0
+    tree._piespector_ignore_highlight_index = selected_index
+    tree.cursor_line = selected_index
+    tree.scroll_to_line(selected_index, animate=False)
+
+
+# ================================================================
+#  Variables table
+# ================================================================
+
+def refresh_env_table(
+    table: DataTable,
+    state: PiespectorState,
+) -> None:
+    from piespector.screens.env.screen import EnvVariablesTable
+    items = state.get_env_items()
+    state.clamp_selected_env_index()
+
+    header_selected = state.mode in {MODE_ENV_SELECT, MODE_ENV_EDIT}
+    fi = state.selected_env_field_index
+
+    # Signature covers data + header highlight state; skip full rebuild on pure cursor moves
+    data_signature = tuple(
+        (v.key, v.value, v.sensitive, v.description) for v in items
+    )
+    header_signature = (header_selected, fi)
+    full_signature = (data_signature, header_signature)
+
+    if getattr(table, "_piespector_signature", None) != full_signature:
+        table._piespector_signature = full_signature
+
+        var_header = Text(
+            "Variable",
+            style=selected_element_style(state, selected=header_selected and fi == 0),
+        )
+        val_header = Text(
+            "Value",
+            style=selected_element_style(state, selected=header_selected and fi == 1),
+        )
+        desc_header = Text(
+            "Description",
+            style=selected_element_style(state, selected=header_selected and fi == 2),
+        )
+        sen_header = Text(
+            "Sensitive",
+            style=selected_element_style(state, selected=header_selected and fi == 3),
+        )
+
+        table.clear(columns=True)
+        table.add_columns("#", var_header, val_header, desc_header, sen_header)
+
+        for index, item in enumerate(items):
+            val_display = "••••••" if item.sensitive else (item.value or "-")
+            table.add_row(
+                str(index + 1),
+                Text(item.key),
+                Text(val_display),
+                Text(item.description or ""),
+                Text("[x]" if item.sensitive else "[ ]"),
+            )
+
+        add_row_key = table.add_row("+", Text("Add variable"), "", "", "")
+        if isinstance(table, EnvVariablesTable):
+            table.set_add_row_key(add_row_key)
+
+    table.cursor_type = "row"
+    row_index = max(0, min(state.selected_env_index, table.row_count - 1))
+    table.move_cursor(row=row_index, column=0, animate=False)
+
+
+# ================================================================
+#  Input sync
 # ================================================================
 
 def _sync_env_input(
@@ -41,8 +128,14 @@ def _sync_env_input(
     if state.env_creating_new:
         initial_value = ""
     elif item is not None:
-        key, value = item
-        initial_value = key if field_name == "key" else value
+        if field_name == "key":
+            initial_value = item.key
+        elif field_name == "value":
+            initial_value = item.value
+        elif field_name == "description":
+            initial_value = item.description
+        else:
+            initial_value = ""
     else:
         initial_value = ""
 
@@ -63,123 +156,51 @@ def _sync_env_input(
     env_input.focus()
 
 
+# ================================================================
+#  Master refresh
+# ================================================================
+
 def refresh_env_widgets(
     state: PiespectorState,
-    env_select: Select,
+    env_tree: Tree,
     env_table: DataTable,
     env_input: Input | None = None,
+    env_sidebar_container=None,
+    env_main=None,
 ) -> None:
-    # Update env selector
-    options = [(name, name) for name in state.env_names]
-    env_select.set_options(options)
-    if state.selected_env_name in state.env_names:
-        env_select.value = state.selected_env_name
-
-    # Update env table
-    env_table.clear()
-    items = state.get_env_items()
-
-    for index, (key, value) in enumerate(items):
-        env_table.add_row(str(index + 1), key, value)
-
-    # Set cursor to selected row
-    if items and state.selected_env_index < len(items):
-        env_table.move_cursor(row=state.selected_env_index)
-
-    # Sync env field input
+    refresh_env_sidebar_tree(env_tree, state)
+    sync_env_sidebar_cursor(env_tree, state)
+    refresh_env_table(env_table, state)
     if env_input is not None:
         _sync_env_input(env_input, state)
+    if env_sidebar_container is not None:
+        env_sidebar_container.set_class(state.mode == MODE_NORMAL, FOCUS_FRAME_CLASS)
+    if env_main is not None:
+        env_main.set_class(state.mode in {MODE_ENV_SELECT, MODE_ENV_EDIT}, FOCUS_FRAME_CLASS)
 
 
 # ================================================================
-#  Legacy Rich rendering (kept for test compatibility)
+#  Subtitle helpers
 # ================================================================
 
-def render_env_viewport(
-    state: PiespectorState, viewport_height: int | None
-) -> RenderableType:
-    selector = Text()
-    for index, env_name in enumerate(state.env_names):
-        if index:
-            selector.append(" ")
-        is_active = env_name == state.selected_env_name
-        selector.append(
-            f" {env_name} ",
-            style=selected_element_style(state, selected=is_active),
-        )
-
-    items = state.get_env_items()
-    if not items:
-        empty = Text()
-        empty.append("No registered values.\n")
-        empty.append("Open the Command Palette with Ctrl+P, then run ")
-        empty.append("set KEY=value")
-        empty.append(" to add one.")
-        return Panel(
-            Group(selector, Align.left(empty)),
-            title="Env",
-            padding=(1, 2),
-            subtitle=env_caption(state, 0, 0, 0),
-            subtitle_align="left",
-        )
-
-    visible_rows = env_visible_rows(viewport_height)
-    state.clamp_env_scroll_offset(visible_rows)
-    start = state.env_scroll_offset
-    end = min(start + visible_rows, len(items))
-    visible_items = items[start:end]
-
-    table = Table(
-        expand=True,
-        box=box.SIMPLE,
-        show_header=True,
-        padding=(0, 1),
-    )
-    header_selected = state.mode in {MODE_ENV_SELECT, MODE_ENV_EDIT}
-    key_header = Text(
-        "Key",
-        style=selected_element_style(
-            state,
-            selected=header_selected and state.selected_env_field_index == 0,
-        ),
-    )
-    value_header = Text(
-        "Value",
-        style=selected_element_style(
-            state,
-            selected=header_selected and state.selected_env_field_index == 1,
-        ),
-    )
-    table.add_column("#", width=4, justify="right")
-    table.add_column(key_header, ratio=2)
-    table.add_column(value_header, ratio=3)
-
-    for index, (key, value) in enumerate(visible_items, start=start):
-        row_style = selected_element_style(
-            state,
-            selected=state.current_tab == TAB_ENV and index == state.selected_env_index,
-        )
-        table.add_row(str(index + 1), key, value, style=row_style)
-
-    return Panel(
-        Group(selector, table),
-        title="Env",
-        subtitle=env_caption(state, start, end, len(items)),
-        subtitle_align="left",
-    )
-
-
-def env_caption(state: PiespectorState, start: int, end: int, total: int) -> str:
-    parts = [f"Env {state.active_env_label()}"]
-    if total > 0:
-        parts.append(f"Rows {start + 1}-{end} of {total}")
+def env_sidebar_subtitle(state: PiespectorState) -> str:
+    parts = []
     if state.mode == MODE_NORMAL:
-        parts.append("h/l envs")
-        parts.append("j/k rows")
+        parts.append("j/k envs")
+        parts.append("e table")
+        parts.append("ctrl+p commands")
+    return "  |  ".join(parts)
+
+
+def env_table_subtitle(state: PiespectorState) -> str:
+    parts = []
     if state.mode == MODE_ENV_SELECT:
         parts.append("h/l fields")
-    if state.mode == MODE_ENV_EDIT:
+        parts.append("e edit")
+        parts.append("a add")
+        parts.append("d del")
+        parts.append("Esc back")
+    elif state.mode == MODE_ENV_EDIT:
         parts.append("enter save")
-    parts.append("a add")
-    parts.append("ctrl+p commands")
+        parts.append("Esc cancel")
     return "  |  ".join(parts)
