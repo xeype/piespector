@@ -440,7 +440,9 @@ def _load_requests_payload(payload: object) -> list[RequestDefinition]:
                     item.get("disabled_auto_headers")
                 ),
                 body=_load_request_body(item.get("body")),
+                description=str(item.get("description", "")),
                 verify_ssl=bool(item.get("verify_ssl", False)),
+                follow_redirects=bool(item.get("follow_redirects", True)),
             )
         )
     return requests
@@ -459,7 +461,9 @@ def _serialize_request_definition(request: RequestDefinition) -> dict[str, objec
         "auth": _serialize_request_auth(request.auth),
         "disabled_auto_headers": request.disabled_auto_headers,
         "body": _serialize_request_body(request.body),
+        "description": request.description,
         "verify_ssl": request.verify_ssl,
+        "follow_redirects": request.follow_redirects,
     }
 
 

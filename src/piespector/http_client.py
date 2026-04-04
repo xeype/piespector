@@ -19,6 +19,11 @@ from piespector.request_builder import (
 )
 
 
+class _NoRedirectHandler(request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
 def perform_request(
     definition: RequestDefinition,
     env_pairs: dict[str, str],
@@ -31,10 +36,19 @@ def perform_request(
         ssl_context.check_hostname = False
         ssl_context.verify_mode = ssl.CERT_NONE
 
-    def _urlopen(url_or_req, *, timeout=None):
+    if not definition.follow_redirects:
+        handlers: list = [_NoRedirectHandler()]
         if ssl_context is not None:
-            return request.urlopen(url_or_req, timeout=timeout, context=ssl_context)
-        return request.urlopen(url_or_req, timeout=timeout)
+            handlers.append(request.HTTPSHandler(context=ssl_context))
+        opener = request.build_opener(*handlers)
+
+        def _urlopen(url_or_req, *, timeout=None):
+            return opener.open(url_or_req, timeout=timeout)
+    else:
+        def _urlopen(url_or_req, *, timeout=None):
+            if ssl_context is not None:
+                return request.urlopen(url_or_req, timeout=timeout, context=ssl_context)
+            return request.urlopen(url_or_req, timeout=timeout)
 
     try:
         req = build_request(

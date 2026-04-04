@@ -142,9 +142,11 @@ class RequestDefinition:
     header_items: list[RequestKeyValue] = field(default_factory=list)
     auth: RequestAuth = field(default_factory=RequestAuth)
     body: RequestBody = field(default_factory=RequestBody)
+    description: str = ""
     transient: bool = False
     disabled_auto_headers: list[str] = field(default_factory=list)
     verify_ssl: bool = False
+    follow_redirects: bool = True
     last_response: ResponseSummary | None = None
 
     def __init__(self, **kwargs) -> None:
@@ -173,9 +175,11 @@ class RequestDefinition:
         else:
             raise TypeError("body must be a RequestBody instance")
 
+        self.description = kwargs.pop("description", "")
         self.transient = kwargs.pop("transient", False)
         self.disabled_auto_headers = kwargs.pop("disabled_auto_headers", [])
         self.verify_ssl = bool(kwargs.pop("verify_ssl", False))
+        self.follow_redirects = bool(kwargs.pop("follow_redirects", True))
         self.last_response = kwargs.pop("last_response", None)
 
         self._apply_legacy_kwargs(kwargs)

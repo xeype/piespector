@@ -1217,6 +1217,11 @@ class HomeStateMixin:
             label = "enabled" if request.verify_ssl else "disabled"
             self.message = f"SSL verification {label}."
             self.notify_requests_mutated()
+        elif field_name == "follow_redirects":
+            request.follow_redirects = not request.follow_redirects
+            label = "enabled" if request.follow_redirects else "disabled"
+            self.message = f"Follow redirects {label}."
+            self.notify_requests_mutated()
 
     def save_selected_request_field(self, value: str | None = None) -> str | None:
         request = self.get_active_request()

@@ -24,12 +24,12 @@ HOME_EDITOR_TAB_BODY = "body"
 HOME_EDITOR_TAB_OPTIONS = "options"
 
 REQUEST_EDITOR_TABS: tuple[tuple[str, str], ...] = (
-    (HOME_EDITOR_TAB_REQUEST, "Request"),
+    (HOME_EDITOR_TAB_REQUEST, "Info"),
     (HOME_EDITOR_TAB_AUTH, "Auth"),
     (HOME_EDITOR_TAB_PARAMS, "Params"),
     (HOME_EDITOR_TAB_HEADERS, "Headers"),
     (HOME_EDITOR_TAB_BODY, "Body"),
-    (HOME_EDITOR_TAB_OPTIONS, "Options"),
+    (HOME_EDITOR_TAB_OPTIONS, "Settings"),
 )
 REQUEST_EDITOR_TAB_LABELS = dict(REQUEST_EDITOR_TABS)
 REQUEST_EDITOR_JUMP_BINDINGS: tuple[tuple[str, str], ...] = (
@@ -118,12 +118,13 @@ HISTORY_DETAIL_BLOCKS = (
 REQUEST_FIELDS_BY_EDITOR_TAB: dict[str, tuple[tuple[str, str], ...]] = {
     HOME_EDITOR_TAB_REQUEST: (
         ("name", "Name"),
+        ("description", "Description"),
     ),
     HOME_EDITOR_TAB_AUTH: (("auth_type", "Type"),),
     HOME_EDITOR_TAB_PARAMS: (("query_text", "Params"),),
     HOME_EDITOR_TAB_HEADERS: (("headers_text", "Headers"),),
     HOME_EDITOR_TAB_BODY: (("body_type", "Body Type"), ("body_text", "Body")),
-    HOME_EDITOR_TAB_OPTIONS: (("verify_ssl", "Verify SSL"),),
+    HOME_EDITOR_TAB_OPTIONS: (("verify_ssl", "Verify SSL"), ("follow_redirects", "Follow Redirects")),
 }
 
 REQUEST_FIELDS: tuple[tuple[str, str], ...] = tuple(
