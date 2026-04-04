@@ -440,9 +440,12 @@ class WorkspaceStateMixin:
             if self.preview_request_id is not None:
                 self.active_request_id = self.preview_request_id
                 should_sync_selection = True
-            elif selected_node is not None and selected_node.request_id is not None:
-                if not self.request_workspace_initialized:
-                    self.preview_request_id = selected_node.request_id
+            elif (
+                not self.request_workspace_initialized
+                and selected_node is not None
+                and selected_node.request_id is not None
+            ):
+                self.preview_request_id = selected_node.request_id
                 self.active_request_id = selected_node.request_id
                 should_sync_selection = True
         if should_sync_selection and self.active_request_id is not None:

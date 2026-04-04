@@ -2563,6 +2563,8 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
             await pilot.pause()
 
             tabs = app.screen.query_one("#open-request-tabs", Tabs)
+            method_select = app.screen.query_one("#method-select", Select)
+            url_display = app.screen.query_one("#url-display", Static)
             self.assertTrue(tabs.display)
             self.assertEqual(tabs.tab_count, 1)
 
@@ -2572,6 +2574,9 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
 
             self.assertFalse(tabs.display)
             self.assertEqual(tabs.tab_count, 0)
+            self.assertIsNone(app.state.get_active_request())
+            self.assertFalse(method_select.display)
+            self.assertEqual(str(url_display.content), "No opened request.")
 
     async def test_home_layout_keeps_top_bar_above_workspace_and_footer_visible(self) -> None:
         app = PiespectorApp()

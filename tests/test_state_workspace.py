@@ -163,6 +163,21 @@ class WorkspaceIndexTests(unittest.TestCase):
         self.assertIsNone(state.get_folder_by_id(folder.folder_id))
         self.assertIsNone(state.get_request_by_id(request.request_id))
 
+    def test_close_active_request_keeps_workspace_empty_until_selection_changes(self) -> None:
+        request = RequestDefinition(request_id="r1", name="Health")
+        state = PiespectorState(requests=[request])
+        state.ensure_request_workspace()
+        state._set_selected_sidebar_by_request_id(request.request_id)
+        state.open_selected_request(pin=True)
+
+        closed = state.close_active_request()
+
+        self.assertIs(closed, request)
+        self.assertIsNone(state.active_request_id)
+        self.assertIsNone(state.preview_request_id)
+        self.assertEqual(state.open_request_ids, [])
+        self.assertIsNone(state.get_active_request())
+
 
 if __name__ == "__main__":
     unittest.main()
