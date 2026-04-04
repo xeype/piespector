@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from piespector.domain.editor import BODY_KEY_VALUE_TYPES, RESPONSE_TAB_BODY
+from piespector.domain.editor import BODY_KEY_VALUE_TYPES, HOME_EDITOR_TAB_OPTIONS, RESPONSE_TAB_BODY
 from piespector.domain.modes import (
     MODE_HOME_AUTH_LOCATION_EDIT,
     MODE_HOME_AUTH_SELECT,
@@ -52,6 +52,8 @@ def home_editor_subtitle(state: PiespectorState) -> str:
     if mode == MODE_HOME_SECTION_SELECT:
         return "h/l sections   j/k enter   e open"
     if mode == MODE_HOME_REQUEST_SELECT:
+        if state.home_editor_tab == HOME_EDITOR_TAB_OPTIONS:
+            return "h/l tabs   j/k rows   space/e toggle"
         return "h/l tabs   j/k fields   e edit"
     if mode == MODE_HOME_AUTH_SELECT:
         return "h/l tabs   j/k rows   e edit"

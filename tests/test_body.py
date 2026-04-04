@@ -65,7 +65,7 @@ class BodyTests(unittest.TestCase):
         captured_data: list[bytes | None] = []
         captured_content_type: list[str | None] = []
 
-        def fake_urlopen(req, timeout=15.0):
+        def fake_urlopen(req, timeout=15.0, context=None):
             headers = {key.lower(): value for key, value in req.header_items()}
             captured_data.append(req.data)
             captured_content_type.append(headers.get("content-type"))
@@ -91,7 +91,7 @@ class BodyTests(unittest.TestCase):
             captured_data: list[bytes | None] = []
             captured_content_type: list[str | None] = []
 
-            def fake_urlopen(req, timeout=15.0):
+            def fake_urlopen(req, timeout=15.0, context=None):
                 headers = {key.lower(): value for key, value in req.header_items()}
                 captured_data.append(req.data)
                 captured_content_type.append(headers.get("content-type"))
@@ -117,7 +117,7 @@ class BodyTests(unittest.TestCase):
         captured_data: list[bytes | None] = []
         captured_content_type: list[str | None] = []
 
-        def fake_urlopen(req, timeout=15.0):
+        def fake_urlopen(req, timeout=15.0, context=None):
             headers = {key.lower(): value for key, value in req.header_items()}
             captured_data.append(req.data)
             captured_content_type.append(headers.get("content-type"))

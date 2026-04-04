@@ -21,6 +21,7 @@ HOME_EDITOR_TAB_AUTH = "auth"
 HOME_EDITOR_TAB_PARAMS = "params"
 HOME_EDITOR_TAB_HEADERS = "headers"
 HOME_EDITOR_TAB_BODY = "body"
+HOME_EDITOR_TAB_OPTIONS = "options"
 
 REQUEST_EDITOR_TABS: tuple[tuple[str, str], ...] = (
     (HOME_EDITOR_TAB_REQUEST, "Request"),
@@ -28,6 +29,7 @@ REQUEST_EDITOR_TABS: tuple[tuple[str, str], ...] = (
     (HOME_EDITOR_TAB_PARAMS, "Params"),
     (HOME_EDITOR_TAB_HEADERS, "Headers"),
     (HOME_EDITOR_TAB_BODY, "Body"),
+    (HOME_EDITOR_TAB_OPTIONS, "Options"),
 )
 REQUEST_EDITOR_TAB_LABELS = dict(REQUEST_EDITOR_TABS)
 REQUEST_EDITOR_JUMP_BINDINGS: tuple[tuple[str, str], ...] = (
@@ -36,6 +38,7 @@ REQUEST_EDITOR_JUMP_BINDINGS: tuple[tuple[str, str], ...] = (
     (HOME_EDITOR_TAB_PARAMS, "e"),
     (HOME_EDITOR_TAB_HEADERS, "r"),
     (HOME_EDITOR_TAB_BODY, "t"),
+    (HOME_EDITOR_TAB_OPTIONS, "y"),
 )
 REQUEST_EDITOR_TAB_TO_JUMP_KEY = dict(REQUEST_EDITOR_JUMP_BINDINGS)
 REQUEST_EDITOR_JUMP_KEY_TO_TAB = {
@@ -120,6 +123,7 @@ REQUEST_FIELDS_BY_EDITOR_TAB: dict[str, tuple[tuple[str, str], ...]] = {
     HOME_EDITOR_TAB_PARAMS: (("query_text", "Params"),),
     HOME_EDITOR_TAB_HEADERS: (("headers_text", "Headers"),),
     HOME_EDITOR_TAB_BODY: (("body_type", "Body Type"), ("body_text", "Body")),
+    HOME_EDITOR_TAB_OPTIONS: (("verify_ssl", "Verify SSL"),),
 }
 
 REQUEST_FIELDS: tuple[tuple[str, str], ...] = tuple(

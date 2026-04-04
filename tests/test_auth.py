@@ -129,7 +129,7 @@ class AuthTests(unittest.TestCase):
         )
         captured_authorization: list[str | None] = []
 
-        def fake_urlopen(req, timeout=15.0):
+        def fake_urlopen(req, timeout=15.0, context=None):
             url = req.full_url
             if url == "https://example.com/oauth/token":
                 self.assertEqual(req.get_method(), "POST")
@@ -176,7 +176,7 @@ class AuthTests(unittest.TestCase):
         )
         captured_authorization: list[str | None] = []
 
-        def fake_urlopen(req, timeout=15.0):
+        def fake_urlopen(req, timeout=15.0, context=None):
             url = req.full_url
             if url == "https://example.com/oauth/token":
                 self.assertEqual(req.get_method(), "POST")

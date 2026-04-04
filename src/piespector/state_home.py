@@ -10,6 +10,7 @@ from piespector.domain.editor import (
     HOME_EDITOR_TAB_AUTH,
     HOME_EDITOR_TAB_BODY,
     HOME_EDITOR_TAB_HEADERS,
+    HOME_EDITOR_TAB_OPTIONS,
     HOME_EDITOR_TAB_PARAMS,
     TAB_HOME,
     RAW_SUBTYPE_OPTIONS,
@@ -1202,6 +1203,20 @@ class HomeStateMixin:
         request.method = HTTP_METHODS[(index + step) % len(HTTP_METHODS)]
         self.notify_requests_mutated()
         return request.method
+
+    def toggle_active_options_field(self) -> None:
+        request = self.get_active_request()
+        if request is None:
+            return
+        fields = REQUEST_FIELDS_BY_EDITOR_TAB[HOME_EDITOR_TAB_OPTIONS]
+        if self.selected_request_field_index >= len(fields):
+            return
+        field_name, _ = fields[self.selected_request_field_index]
+        if field_name == "verify_ssl":
+            request.verify_ssl = not request.verify_ssl
+            label = "enabled" if request.verify_ssl else "disabled"
+            self.message = f"SSL verification {label}."
+            self.notify_requests_mutated()
 
     def save_selected_request_field(self, value: str | None = None) -> str | None:
         request = self.get_active_request()

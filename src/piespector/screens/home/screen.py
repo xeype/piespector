@@ -14,6 +14,7 @@ from piespector.domain.editor import (
     HOME_EDITOR_TAB_AUTH,
     HOME_EDITOR_TAB_BODY,
     HOME_EDITOR_TAB_HEADERS,
+    HOME_EDITOR_TAB_OPTIONS,
     HOME_EDITOR_TAB_PARAMS,
     HOME_EDITOR_TAB_REQUEST,
     RAW_SUBTYPE_OPTIONS,
@@ -169,6 +170,8 @@ class HomeScreen(PiespectorScreen):
                                     select_on_focus=False,
                                 )
                                 yield Static("", id="request-body-preview")
+                            with TabPane("Options", id=HOME_EDITOR_TAB_OPTIONS):
+                                yield Static("", id="request-options-content")
                         yield Static("", classes="panel-subtitle", id="request-subtitle")
                     with Vertical(id="response-panel"):
                         yield Static("Response", classes="panel-title", id="response-title")

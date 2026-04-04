@@ -25,15 +25,25 @@ def perform_request(
     timeout_seconds: float = 15.0,
 ) -> ResponseSummary:
     started = perf_counter()
+    ssl_context: ssl.SSLContext | None = None
+    if not definition.verify_ssl:
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+
+    def _urlopen(url_or_req, *, timeout=None):
+        if ssl_context is not None:
+            return request.urlopen(url_or_req, timeout=timeout, context=ssl_context)
+        return request.urlopen(url_or_req, timeout=timeout)
 
     try:
         req = build_request(
             definition,
             env_pairs,
             timeout_seconds=timeout_seconds,
-            urlopen=request.urlopen,
+            urlopen=_urlopen,
         )
-        with request.urlopen(req, timeout=timeout_seconds) as response:
+        with _urlopen(req, timeout=timeout_seconds) as response:
             raw_body = response.read()
             elapsed_ms = (perf_counter() - started) * 1000
             return ResponseSummary(

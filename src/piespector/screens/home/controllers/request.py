@@ -6,6 +6,7 @@ from piespector.domain.editor import (
     HOME_EDITOR_TAB_AUTH,
     HOME_EDITOR_TAB_BODY,
     HOME_EDITOR_TAB_HEADERS,
+    HOME_EDITOR_TAB_OPTIONS,
     HOME_EDITOR_TAB_PARAMS,
 )
 from piespector.domain.modes import (
@@ -25,6 +26,7 @@ from piespector.interactions.keys import (
     OPEN_KEYS,
     TAB_NEXT_KEYS,
     TAB_PREVIOUS_KEYS,
+    TOGGLE_KEYS,
     UP_KEYS,
     DOWN_KEYS,
 )
@@ -62,6 +64,8 @@ class HomeRequestController(HomeControllerBase):
                     )
                     return
                 self.state.enter_home_body_edit_mode(origin_mode=MODE_HOME_BODY_SELECT)
+        elif self.state.home_editor_tab == HOME_EDITOR_TAB_OPTIONS:
+            self.state.toggle_active_options_field()
         else:
             self.state.enter_home_request_edit_mode()
 
@@ -98,6 +102,12 @@ class HomeRequestController(HomeControllerBase):
         if event.key in TAB_NEXT_KEYS:
             self.move_request_block(1)
             self.app._refresh_screen()
+            event.stop()
+            return
+
+        if self.state.home_editor_tab == HOME_EDITOR_TAB_OPTIONS and event.key in TOGGLE_KEYS:
+            self.state.toggle_active_options_field()
+            self.app._refresh_home_request_panel()
             event.stop()
             return
 

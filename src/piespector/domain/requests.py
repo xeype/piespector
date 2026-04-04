@@ -144,6 +144,7 @@ class RequestDefinition:
     body: RequestBody = field(default_factory=RequestBody)
     transient: bool = False
     disabled_auto_headers: list[str] = field(default_factory=list)
+    verify_ssl: bool = False
     last_response: ResponseSummary | None = None
 
     def __init__(self, **kwargs) -> None:
@@ -174,6 +175,7 @@ class RequestDefinition:
 
         self.transient = kwargs.pop("transient", False)
         self.disabled_auto_headers = kwargs.pop("disabled_auto_headers", [])
+        self.verify_ssl = bool(kwargs.pop("verify_ssl", False))
         self.last_response = kwargs.pop("last_response", None)
 
         self._apply_legacy_kwargs(kwargs)

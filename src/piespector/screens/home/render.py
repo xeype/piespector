@@ -18,6 +18,7 @@ from piespector.domain.editor import (
     HOME_EDITOR_TAB_AUTH,
     HOME_EDITOR_TAB_BODY,
     HOME_EDITOR_TAB_HEADERS,
+    HOME_EDITOR_TAB_OPTIONS,
     HOME_EDITOR_TAB_PARAMS,
     HOME_EDITOR_TAB_REQUEST,
     RAW_SUBTYPE_OPTIONS,
@@ -83,6 +84,7 @@ from piespector.screens.home.request.request_metadata import (
     render_request_overview_fields,
     request_label,
 )
+from piespector.screens.home.request.request_options import render_request_options_editor
 from piespector.screens.home.request.header_editor import RequestHeadersTable, refresh_request_headers_table
 from piespector.screens.home.request.query_editor import RequestParamsTable, refresh_request_params_table
 from piespector.screens.home.request.dropdown import sync_select_widget
@@ -589,6 +591,7 @@ def refresh_home_request_content(
     body_table = tabs.query_one("#request-body-table", RequestBodyTable)
     body_input = tabs.query_one("#request-body-input", Input)
     body_preview = tabs.query_one("#request-body-preview", Static)
+    options_content = tabs.query_one("#request-options-content", Static)
 
     mode = effective_mode(state)
     selection = home_selection(state)
@@ -605,6 +608,7 @@ def refresh_home_request_content(
         _sync_input_widget(overview_input, "", display=False)
         _sync_input_widget(auth_field_input, "", display=False)
         auth_content.update(empty)
+        options_content.update(empty)
         body_preview.update(empty)
         note.update("")
         auth_type_select.display = False
@@ -790,6 +794,10 @@ def refresh_home_request_content(
             headers_table.focus()
         elif not headers_table_selected:
             _deactivate_table_widget(headers_table)
+        return
+
+    if state.home_editor_tab == HOME_EDITOR_TAB_OPTIONS:
+        options_content.update(render_request_options_editor(active_request, state))
         return
 
     sync_select_widget(

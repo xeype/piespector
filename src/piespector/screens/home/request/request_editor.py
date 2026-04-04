@@ -10,6 +10,7 @@ from piespector.domain.editor import (
     HOME_EDITOR_TAB_AUTH,
     HOME_EDITOR_TAB_BODY,
     HOME_EDITOR_TAB_HEADERS,
+    HOME_EDITOR_TAB_OPTIONS,
     HOME_EDITOR_TAB_PARAMS,
     HOME_EDITOR_TAB_REQUEST,
     REQUEST_EDITOR_TABS,
@@ -22,6 +23,7 @@ from piespector.screens.home.selection import request_panel_selected
 from piespector.screens.home.request.request_auth import render_request_auth_editor
 from piespector.screens.home.request.request_body import render_request_body_editor
 from piespector.screens.home.request.request_metadata import render_request_overview_fields
+from piespector.screens.home.request.request_options import render_request_options_editor
 from piespector.screens.home.request.query_editor import render_request_params_fallback
 from piespector.screens.home.request.header_editor import render_request_headers_fallback
 from piespector.state import PiespectorState
@@ -52,6 +54,8 @@ def render_home_editor_content(
         return render_request_auth_editor(request, state)
     if state.home_editor_tab == HOME_EDITOR_TAB_HEADERS:
         return render_request_headers_fallback(request, state)
+    if state.home_editor_tab == HOME_EDITOR_TAB_OPTIONS:
+        return render_request_options_editor(request, state)
     return render_request_body_editor(request, state, viewport_width)
 
 
