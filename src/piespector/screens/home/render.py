@@ -388,6 +388,12 @@ def refresh_home_url_bar(
         ),
     )
     method_select.display = True
+    if not method_selected:
+        try:
+            label_widget = method_select.query_one("SelectCurrent Static#label", Static)
+            label_widget.styles.color = method_color(active_request.method.upper())
+        except NoMatches:
+            pass
     if mode == MODE_HOME_URL_EDIT:
         url_display.display = False
         _sync_input_widget(

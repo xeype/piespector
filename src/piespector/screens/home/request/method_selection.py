@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from rich.style import Style
 from rich.text import Text
 
 from piespector.domain.requests import RequestDefinition
@@ -40,11 +41,12 @@ def render_method_selector_value(
     if show_caret:
         label += " ▾"
     label += " "
-    return Text(
-        label,
-        style=selected_element_style(
+    if selected:
+        style = selected_element_style(
             state,
-            selected=selected,
+            selected=True,
             foreground=method_color(current_method),
-        ),
-    )
+        )
+    else:
+        style = Style(color=method_color(current_method))
+    return Text(label, style=style)
