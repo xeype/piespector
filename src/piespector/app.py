@@ -55,6 +55,8 @@ from piespector.screen_refresh import ScreenRefreshCoordinator
 from piespector.state import PiespectorState
 from piespector.storage import (
     discover_workspace_paths,
+    load_collections_from_dir,
+    load_env_from_dir,
     load_env_workspace,
     load_history_entries,
     load_request_workspace,
@@ -92,6 +94,8 @@ class PiespectorApp(App[None]):
         self._requests_file_path = self._storage_paths.requests_path
         self._history_file_path = self._storage_paths.history_path
         self._log_file_path = self._storage_paths.log_path
+        self._collections_dir = self._storage_paths.collections_dir
+        self._env_dir = self._storage_paths.env_dir
         self.response_copy_keys = response_copy_keys()
         self.response_copy_hint = response_copy_hint()
         self._edit_path_completion_anchor = ""
@@ -166,16 +170,18 @@ class PiespectorApp(App[None]):
         self.screen.query(PiespectorHelpPanel).remove()
 
     def _load_env_workspace(self) -> None:
-        env_names, env_sets, selected_env_name = load_env_workspace(
-            self._storage_paths.env_workspace_source_path,
-            self._storage_paths.legacy_env_path,
-        )
+        if self._storage_paths.use_env_dir:
+            env_names, env_sets, selected_env_name = load_env_from_dir(self._env_dir)
+        else:
+            env_names, env_sets, selected_env_name = load_env_workspace(
+                self._storage_paths.env_workspace_source_path,
+                self._storage_paths.legacy_env_path,
+            )
+            self._persist_env_pairs()
         self.state.env_names = env_names
         self.state.env_sets = env_sets
         self.state.selected_env_name = selected_env_name
         self.state.ensure_env_workspace()
-        if self._storage_paths.needs_env_workspace_migration:
-            self._persist_env_pairs()
 
     def _load_history(self) -> None:
         self.state.history_entries = load_history_entries(
@@ -185,21 +191,29 @@ class PiespectorApp(App[None]):
             self._persist_history_entries()
 
     def _load_request_workspace(self) -> None:
-        (
-            collections,
-            folders,
-            requests,
-            collapsed_collection_ids,
-            collapsed_folder_ids,
-        ) = load_request_workspace(self._storage_paths.requests_source_path)
+        if self._storage_paths.use_collections_dir:
+            (
+                collections,
+                folders,
+                requests,
+                collapsed_collection_ids,
+                collapsed_folder_ids,
+            ) = load_collections_from_dir(self._collections_dir)
+        else:
+            (
+                collections,
+                folders,
+                requests,
+                collapsed_collection_ids,
+                collapsed_folder_ids,
+            ) = load_request_workspace(self._storage_paths.requests_source_path)
+            self._persist_requests()
         self.state.collections = collections
         self.state.folders = folders
         self.state.requests = requests
         self.state.collapsed_collection_ids = collapsed_collection_ids
         self.state.collapsed_folder_ids = collapsed_folder_ids
         self.state.ensure_request_workspace()
-        if self._storage_paths.needs_requests_migration:
-            self._persist_requests()
 
     def on_resize(self) -> None:
         self._refresh_screen()

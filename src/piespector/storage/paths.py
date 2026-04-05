@@ -12,6 +12,9 @@ REQUESTS_FILE_NAME = ".piespector.requests.json"
 HISTORY_FILE_NAME = ".piespector.history.jsonl"
 LOG_FILE_NAME = ".piespector.log"
 APP_DATA_DIRECTORY_NAME = "piespector"
+COLLECTIONS_DIR_NAME = "collections"
+ENV_DIR_NAME = "env"
+DIR_WORKSPACE_FILE = "_workspace.json"
 
 
 @dataclass(frozen=True)
@@ -24,6 +27,8 @@ class WorkspaceStoragePaths:
     history_path: Path
     history_source_path: Path
     log_path: Path
+    collections_dir: Path
+    env_dir: Path
 
     @property
     def needs_env_workspace_migration(self) -> bool:
@@ -36,6 +41,14 @@ class WorkspaceStoragePaths:
     @property
     def needs_history_migration(self) -> bool:
         return self.history_source_path != self.history_path
+
+    @property
+    def use_collections_dir(self) -> bool:
+        return (self.collections_dir / DIR_WORKSPACE_FILE).exists()
+
+    @property
+    def use_env_dir(self) -> bool:
+        return (self.env_dir / DIR_WORKSPACE_FILE).exists()
 
 
 def app_data_dir(base_dir: Path | None = None) -> Path:
@@ -81,6 +94,14 @@ def log_file_path(base_dir: Path | None = None) -> Path:
     return app_data_dir(base_dir) / LOG_FILE_NAME
 
 
+def collections_dir(base_dir: Path | None = None) -> Path:
+    return app_data_dir(base_dir) / COLLECTIONS_DIR_NAME
+
+
+def env_dir(base_dir: Path | None = None) -> Path:
+    return app_data_dir(base_dir) / ENV_DIR_NAME
+
+
 def discover_workspace_paths(
     *,
     base_dir: Path | None = None,
@@ -120,6 +141,8 @@ def discover_workspace_paths(
         history_path=history_path_value,
         history_source_path=history_source_path,
         log_path=log_file_path(base_dir),
+        collections_dir=collections_dir(base_dir),
+        env_dir=env_dir(base_dir),
     )
 
 

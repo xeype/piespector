@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from uuid import uuid4
 
@@ -303,6 +304,250 @@ def save_request_workspace(
 
 def save_requests(path: Path, requests: list[RequestDefinition]) -> None:
     save_request_workspace(path, [], [], requests, set(), set())
+
+
+def _sanitize_filename(name: str) -> str:
+    sanitized = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", name).strip().strip(".")
+    return sanitized or "unnamed"
+
+
+def load_collections_from_dir(
+    dir_path: Path,
+) -> tuple[
+    list[CollectionDefinition],
+    list[FolderDefinition],
+    list[RequestDefinition],
+    set[str],
+    set[str],
+]:
+    workspace_file = dir_path / "_workspace.json"
+    if not workspace_file.exists():
+        return ([], [], [], set(), set())
+
+    workspace = json.loads(workspace_file.read_text(encoding="utf-8"))
+    collection_order: list[str] = workspace.get("collection_order", [])
+
+    file_map: dict[str, tuple[Path, dict]] = {}
+    for file_path in dir_path.glob("*.json"):
+        if file_path.name == "_workspace.json":
+            continue
+        try:
+            data = json.loads(file_path.read_text(encoding="utf-8"))
+            if isinstance(data, dict) and "collection_id" in data:
+                cid = str(data["collection_id"]).strip()
+                if cid:
+                    file_map[cid] = (file_path, data)
+        except (json.JSONDecodeError, OSError):
+            continue
+
+    collections: list[CollectionDefinition] = []
+    folders: list[FolderDefinition] = []
+    requests: list[RequestDefinition] = []
+    collapsed_collection_ids: set[str] = set()
+    collapsed_folder_ids: set[str] = set()
+
+    ordered_ids = [cid for cid in collection_order if cid in file_map]
+    for cid in file_map:
+        if cid not in collection_order:
+            ordered_ids.append(cid)
+
+    seen: set[str] = set()
+    for cid in ordered_ids:
+        if cid in seen:
+            continue
+        seen.add(cid)
+        _, data = file_map[cid]
+
+        collections.append(CollectionDefinition(
+            collection_id=cid,
+            name=str(data.get("name", "New Collection")),
+        ))
+
+        if data.get("collapsed", False):
+            collapsed_collection_ids.add(cid)
+
+        for folder_item in data.get("folders", []):
+            if not isinstance(folder_item, dict):
+                continue
+            folder_id = str(folder_item.get("folder_id") or uuid4().hex).strip()
+            parent_folder_id = folder_item.get("parent_folder_id")
+            folders.append(FolderDefinition(
+                folder_id=folder_id,
+                name=str(folder_item.get("name", "New Folder")),
+                collection_id=cid,
+                parent_folder_id=str(parent_folder_id) if parent_folder_id else None,
+            ))
+            if folder_item.get("collapsed", False):
+                collapsed_folder_ids.add(folder_id)
+
+        for req in _load_requests_payload(data.get("requests")):
+            req.collection_id = cid
+            requests.append(req)
+
+    return (collections, folders, requests, collapsed_collection_ids, collapsed_folder_ids)
+
+
+def save_collections_to_dir(
+    dir_path: Path,
+    collections: list[CollectionDefinition],
+    folders: list[FolderDefinition],
+    requests: list[RequestDefinition],
+    collapsed_collection_ids: set[str] | None = None,
+    collapsed_folder_ids: set[str] | None = None,
+) -> None:
+    dir_path.mkdir(parents=True, exist_ok=True)
+
+    collapsed_cids = collapsed_collection_ids or set()
+    collapsed_fids = collapsed_folder_ids or set()
+
+    folders_by_collection: dict[str, list[FolderDefinition]] = {}
+    for folder in folders:
+        folders_by_collection.setdefault(folder.collection_id, []).append(folder)
+
+    requests_by_collection: dict[str, list[RequestDefinition]] = {}
+    for req in requests:
+        if not req.transient and req.collection_id:
+            requests_by_collection.setdefault(req.collection_id, []).append(req)
+
+    written_files: set[str] = {"_workspace.json"}
+
+    for collection in collections:
+        cid = collection.collection_id
+        sanitized = _sanitize_filename(collection.name)
+        file_name = f"{sanitized}.json"
+        if file_name in written_files:
+            file_name = f"{sanitized}_{cid[:8]}.json"
+        written_files.add(file_name)
+
+        coll_folders = folders_by_collection.get(cid, [])
+        coll_requests = requests_by_collection.get(cid, [])
+
+        payload = {
+            "collection_id": cid,
+            "name": collection.name,
+            "collapsed": cid in collapsed_cids,
+            "folders": [
+                {
+                    "folder_id": folder.folder_id,
+                    "name": folder.name,
+                    "parent_folder_id": folder.parent_folder_id,
+                    "collapsed": folder.folder_id in collapsed_fids,
+                }
+                for folder in coll_folders
+            ],
+            "requests": [
+                _serialize_request_definition(req)
+                for req in coll_requests
+            ],
+        }
+
+        (dir_path / file_name).write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+    workspace = {"collection_order": [c.collection_id for c in collections]}
+    (dir_path / "_workspace.json").write_text(
+        json.dumps(workspace, indent=2), encoding="utf-8"
+    )
+
+    for file_path in dir_path.glob("*.json"):
+        if file_path.name not in written_files:
+            file_path.unlink()
+
+
+def load_env_from_dir(
+    dir_path: Path,
+) -> tuple[list[str], dict[str, list[EnvVariable]], str]:
+    workspace_file = dir_path / "_workspace.json"
+    if not workspace_file.exists():
+        return (["Default"], {"Default": []}, "Default")
+
+    workspace = json.loads(workspace_file.read_text(encoding="utf-8"))
+    env_order: list[str] = workspace.get("env_order", [])
+    selected_env_name: str = str(workspace.get("selected_env_name", "")).strip()
+
+    env_sets: dict[str, list[EnvVariable]] = {}
+    for file_path in dir_path.glob("*.json"):
+        if file_path.name == "_workspace.json":
+            continue
+        try:
+            data = json.loads(file_path.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                name = str(data.get("name", "")).strip()
+                if name and name not in env_sets:
+                    env_sets[name] = _load_env_variables(data)
+        except (json.JSONDecodeError, OSError):
+            continue
+
+    names: list[str] = []
+    seen: set[str] = set()
+    for name in env_order:
+        if name in env_sets and name not in seen:
+            names.append(name)
+            seen.add(name)
+    for name in env_sets:
+        if name not in seen:
+            names.append(name)
+
+    if not names:
+        return (["Default"], {"Default": []}, "Default")
+
+    if selected_env_name not in env_sets:
+        selected_env_name = names[0]
+
+    return (names, env_sets, selected_env_name)
+
+
+def save_env_to_dir(
+    dir_path: Path,
+    env_order: list[str],
+    env_sets: dict[str, list[EnvVariable]],
+    selected_env_name: str,
+) -> None:
+    dir_path.mkdir(parents=True, exist_ok=True)
+
+    ordered_names = [name for name in env_order if name in env_sets]
+    if not ordered_names:
+        ordered_names = ["Default"]
+        env_sets = {"Default": []}
+        selected_env_name = "Default"
+    if selected_env_name not in env_sets:
+        selected_env_name = ordered_names[0]
+
+    written_files: set[str] = {"_workspace.json"}
+
+    for name in ordered_names:
+        sanitized = _sanitize_filename(name)
+        file_name = f"{sanitized}.json"
+        if file_name in written_files:
+            import hashlib
+            h = hashlib.md5(name.encode()).hexdigest()[:8]
+            file_name = f"{sanitized}_{h}.json"
+        written_files.add(file_name)
+
+        payload = {
+            "name": name,
+            "variables": [
+                {
+                    "key": v.key,
+                    "value": v.value,
+                    "sensitive": v.sensitive,
+                    "description": v.description,
+                }
+                for v in env_sets.get(name, [])
+            ],
+        }
+        (dir_path / file_name).write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+    workspace = {
+        "selected_env_name": selected_env_name,
+        "env_order": ordered_names,
+    }
+    (dir_path / "_workspace.json").write_text(
+        json.dumps(workspace, indent=2), encoding="utf-8"
+    )
+
+    for file_path in dir_path.glob("*.json"):
+        if file_path.name not in written_files:
+            file_path.unlink()
 
 
 def export_collection_workspace(

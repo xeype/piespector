@@ -5,9 +5,9 @@ from typing import TYPE_CHECKING
 from piespector.domain.history import HistoryEntry
 from piespector.storage import (
     append_history_entry,
-    save_env_workspace,
+    save_collections_to_dir,
+    save_env_to_dir,
     save_history_entries,
-    save_request_workspace,
 )
 
 if TYPE_CHECKING:
@@ -37,8 +37,8 @@ class PersistenceManager:
     def persist_env_workspace(self) -> None:
         if not self.enabled:
             return
-        save_env_workspace(
-            self.app._env_workspace_path,
+        save_env_to_dir(
+            self.app._env_dir,
             self.state.env_names,
             self.state.env_sets,
             self.state.selected_env_name,
@@ -47,8 +47,8 @@ class PersistenceManager:
     def persist_request_workspace(self) -> None:
         if not self.enabled:
             return
-        save_request_workspace(
-            self.app._requests_file_path,
+        save_collections_to_dir(
+            self.app._collections_dir,
             self.state.collections,
             self.state.folders,
             self.state.requests,
