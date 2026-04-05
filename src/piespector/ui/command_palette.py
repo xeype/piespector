@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+from asyncio import sleep as async_sleep
 from typing import TYPE_CHECKING
 
+from textual.binding import Binding
 from textual.command import (
+    Command,
     CommandInput,
+    CommandList,
     CommandPalette,
     DiscoveryHit,
     Hit,
@@ -21,6 +25,10 @@ if TYPE_CHECKING:
 
 
 class PiespectorPalette(CommandPalette):
+    BINDINGS = [
+        Binding("tab", "tab_complete", "Autocomplete", show=False),
+    ]
+
     def __init__(
         self,
         *args,
@@ -37,6 +45,22 @@ class PiespectorPalette(CommandPalette):
         command_input = self.query_one(CommandInput)
         command_input.value = self._initial_value
         command_input.action_end()
+
+    def action_tab_complete(self) -> None:
+        command_input = self.query_one(CommandInput)
+        command_list = self.query_one(CommandList)
+
+        index = command_list.highlighted
+        if index is None and command_list.option_count > 0:
+            index = 0
+
+        if index is not None:
+            option = command_list.get_option_at_index(index)
+            if isinstance(option, Command):
+                text = str(option.hit.text)
+                if text != command_input.value:
+                    command_input.value = text
+                    command_input.action_end()
 
 
 class PiespectorProvider(Provider):
@@ -69,6 +93,7 @@ class PiespectorCommandProvider(PiespectorProvider):
             )
 
     async def search(self, query: str):
+        await async_sleep(0)
         entries = command_palette_commands(self.piespector_app.state)
         entry_by_text = {entry.text.strip(): entry for entry in entries}
 
@@ -137,25 +162,20 @@ class PiespectorSearchProvider(PiespectorProvider):
             )
 
     async def search(self, query: str):
+        await async_sleep(0)
         matcher = self.matcher(query)
-        hits: list[tuple[float, SearchTarget]] = []
-        for target in search_targets(self.piespector_app.state):
+        for index, target in enumerate(search_targets(self.piespector_app.state)):
             score = max(matcher.match(term) for term in target.query_terms)
-            if score <= 0:
-                continue
-            hits.append((score, target))
-
-        for score, target in sorted(
-            hits,
-            key=lambda hit: (-hit[0], hit[1].display.casefold()),
-        ):
-            yield Hit(
-                score,
-                matcher.highlight(target.display),
-                self._target_callback(target),
-                text=target.display,
-                help=self._target_help(target),
-            )
+            if score > 0:
+                yield Hit(
+                    score,
+                    matcher.highlight(target.display),
+                    self._target_callback(target),
+                    text=target.display,
+                    help=self._target_help(target),
+                )
+            if index % 10 == 9:
+                await async_sleep(0)
 
 
 class PiespectorHistorySearchProvider(PiespectorProvider):
@@ -172,14 +192,17 @@ class PiespectorHistorySearchProvider(PiespectorProvider):
             yield DiscoveryHit(display, self._entry_callback(entry), text=display, help="Navigate to this history entry.")
 
     async def search(self, query: str):
+        await async_sleep(0)
         from piespector.search import history_search_display
         matcher = self.matcher(query)
         state = self.piespector_app.state
-        for entry in state.history_entries:
+        for index, entry in enumerate(state.history_entries):
             display = history_search_display(entry)
             score = matcher.match(display)
             if score > 0:
                 yield Hit(score, matcher.highlight(display), self._entry_callback(entry), text=display, help="Navigate to this history entry.")
+            if index % 25 == 24:
+                await async_sleep(0)
 
 
 class PiespectorThemeProvider(PiespectorProvider):

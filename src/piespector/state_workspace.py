@@ -93,21 +93,31 @@ class WorkspaceStateMixin:
         return self._requests_by_id.get(request_id)
 
     def get_sidebar_nodes(self) -> list[SidebarNode]:
+        # Build O(1)-lookup indexes to avoid O(N) scans per container.
+        requests_by_container: dict[tuple, list[tuple[int, object]]] = {}
+        for request_index, request in enumerate(self.requests):
+            key = (request.collection_id, request.folder_id)
+            requests_by_container.setdefault(key, []).append((request_index, request))
+
+        folders_by_parent: dict[tuple, list[object]] = {}
+        for folder in self.folders:
+            key = (folder.collection_id, folder.parent_folder_id)
+            folders_by_parent.setdefault(key, []).append(folder)
+
         nodes: list[SidebarNode] = []
 
-        for request_index, request in enumerate(self.requests):
-            if request.collection_id is None:
-                nodes.append(
-                    SidebarNode(
-                        kind="request",
-                        node_id=request.request_id,
-                        label=request.name,
-                        depth=0,
-                        request_id=request.request_id,
-                        request_index=request_index,
-                        method=request.method,
-                    )
+        for request_index, request in requests_by_container.get((None, None), []):
+            nodes.append(
+                SidebarNode(
+                    kind="request",
+                    node_id=request.request_id,
+                    label=request.name,
+                    depth=0,
+                    request_id=request.request_id,
+                    request_index=request_index,
+                    method=request.method,
                 )
+            )
 
         for collection in self.collections:
             nodes.append(
@@ -124,6 +134,7 @@ class WorkspaceStateMixin:
                         collection.collection_id,
                         None,
                         depth=1,
+                        requests_by_container=requests_by_container,
                     )
                 )
                 nodes.extend(
@@ -131,6 +142,8 @@ class WorkspaceStateMixin:
                         collection.collection_id,
                         None,
                         depth=1,
+                        requests_by_container=requests_by_container,
+                        folders_by_parent=folders_by_parent,
                     )
                 )
 
@@ -142,11 +155,16 @@ class WorkspaceStateMixin:
         folder_id: str | None,
         *,
         depth: int,
+        requests_by_container: dict | None = None,
     ) -> list[SidebarNode]:
+        if requests_by_container is None:
+            requests_by_container = {}
+            for request_index, request in enumerate(self.requests):
+                key = (request.collection_id, request.folder_id)
+                requests_by_container.setdefault(key, []).append((request_index, request))
+
         nodes: list[SidebarNode] = []
-        for request_index, request in enumerate(self.requests):
-            if request.collection_id != collection_id or request.folder_id != folder_id:
-                continue
+        for request_index, request in requests_by_container.get((collection_id, folder_id), []):
             nodes.append(
                 SidebarNode(
                     kind="request",
@@ -166,14 +184,22 @@ class WorkspaceStateMixin:
         parent_folder_id: str | None,
         *,
         depth: int,
+        requests_by_container: dict | None = None,
+        folders_by_parent: dict | None = None,
     ) -> list[SidebarNode]:
+        if requests_by_container is None:
+            requests_by_container = {}
+            for request_index, request in enumerate(self.requests):
+                key = (request.collection_id, request.folder_id)
+                requests_by_container.setdefault(key, []).append((request_index, request))
+        if folders_by_parent is None:
+            folders_by_parent = {}
+            for folder in self.folders:
+                key = (folder.collection_id, folder.parent_folder_id)
+                folders_by_parent.setdefault(key, []).append(folder)
+
         nodes: list[SidebarNode] = []
-        for folder in self.folders:
-            if (
-                folder.collection_id != collection_id
-                or folder.parent_folder_id != parent_folder_id
-            ):
-                continue
+        for folder in folders_by_parent.get((collection_id, parent_folder_id), []):
             nodes.append(
                 SidebarNode(
                     kind="folder",
@@ -188,6 +214,7 @@ class WorkspaceStateMixin:
                         collection_id,
                         folder.folder_id,
                         depth=depth + 1,
+                        requests_by_container=requests_by_container,
                     )
                 )
                 nodes.extend(
@@ -195,6 +222,8 @@ class WorkspaceStateMixin:
                         collection_id,
                         folder.folder_id,
                         depth=depth + 1,
+                        requests_by_container=requests_by_container,
+                        folders_by_parent=folders_by_parent,
                     )
                 )
         return nodes

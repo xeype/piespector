@@ -357,6 +357,8 @@ def refresh_home_url_bar(
     if getattr(open_tabs, "_piespector_signature", None) != open_tabs_signature:
         _refresh_open_request_tabs(state, open_tabs)
         open_tabs._piespector_signature = open_tabs_signature
+    else:
+        _sync_active_tab(state, open_tabs)
     open_tabs.display = bool(open_requests)
 
     if active_request is None:
@@ -426,7 +428,7 @@ def refresh_home_url_bar(
     url_display._piespector_signature = url_display_signature
 
 
-def _open_request_tabs_signature(state: PiespectorState) -> tuple[tuple[str, str, str, str], ...] | tuple[tuple[str, str, str, str], ...]:
+def _open_request_tabs_signature(state: PiespectorState) -> tuple[tuple[str, str, str, str], ...]:
     spinner_frames = ("|", "/", "-", "\\")
     spinner_frame = spinner_frames[state.pending_request_spinner_tick % len(spinner_frames)]
     return tuple(
@@ -437,7 +439,7 @@ def _open_request_tabs_signature(state: PiespectorState) -> tuple[tuple[str, str
             spinner_frame if request.request_id == state.pending_request_id else "",
         )
         for request in state.get_open_requests()
-    ) + ((state.active_request_id or "", "", "", ""),)
+    )
 
 
 def _url_line_signature(
@@ -533,16 +535,26 @@ def _refresh_open_request_tabs(state: PiespectorState, tabs: Tabs) -> None:
             else ""
         )
         tab_id = f"open-req-{req.request_id}"
-        label = Text()
-        if spinner:
-            label.append(spinner)
-        label.append(req.method, style=method_color(req.method))
-        label.append(f" {req.name}")
+        label_signature = (req.method, req.name, spinner)
         existing = existing_tabs.get(tab_id)
         if existing is not None:
-            existing.update(label)
+            if getattr(existing, "_piespector_label_sig", None) != label_signature:
+                label = Text()
+                if spinner:
+                    label.append(spinner)
+                label.append(req.method, style=method_color(req.method))
+                label.append(f" {req.name}")
+                existing.update(label)
+                existing._piespector_label_sig = label_signature
         else:
-            tabs_list.mount(Tab(label, id=tab_id))
+            label = Text()
+            if spinner:
+                label.append(spinner)
+            label.append(req.method, style=method_color(req.method))
+            label.append(f" {req.name}")
+            new_tab = Tab(label, id=tab_id)
+            new_tab._piespector_label_sig = label_signature
+            tabs_list.mount(new_tab)
 
     if state.active_request_id:
         active_tab_id = f"open-req-{state.active_request_id}"
@@ -551,6 +563,15 @@ def _refresh_open_request_tabs(state: PiespectorState, tabs: Tabs) -> None:
         return
 
     _clear_open_request_tabs_selection(tabs)
+
+
+def _sync_active_tab(state: PiespectorState, tabs: Tabs) -> None:
+    if state.active_request_id:
+        active_tab_id = f"open-req-{state.active_request_id}"
+        if tabs.active != active_tab_id and tabs.query(f"#tabs-list > #{active_tab_id}"):
+            tabs.active = active_tab_id
+    elif tabs.active:
+        _clear_open_request_tabs_selection(tabs)
 
 
 def _clear_open_request_tabs_selection(tabs: Tabs) -> None:
