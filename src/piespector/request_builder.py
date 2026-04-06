@@ -467,7 +467,7 @@ def _build_request_body(
     resolved_body_urlencoded_items: list[tuple[str, str]],
     headers: dict[str, str],
 ) -> bytes | None:
-    if definition.method.upper() == "GET":
+    if definition.method.upper() in {"GET", "HEAD"}:
         return None
 
     if definition.body_type == "none":
@@ -594,7 +594,7 @@ def _default_raw_content_type(raw_subtype: str) -> str:
 
 
 def _default_content_type(definition: RequestDefinition) -> str | None:
-    if definition.method.upper() == "GET":
+    if definition.method.upper() in {"GET", "HEAD"}:
         return None
     if definition.body_type == "raw":
         return _default_raw_content_type(definition.raw_subtype)

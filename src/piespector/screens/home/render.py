@@ -374,10 +374,7 @@ def refresh_home_url_bar(
     mode = effective_mode(state)
     method_selected = mode in {MODE_HOME_REQUEST_METHOD_SELECT, MODE_HOME_REQUEST_METHOD_EDIT}
 
-    if method_selected:
-        method_options = tuple((method, Text(method)) for method in HTTP_METHODS)
-    else:
-        method_options = tuple((method, Text(method, style=method_color(method))) for method in HTTP_METHODS)
+    method_options = tuple((method, Text(method, style=method_color(method))) for method in HTTP_METHODS)
 
     sync_select_widget(
         method_select,

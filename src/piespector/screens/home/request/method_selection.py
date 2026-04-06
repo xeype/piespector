@@ -13,8 +13,8 @@ _METHOD_COLORS: dict[str, str] = {
     "PUT": "#5555ff",
     "PATCH": "#00ffff",
     "DELETE": "#ff0000",
-    "HEAD": "#ff00ff",
-    "OPTIONS": "#aaaaaa",
+    "HEAD": "#17b317",
+    "OPTIONS": "#d904d9",
 }
 
 
