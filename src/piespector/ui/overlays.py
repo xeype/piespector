@@ -204,6 +204,7 @@ def build_overlay_widgets() -> tuple[Static | TextArea, ...]:
         ),
         Static("", id="body-editor-hint", classes="hidden"),
         Static("", id="body-editor-footer", classes="hidden"),
+        Static("", id="url-input-hint", classes="hidden"),
     ]
     return tuple(widgets)
 

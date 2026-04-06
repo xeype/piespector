@@ -100,6 +100,9 @@ class PiespectorApp(App[None]):
         self.response_copy_hint = response_copy_hint()
         self._edit_path_completion_anchor = ""
         self._edit_path_completion_index = -1
+        self._url_env_completion_anchor = ""
+        self._url_env_completion_matches: list[str] = []
+        self._url_env_completion_index = -1
         self.state.attach_app(self)
         self.persistence_manager = PersistenceManager(self, enabled=persist_state)
         self.request_executor = RequestExecutor(self)

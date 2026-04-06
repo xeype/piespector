@@ -632,6 +632,13 @@ TextArea {
     height: 1;
 }
 
+#url-input-hint {
+    position: absolute;
+    layer: above;
+    width: auto;
+    height: 1;
+}
+
 #body-editor-footer {
     height: auto;
 }

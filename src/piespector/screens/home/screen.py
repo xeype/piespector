@@ -39,7 +39,7 @@ from piespector.domain.modes import (
     MODE_HOME_URL_EDIT,
 )
 from piespector.commands import filesystem_path_completions
-from piespector.placeholders import apply_placeholder_completion
+from piespector.placeholders import apply_placeholder_completion, placeholder_match
 from piespector.screens.home import messages
 from piespector.screens.base import PiespectorScreen
 from piespector.screens.home.request.header_editor import RequestHeadersTable
@@ -465,9 +465,21 @@ class HomeScreen(PiespectorScreen):
         app._refresh_screen()
         event.stop()
 
+    def on_input_changed(self, event: Input.Changed) -> None:
+        app = self.app
+        if app is None or event.input.id != "url-input" or app.state.mode != MODE_HOME_URL_EDIT:
+            return
+        # Auto-pair {{ → {{}}
+        text = event.value
+        cursor = event.input.cursor_position
+        if cursor >= 2 and text[cursor - 2 : cursor] == "{{" and text[cursor : cursor + 2] != "}}":
+            event.input.value = text[:cursor] + "}}" + text[cursor:]
+            event.input.cursor_position = cursor
+        app.call_after_refresh(app._refresh_home_url_bar_panel)
+
     def on_key(self, event: events.Key) -> None:
         app = self.app
-        if app is None or event.key != "tab":
+        if app is None:
             return
 
         focused = app.focused
@@ -482,33 +494,52 @@ class HomeScreen(PiespectorScreen):
         }:
             return
 
-        if focused.id == "request-body-input" and app.state.mode == MODE_HOME_BODY_EDIT:
-            current = focused.value
-            anchor = app._edit_path_completion_anchor or current
-            matches = filesystem_path_completions(anchor)
-            if matches:
-                if app._edit_path_completion_anchor != anchor:
-                    app._edit_path_completion_anchor = anchor
-                    app._edit_path_completion_index = 0
-                else:
-                    app._edit_path_completion_index = (
-                        app._edit_path_completion_index + 1
-                    ) % len(matches)
-                completed = matches[app._edit_path_completion_index]
-                focused.value = completed
-                focused.cursor_position = len(completed)
+        if event.key == "tab":
+            if focused.id == "request-body-input" and app.state.mode == MODE_HOME_BODY_EDIT:
+                current = focused.value
+                anchor = app._edit_path_completion_anchor or current
+                matches = filesystem_path_completions(anchor)
+                if matches:
+                    if app._edit_path_completion_anchor != anchor:
+                        app._edit_path_completion_anchor = anchor
+                        app._edit_path_completion_index = 0
+                    else:
+                        app._edit_path_completion_index = (
+                            app._edit_path_completion_index + 1
+                        ) % len(matches)
+                    completed = matches[app._edit_path_completion_index]
+                    focused.value = completed
+                    focused.cursor_position = len(completed)
+                event.stop()
+                return
+
+            if focused.id == "url-input" and app.state.mode == MODE_HOME_URL_EDIT:
+                env_keys = sorted(app.state.env_pairs)
+                match = placeholder_match(focused.value, focused.cursor_position, env_keys)
+                if match is not None:
+                    anchor = app._url_env_completion_anchor
+                    stored = app._url_env_completion_matches
+                    # Detect cycling: prefix is one of the completions from stored anchor
+                    if anchor and match.prefix in stored:
+                        matches = stored
+                        new_idx = (app._url_env_completion_index + 1) % len(matches)
+                    else:
+                        anchor = match.prefix
+                        matches = [k for k in env_keys if k.startswith(anchor)]
+                        new_idx = 0
+                    if matches:
+                        app._url_env_completion_anchor = anchor
+                        app._url_env_completion_matches = matches
+                        app._url_env_completion_index = new_idx
+                        suggestion = matches[new_idx]
+                        before = focused.value[: match.start]
+                        after = focused.value[match.end :]
+                        completed = f"{before}{{{{{suggestion}}}}}{after}"
+                        new_cursor = len(before) + 2 + len(suggestion)
+                        focused.value = completed
+                        focused.cursor_position = new_cursor
+                        app.call_after_refresh(app._refresh_home_url_bar_panel)
             event.stop()
             return
 
-        if focused.id == "url-input" and app.state.mode == MODE_HOME_URL_EDIT:
-            completed = apply_placeholder_completion(
-                focused.value,
-                focused.cursor_position,
-                sorted(app.state.env_pairs),
-            )
-            if completed is not None:
-                value, cursor_position = completed
-                focused.value = value
-                focused.cursor_position = cursor_position
 
-        event.stop()

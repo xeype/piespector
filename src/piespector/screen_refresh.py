@@ -22,7 +22,8 @@ from piespector.domain.editor import (
     TAB_HOME,
     TAB_ORDER,
 )
-from piespector.domain.modes import MODE_COMMAND
+from piespector.domain.modes import MODE_COMMAND, MODE_HOME_URL_EDIT
+from piespector.placeholders import placeholder_match
 from piespector.screens.base import PiespectorScreen
 from piespector.screens.env import render as env_render
 from piespector.screens.history import render as history_render
@@ -233,7 +234,24 @@ class ScreenRefreshCoordinator:
         url_display = self.app._query_current("#url-display", Static)
         url_input = self.app._query_current("#url-input", Input)
         open_tabs = self.app._query_current("#open-request-tabs", Tabs)
+        url_hint = self.app._query_current("#url-input-hint", Static)
         refresh_home_url_bar(self.state, method_select, url_display, url_input, open_tabs)
+        self._refresh_url_input_hint(url_input, url_hint)
+
+    def _refresh_url_input_hint(self, url_input: Input, url_hint: Static) -> None:
+        if self.state.mode == MODE_HOME_URL_EDIT and url_input.display:
+            match = placeholder_match(
+                url_input.value,
+                url_input.cursor_position,
+                sorted(self.state.env_pairs),
+            )
+            if match is not None and match.suggestion != match.prefix:
+                cursor_offset = url_input.cursor_screen_offset
+                url_hint.update(match.suggestion)
+                url_hint.offset = (cursor_offset.x, cursor_offset.y + 1)
+                url_hint.remove_class("hidden")
+                return
+        url_hint.add_class("hidden")
 
     def refresh_home_request_panel(self) -> None:
         if not self.app._has_live_screen():
