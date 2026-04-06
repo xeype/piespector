@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from rich.style import Style
-from textual import events
+from textual import events, on
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
-from textual.widgets import ContentSwitcher, DataTable, Input, Select, Static, Tab, TabbedContent, TabPane, Tabs, Tree
+from textual.widgets import ContentSwitcher, DataTable, Input, Static, Tab, TabbedContent, TabPane, Tabs, Tree
 from textual.widgets._tree import TreeNode
 
 from piespector.domain.editor import (
@@ -39,14 +39,14 @@ from piespector.domain.modes import (
     MODE_HOME_URL_EDIT,
 )
 from piespector.commands import filesystem_path_completions
-from piespector.placeholders import apply_placeholder_completion, placeholder_match
+from piespector.placeholders import placeholder_match
 from piespector.screens.home import messages
 from piespector.screens.base import PiespectorScreen
 from piespector.screens.home.request.header_editor import RequestHeadersTable
 from piespector.screens.home.request.query_editor import RequestParamsTable
 from piespector.screens.home.request.request_body import RequestBodyTable
 from piespector.ui.input import PiespectorInput
-from piespector.ui.select import PiespectorSelect
+from piespector.widget.select import PiespectorSelect, SelectionChanged, option_list
 
 
 class SidebarTree(Tree, inherit_bindings=False):
@@ -72,7 +72,7 @@ class HomeScreen(PiespectorScreen):
                 yield Static("", classes="panel-subtitle", id="url-bar-subtitle")
                 with Horizontal(id="url-line"):
                     yield PiespectorSelect(
-                        [(method, method) for method in HTTP_METHODS],
+                        option_list(*((method, method) for method in HTTP_METHODS)),
                         id="method-select",
                         allow_blank=False,
                         value="GET",
@@ -104,7 +104,7 @@ class HomeScreen(PiespectorScreen):
                                 )
                             with TabPane("Auth", id=HOME_EDITOR_TAB_AUTH):
                                 yield PiespectorSelect(
-                                    [(label, value) for value, label in AUTH_TYPE_OPTIONS],
+                                    option_list(*AUTH_TYPE_OPTIONS),
                                     id="auth-type-select",
                                     allow_blank=False,
                                     value=AUTH_TYPE_OPTIONS[0][0],
@@ -112,7 +112,7 @@ class HomeScreen(PiespectorScreen):
                                 )
                                 yield Static("", id="auth-option-label")
                                 yield PiespectorSelect(
-                                    [(label, value) for value, label in AUTH_API_KEY_LOCATION_OPTIONS],
+                                    option_list(*AUTH_API_KEY_LOCATION_OPTIONS),
                                     id="auth-option-select",
                                     allow_blank=False,
                                     value=AUTH_API_KEY_LOCATION_OPTIONS[0][0],
@@ -152,14 +152,14 @@ class HomeScreen(PiespectorScreen):
                                 )
                             with TabPane("Body", id=HOME_EDITOR_TAB_BODY):
                                 yield PiespectorSelect(
-                                    [(label, value) for value, label in BODY_TYPE_OPTIONS],
+                                    option_list(*BODY_TYPE_OPTIONS),
                                     id="body-type-select",
                                     allow_blank=False,
                                     value=BODY_TYPE_OPTIONS[0][0],
                                     compact=True,
                                 )
                                 yield PiespectorSelect(
-                                    [(label, value) for value, label in RAW_SUBTYPE_OPTIONS],
+                                    option_list(*RAW_SUBTYPE_OPTIONS),
                                     id="body-raw-type-select",
                                     allow_blank=False,
                                     value=RAW_SUBTYPE_OPTIONS[1][0],
@@ -226,15 +226,6 @@ class HomeScreen(PiespectorScreen):
         request_tabs.active = self.app.state.home_editor_tab
         response_tabs.active = self.app.state.selected_home_response_tab
         response_content.current = self._response_content_id(self.app.state.selected_home_response_tab)
-        for select_id in (
-            "method-select",
-            "auth-type-select",
-            "auth-option-select",
-            "body-type-select",
-            "body-raw-type-select",
-        ):
-            select = self.query_one(f"#{select_id}", Select)
-            select._piespector_ignored_change_value = select.value
         self._tab_activation_ready = True
         self.query_one("#sidebar-container").border_title = "Collections"
         self.query_one("#request-panel").border_title = "Request"
@@ -356,37 +347,45 @@ class HomeScreen(PiespectorScreen):
 
         app._refresh_screen()
 
-    def on_select_changed(self, event: Select.Changed) -> None:
-        app = self.app
-        if app is None or getattr(event.select, "_piespector_syncing", False):
+    @on(SelectionChanged, "#method-select")
+    def _on_method_selected(self, event: SelectionChanged) -> None:
+        if self.app.state.mode != MODE_HOME_REQUEST_METHOD_EDIT:
             return
-        if getattr(event.select, "_piespector_suppress_changes", False):
-            return
+        self.app.state.save_home_method_selection(event.value)
+        self.app.set_focus(None)
+        self.app._refresh_screen()
 
-        value = event.value
-        if value == Select.NULL:
+    @on(SelectionChanged, "#auth-type-select")
+    def _on_auth_type_selected(self, event: SelectionChanged) -> None:
+        if self.app.state.mode != MODE_HOME_AUTH_TYPE_EDIT:
             return
-        ignored_value = getattr(event.select, "_piespector_ignored_change_value", None)
-        if ignored_value == value:
-            event.select._piespector_ignored_change_value = None
-            return
+        self.app.state.save_home_auth_type_selection(event.value)
+        self.app.set_focus(None)
+        self.app._refresh_screen()
 
-        if event.select.id == "method-select" and app.state.mode == MODE_HOME_REQUEST_METHOD_EDIT:
-            app.state.save_home_method_selection(str(value))
-        elif event.select.id == "auth-type-select" and app.state.mode == MODE_HOME_AUTH_TYPE_EDIT:
-            app.state.save_home_auth_type_selection(str(value))
-        elif event.select.id == "auth-option-select" and app.state.mode == MODE_HOME_AUTH_LOCATION_EDIT:
-            app.state.save_home_auth_option_selection(str(value))
-        elif event.select.id == "body-type-select" and app.state.mode == MODE_HOME_BODY_TYPE_EDIT:
-            app.state.save_home_body_type_selection(str(value))
-        elif event.select.id == "body-raw-type-select" and app.state.mode == MODE_HOME_BODY_RAW_TYPE_EDIT:
-            app.state.save_home_body_raw_type_selection(str(value))
-        else:
+    @on(SelectionChanged, "#auth-option-select")
+    def _on_auth_option_selected(self, event: SelectionChanged) -> None:
+        if self.app.state.mode != MODE_HOME_AUTH_LOCATION_EDIT:
             return
+        self.app.state.save_home_auth_option_selection(event.value)
+        self.app.set_focus(None)
+        self.app._refresh_screen()
 
-        app.set_focus(None)
-        app._refresh_screen()
-        event.stop()
+    @on(SelectionChanged, "#body-type-select")
+    def _on_body_type_selected(self, event: SelectionChanged) -> None:
+        if self.app.state.mode != MODE_HOME_BODY_TYPE_EDIT:
+            return
+        self.app.state.save_home_body_type_selection(event.value)
+        self.app.set_focus(None)
+        self.app._refresh_screen()
+
+    @on(SelectionChanged, "#body-raw-type-select")
+    def _on_body_raw_type_selected(self, event: SelectionChanged) -> None:
+        if self.app.state.mode != MODE_HOME_BODY_RAW_TYPE_EDIT:
+            return
+        self.app.state.save_home_body_raw_type_selection(event.value)
+        self.app.set_focus(None)
+        self.app._refresh_screen()
 
     def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
         app = self.app

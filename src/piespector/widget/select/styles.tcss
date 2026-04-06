@@ -1,0 +1,46 @@
+/* Base Select widget styling */
+
+Select > SelectCurrent {
+    background: $surface;
+}
+
+Select:focus > SelectCurrent {
+    background: $surface;
+    background-tint: 0%;
+}
+
+Select > SelectOverlay {
+    background: $surface;
+}
+
+Select > SelectOverlay:focus {
+    background: $surface;
+    background-tint: 0%;
+}
+
+Select > SelectOverlay > .option-list--option,
+Select > SelectOverlay > .option-list--option-disabled,
+Select > SelectOverlay > .option-list--option-hover {
+    background: $surface;
+}
+
+Select > SelectOverlay > .option-list--option-highlighted,
+Select > SelectOverlay:focus > .option-list--option-highlighted {
+    color: $text;
+    background: $accent;
+    text-style: none;
+}
+
+Select > SelectOverlay > .option-list--option-hover {
+    background: $accent;
+}
+
+/* Selected-element state (applied via .piespector-selected-element class) */
+
+Select.piespector-selected-element > SelectCurrent {
+    background: $accent;
+}
+
+Select.piespector-selected-element > SelectCurrent Static#label {
+    color: $button-color-foreground;
+}

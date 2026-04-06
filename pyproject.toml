@@ -45,3 +45,6 @@ version = {attr = "piespector.__version__"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+piespector = ["**/*.tcss"]

@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from importlib.resources import files
+
 from piespector.domain.http import HTTP_METHODS
 
 
 def build_app_css() -> str:
     method_select_width = max(len(method) for method in HTTP_METHODS) + 3
-    css = """
+    select_css = files("piespector.widget.select").joinpath("styles.tcss").read_text(encoding="utf-8")
+    css = select_css + """
 Screen {
     layout: vertical;
 }
@@ -97,14 +100,6 @@ Screen {
     border: solid $accent;
 }
 
-Select.piespector-selected-element > SelectCurrent {
-    background: $accent;
-}
-
-Select.piespector-selected-element > SelectCurrent Static#label {
-    color: $button-color-foreground;
-}
-
 #open-request-tabs {
     height: 2;
 }
@@ -152,41 +147,6 @@ Select.piespector-selected-element > SelectCurrent Static#label {
 
 #method-select.piespector-selected-element > SelectCurrent {
     outline: solid $accent;
-}
-
-Select > SelectCurrent {
-    background: $surface;
-}
-
-Select:focus > SelectCurrent {
-    background: $surface;
-    background-tint: 0%;
-}
-
-Select > SelectOverlay {
-    background: $surface;
-}
-
-Select > SelectOverlay:focus {
-    background: $surface;
-    background-tint: 0%;
-}
-
-Select > SelectOverlay > .option-list--option,
-Select > SelectOverlay > .option-list--option-disabled,
-Select > SelectOverlay > .option-list--option-hover {
-    background: $surface;
-}
-
-Select > SelectOverlay > .option-list--option-highlighted,
-Select > SelectOverlay:focus > .option-list--option-highlighted {
-    color: $text;
-    background: $accent;
-    text-style: none;
-}
-
-Select > SelectOverlay > .option-list--option-hover {
-    background: $accent;
 }
 
 #url-bar-subtitle {

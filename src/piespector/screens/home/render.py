@@ -87,7 +87,7 @@ from piespector.screens.home.request.request_metadata import (
 from piespector.screens.home.request.request_options import render_request_options_editor
 from piespector.screens.home.request.header_editor import RequestHeadersTable, refresh_request_headers_table
 from piespector.screens.home.request.query_editor import RequestParamsTable, refresh_request_params_table
-from piespector.screens.home.request.dropdown import sync_select_widget
+from piespector.widget.select import option_list, sync
 from piespector.screens.home.request.url_bar import render_request_url_preview
 from piespector.screens.home.request.url_bar import render_top_url_bar
 from piespector.screens.home.response_panel import (
@@ -374,9 +374,11 @@ def refresh_home_url_bar(
     mode = effective_mode(state)
     method_selected = mode in {MODE_HOME_REQUEST_METHOD_SELECT, MODE_HOME_REQUEST_METHOD_EDIT}
 
-    method_options = tuple((method, Text(method, style=method_color(method))) for method in HTTP_METHODS)
+    method_options = option_list(
+        *((method, Text(method, style=method_color(method))) for method in HTTP_METHODS)
+    )
 
-    sync_select_widget(
+    sync(
         method_select,
         method_options,
         active_request.method.upper(),
@@ -688,9 +690,9 @@ def refresh_home_request_content(
         return
 
     if state.home_editor_tab == HOME_EDITOR_TAB_AUTH:
-        sync_select_widget(
+        sync(
             auth_type_select,
-            AUTH_TYPE_OPTIONS,
+            option_list(*AUTH_TYPE_OPTIONS),
             active_request.auth_type,
             auto_open_token=(
                 ("auth-type", active_request.request_id, state.mode)
@@ -703,9 +705,9 @@ def refresh_home_request_content(
             label, options, current_value = option_context
             auth_option_label.update(label)
             auth_option_label.display = True
-            sync_select_widget(
+            sync(
                 auth_option_select,
-                options,
+                option_list(*options),
                 current_value,
                 display=True,
                 auto_open_token=(
@@ -820,9 +822,9 @@ def refresh_home_request_content(
         options_content.update(render_request_options_editor(active_request, state))
         return
 
-    sync_select_widget(
+    sync(
         body_type_select,
-        BODY_TYPE_OPTIONS,
+        option_list(*BODY_TYPE_OPTIONS),
         active_request.body_type,
         auto_open_token=(
             ("body-type", active_request.request_id, state.mode)
@@ -831,9 +833,9 @@ def refresh_home_request_content(
         ),
     )
     if active_request.body_type == "raw":
-        sync_select_widget(
+        sync(
             body_raw_type_select,
-            RAW_SUBTYPE_OPTIONS,
+            option_list(*RAW_SUBTYPE_OPTIONS),
             active_request.raw_subtype,
             display=True,
             auto_open_token=(
