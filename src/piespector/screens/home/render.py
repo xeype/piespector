@@ -9,7 +9,9 @@ from rich.style import Style
 from rich.text import Text
 
 from textual.css.query import NoMatches
-from textual.widgets import ContentSwitcher, DataTable, Input, Select, Static, Tab, TabbedContent, Tabs, Tree
+from textual.widgets import ContentSwitcher, DataTable, Input, Select, Static, Tab, TabbedContent, Tabs
+
+from piespector.widget.tree import PiespectorTree, rebuild as rebuild_tree
 
 from piespector.domain.editor import (
     AUTH_TYPE_OPTIONS,
@@ -248,7 +250,7 @@ def sync_home_focus_highlights(
 
 def refresh_home_sidebar(
     state: PiespectorState,
-    tree: Tree,
+    tree: PiespectorTree,
     subtitle: Static,
     container,
     title: Static,
@@ -269,7 +271,7 @@ def refresh_home_sidebar(
         tree.focus()
 
 
-def _rebuild_tree(tree: Tree, state: PiespectorState, items: list) -> None:
+def _rebuild_tree(tree: PiespectorTree, state: PiespectorState, items: list) -> None:
     signature = (
         tuple(
             (
@@ -287,46 +289,41 @@ def _rebuild_tree(tree: Tree, state: PiespectorState, items: list) -> None:
         tuple(sorted(state.collapsed_folder_ids)),
     )
 
-    if getattr(tree, "_piespector_signature", None) == signature:
-        return
+    def build(t: PiespectorTree) -> None:
+        parent_stack: list[tuple[object, int]] = [(t.root, -1)]
+        for index, item in enumerate(items):
+            while len(parent_stack) > 1 and parent_stack[-1][1] >= item.depth:
+                parent_stack.pop()
+            parent_node = parent_stack[-1][0]
 
-    tree.clear()
-    tree.root.expand()
-    parent_stack: list[tuple[object, int]] = [(tree.root, -1)]
+            if item.kind == "request":
+                label = Text()
+                label.append(f"{item.method:7s}", style=method_color(item.method))
+                label.append(item.label)
+                parent_node.add_leaf(label, data=index)
+            elif item.kind == "collection":
+                marker = "[+]" if item.node_id in state.collapsed_collection_ids else "[-]"
+                label = Text(f"{marker} {item.label}")
+                node = parent_node.add(
+                    label,
+                    data=index,
+                    expand=item.node_id not in state.collapsed_collection_ids,
+                )
+                parent_stack.append((node, item.depth))
+            else:
+                marker = "[+]" if item.node_id in state.collapsed_folder_ids else "[-]"
+                label = Text(f"{marker} {item.label}")
+                node = parent_node.add(
+                    label,
+                    data=index,
+                    expand=item.node_id not in state.collapsed_folder_ids,
+                )
+                parent_stack.append((node, item.depth))
 
-    for index, item in enumerate(items):
-        while len(parent_stack) > 1 and parent_stack[-1][1] >= item.depth:
-            parent_stack.pop()
-        parent_node = parent_stack[-1][0]
-
-        if item.kind == "request":
-            label = Text()
-            label.append(f"{item.method:7s}", style=method_color(item.method))
-            label.append(item.label)
-            node = parent_node.add_leaf(label, data=index)
-        elif item.kind == "collection":
-            marker = "[+]" if item.node_id in state.collapsed_collection_ids else "[-]"
-            label = Text(f"{marker} {item.label}")
-            node = parent_node.add(
-                label,
-                data=index,
-                expand=item.node_id not in state.collapsed_collection_ids,
-            )
-            parent_stack.append((node, item.depth))
-        else:
-            marker = "[+]" if item.node_id in state.collapsed_folder_ids else "[-]"
-            label = Text(f"{marker} {item.label}")
-            node = parent_node.add(
-                label,
-                data=index,
-                expand=item.node_id not in state.collapsed_folder_ids,
-            )
-            parent_stack.append((node, item.depth))
-
-    tree._piespector_signature = signature
+    rebuild_tree(tree, signature, build)
 
 
-def _ensure_tree_cursor(tree: Tree, state: PiespectorState, item_count: int) -> None:
+def _ensure_tree_cursor(tree: PiespectorTree, state: PiespectorState, item_count: int) -> None:
     if not item_count:
         return
 
@@ -501,7 +498,11 @@ def _sync_input_widget(
 def _deactivate_table_widget(table: DataTable) -> None:
     if not table.has_focus:
         return
-    table.blur()
+    app = table.app
+    if app is not None:
+        app.set_focus(None)
+    else:
+        table.blur()
 
 
 def _refresh_open_request_tabs(state: PiespectorState, tabs: Tabs) -> None:

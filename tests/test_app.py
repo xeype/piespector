@@ -34,7 +34,7 @@ from piespector.domain.modes import (
 )
 from piespector.screens.home.controller import HomeController
 from piespector.domain.workspace import CollectionDefinition, FolderDefinition
-from piespector.screens.home.screen import SidebarTree
+from piespector.widget.tree import PiespectorTree as SidebarTree
 from piespector.state import PiespectorState, RequestDefinition
 from piespector.ui.help_panel import _hide_binding
 from piespector.ui.input import PiespectorInput
@@ -503,9 +503,11 @@ class AppCommandModeTests(unittest.TestCase):
 
         self.assertEqual(app.state.active_request_id, requests[1].request_id)
 
-    def test_sidebar_tree_bindings_remove_arrow_shortcuts(self) -> None:
+    def test_sidebar_tree_bindings(self) -> None:
         binding_keys = {binding.key for binding in SidebarTree.BINDINGS}
 
+        # Arrow keys and Enter stripped — app controller drives these via
+        # programmatic action calls to avoid conflicts with normal-mode navigation.
         self.assertNotIn("up", binding_keys)
         self.assertNotIn("down", binding_keys)
         self.assertNotIn("left", binding_keys)
@@ -515,6 +517,11 @@ class AppCommandModeTests(unittest.TestCase):
         self.assertNotIn("shift+up", binding_keys)
         self.assertNotIn("shift+down", binding_keys)
         self.assertNotIn("enter", binding_keys)
+
+        # Vim aliases handled directly on the widget when it owns focus.
+        self.assertIn("j", binding_keys)
+        self.assertIn("k", binding_keys)
+        self.assertIn("e", binding_keys)
         self.assertNotIn("space", binding_keys)
         self.assertNotIn("shift+space", binding_keys)
 

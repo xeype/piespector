@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from rich.text import Text
 
-from textual.widgets import DataTable, Input, Tree
+from textual.widgets import DataTable, Input
 from textual.widgets._data_table import RowKey
+
+from piespector.widget.tree import PiespectorTree, move_cursor as tree_move_cursor, rebuild as rebuild_tree
 
 from piespector.domain.modes import MODE_ENV_EDIT, MODE_ENV_SELECT, MODE_NORMAL
 from piespector.state import PiespectorState
@@ -15,21 +17,19 @@ from piespector.ui.selection import FOCUS_FRAME_CLASS, selected_element_style
 # ================================================================
 
 def refresh_env_sidebar_tree(
-    tree: Tree,
+    tree: PiespectorTree,
     state: PiespectorState,
 ) -> None:
-    signature = tuple(state.env_names)
-    if getattr(tree, "_piespector_signature", None) == signature:
-        return
-    tree._piespector_signature = signature
-    tree.clear()
-    tree.root.expand()
-    for index, env_name in enumerate(state.env_names):
-        tree.root.add_leaf(env_name, data=index)
+    env_names = state.env_names
+    rebuild_tree(
+        tree,
+        tuple(env_names),
+        lambda t: [t.root.add_leaf(name, data=i) for i, name in enumerate(env_names)],
+    )
 
 
 def sync_env_sidebar_cursor(
-    tree: Tree,
+    tree: PiespectorTree,
     state: PiespectorState,
 ) -> None:
     env_names = state.env_names
@@ -39,9 +39,7 @@ def sync_env_sidebar_cursor(
         selected_index = env_names.index(state.selected_env_name)
     except ValueError:
         selected_index = 0
-    tree._piespector_ignore_highlight_index = selected_index
-    tree.cursor_line = selected_index
-    tree.scroll_to_line(selected_index, animate=False)
+    tree_move_cursor(tree, selected_index)
 
 
 # ================================================================
@@ -162,7 +160,7 @@ def _sync_env_input(
 
 def refresh_env_widgets(
     state: PiespectorState,
-    env_tree: Tree,
+    env_tree: PiespectorTree,
     env_table: DataTable,
     env_input: Input | None = None,
     env_sidebar_container=None,

@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-from rich.style import Style
 from textual import events, on
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.widgets import ContentSwitcher, DataTable, Input, Static, Tab, TabbedContent, TabPane, Tabs, Tree
-from textual.widgets._tree import TreeNode
 
 from piespector.domain.editor import (
     AUTH_API_KEY_LOCATION_OPTIONS,
@@ -47,15 +45,7 @@ from piespector.screens.home.request.query_editor import RequestParamsTable
 from piespector.screens.home.request.request_body import RequestBodyTable
 from piespector.ui.input import PiespectorInput
 from piespector.widget.select import PiespectorSelect, SelectionChanged, option_list
-
-
-class SidebarTree(Tree, inherit_bindings=False):
-    BINDINGS = []
-
-    def render_label(self, node: TreeNode, base_style: Style, style: Style) -> object:
-        if not self.has_focus:
-            style = Style.null()
-        return super().render_label(node, base_style, style)
+from piespector.widget.tree import PiespectorTree
 
 
 class HomeScreen(PiespectorScreen):
@@ -88,7 +78,7 @@ class HomeScreen(PiespectorScreen):
             with Horizontal(id="home-workspace"):
                 with Vertical(id="sidebar-container"):
                     yield Static("Collections", classes="panel-title", id="sidebar-title")
-                    yield SidebarTree("Collections", id="sidebar-tree")
+                    yield PiespectorTree("Collections", id="sidebar-tree")
                     yield Static("", classes="panel-subtitle", id="sidebar-subtitle")
                 with Vertical(id="home-main"):
                     with Vertical(id="request-panel"):
@@ -199,7 +189,7 @@ class HomeScreen(PiespectorScreen):
     def on_mount(self) -> None:
         super().on_mount()
         self._tab_activation_ready = False
-        tree = self.query_one("#sidebar-tree", Tree)
+        tree = self.query_one("#sidebar-tree", PiespectorTree)
         tree.show_root = False
         tree.focus()
         self.disable_focus("open-request-tabs")
@@ -238,8 +228,9 @@ class HomeScreen(PiespectorScreen):
         index = node.node.data
         if not isinstance(index, int):
             return False
-        if getattr(node.control, "_piespector_ignore_highlight_index", None) == index:
-            node.control._piespector_ignore_highlight_index = None
+        tree = node.control
+        if isinstance(tree, PiespectorTree) and tree.sync_state.ignore_highlight_index == index:
+            tree.sync_state.ignore_highlight_index = None
             return False
         app.state.sync_sidebar_selection(index)
         return True

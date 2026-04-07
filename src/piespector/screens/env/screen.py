@@ -10,10 +10,7 @@ from textual.widgets._data_table import RowDoesNotExist, RowKey
 from piespector.domain.modes import MODE_ENV_EDIT, MODE_ENV_SELECT
 from piespector.screens.base import PiespectorScreen
 from piespector.ui.input import PiespectorInput
-
-
-class EnvSidebarTree(Tree, inherit_bindings=False):
-    BINDINGS = []
+from piespector.widget.tree import PiespectorTree
 
 
 class EnvVariablesTable(DataTable):
@@ -55,7 +52,7 @@ class EnvScreen(PiespectorScreen):
         with Horizontal(id="env-screen"):
             with Vertical(id="env-sidebar-container"):
                 yield Static("Environments", classes="panel-title", id="env-sidebar-title")
-                yield EnvSidebarTree("Environments", id="env-sidebar-tree")
+                yield PiespectorTree("Environments", id="env-sidebar-tree")
                 yield Static("", classes="panel-subtitle", id="env-sidebar-subtitle")
             with Vertical(id="env-main"):
                 yield EnvVariablesTable(
@@ -72,7 +69,7 @@ class EnvScreen(PiespectorScreen):
 
     def on_mount(self) -> None:
         super().on_mount()
-        tree = self.query_one("#env-sidebar-tree", Tree)
+        tree = self.query_one("#env-sidebar-tree", PiespectorTree)
         tree.show_root = False
         tree.focus()
         self.disable_focus("env-table")
@@ -86,8 +83,9 @@ class EnvScreen(PiespectorScreen):
         index = event.node.data
         if not isinstance(index, int):
             return
-        if getattr(event.control, "_piespector_ignore_highlight_index", None) == index:
-            event.control._piespector_ignore_highlight_index = None
+        tree = event.control
+        if isinstance(tree, PiespectorTree) and tree.sync_state.ignore_highlight_index == index:
+            tree.sync_state.ignore_highlight_index = None
             return
         env_names = app.state.env_names
         if 0 <= index < len(env_names):

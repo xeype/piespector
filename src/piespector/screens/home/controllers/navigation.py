@@ -149,7 +149,8 @@ class HomeNavigationController(HomeControllerBase):
             else:
                 if not tree.has_focus:
                     tree.focus()
-                tree.action_select_cursor()
+                    tree.action_confirm()
+                # if tree already has focus, widget binding (e → confirm) handles it
             event.stop()
             return True
 

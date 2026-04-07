@@ -12,8 +12,9 @@ from textual.widgets import (
     Static,
     TabbedContent,
     Tabs,
-    Tree,
 )
+
+from piespector.widget.tree import PiespectorTree, move_cursor as tree_move_cursor
 
 from piespector.domain.editor import (
     HOME_SIDEBAR_LABEL,
@@ -89,16 +90,14 @@ class ScreenRefreshCoordinator:
         if self.state.current_tab != TAB_HOME or not self.app._has_live_screen():
             return
         try:
-            tree = self.app._query_current("#sidebar-tree", Tree)
+            tree = self.app._query_current("#sidebar-tree", PiespectorTree)
         except NoMatches:
             return
         item_count = len(self.state.get_sidebar_nodes())
         if item_count <= 0:
             return
         selected_index = max(0, min(self.state.selected_sidebar_index, item_count - 1))
-        tree._piespector_ignore_highlight_index = selected_index
-        tree.cursor_line = selected_index
-        tree.scroll_to_line(selected_index, animate=False)
+        tree_move_cursor(tree, selected_index)
 
     def switch_screen_visibility(self) -> None:
         if not self.app._screens_installed:
@@ -212,7 +211,7 @@ class ScreenRefreshCoordinator:
         if not self.app._has_live_screen():
             self.app._refresh_viewport()
             return
-        tree = self.app._query_current("#sidebar-tree", Tree)
+        tree = self.app._query_current("#sidebar-tree", PiespectorTree)
         sidebar_subtitle = self.app._query_current("#sidebar-subtitle", Static)
         sidebar_container = self.app._query_current("#sidebar-container")
         sidebar_title = self.app._query_current("#sidebar-title", Static)
@@ -318,7 +317,7 @@ class ScreenRefreshCoordinator:
             env_input = None
         env_render.refresh_env_widgets(
             self.state,
-            self.app._query_current("#env-sidebar-tree", Tree),
+            self.app._query_current("#env-sidebar-tree", PiespectorTree),
             self.app._query_current("#env-table", DataTable),
             env_input,
             self.app._query_current("#env-sidebar-container"),
@@ -393,7 +392,7 @@ class ScreenRefreshCoordinator:
 
     def home_request_list_visible_rows(self) -> int:
         try:
-            tree = self.app._query_current("#sidebar-tree", Tree)
+            tree = self.app._query_current("#sidebar-tree", PiespectorTree)
             return max(tree.size.height - 2, 6)
         except NoMatches:
             return 14
