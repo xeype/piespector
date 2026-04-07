@@ -379,6 +379,11 @@ class PiespectorApp(App[None]):
     def action_home_next_open_request(self) -> None:
         self.home_controller.navigation.cycle_open_request(1)
 
+    def _create_new_request(self) -> None:
+        self.state.create_request()
+        self._persist_requests()
+        self._refresh_viewport()
+
     def _send_selected_request(self) -> None:
         self.request_executor.send_selected_request()
 

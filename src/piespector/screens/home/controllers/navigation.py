@@ -11,6 +11,7 @@ from piespector.domain.editor import (
 from piespector.domain.modes import MODE_HOME_SECTION_SELECT, MODE_NORMAL
 from piespector.interactions.keys import (
     DOWN_KEYS,
+    KEY_ADD,
     KEY_CLOSE,
     KEY_EDIT,
     KEY_ESCAPE,
@@ -60,6 +61,11 @@ class HomeNavigationController(HomeControllerBase):
             self.app._sync_home_sidebar_cursor()
 
     def handle_home_view_key(self, event: events.Key) -> bool:
+        if event.key == KEY_ADD:
+            self.app._create_new_request()
+            event.stop()
+            return True
+
         if event.key == KEY_SEND:
             self.app._send_selected_request()
             event.stop()
