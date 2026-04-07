@@ -62,6 +62,21 @@ class BodyTextEditor(TextArea):
         if app is not None:
             app._close_body_text_editor(save=True)
 
+    def action_copy_body(self) -> None:
+        app = self.app
+        if app is None:
+            return
+        content = self.selected_text or self.text
+        copied = app._copy_text(content)
+        if copied:
+            app.state.message = (
+                "Copied selection."
+                if self.selected_text
+                else "Copied full body."
+            )
+        else:
+            app.state.message = "Copy failed."
+
     def action_cancel_body(self) -> None:
         app = self.app
         if app is not None:
@@ -78,6 +93,10 @@ class BodyTextEditor(TextArea):
             return
         if event.key == KEY_ESCAPE:
             self.action_cancel_body()
+            event.stop()
+            return
+        if app is not None and event.key in app.response_copy_keys:
+            self.action_copy_body()
             event.stop()
             return
         if app is not None:
