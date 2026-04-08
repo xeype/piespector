@@ -269,6 +269,8 @@ def refresh_home_sidebar(
     selected = home_selection(state).panel == "sidebar"
     if selected and tree.can_focus and not tree.has_focus:
         tree.focus()
+    elif not selected and tree.has_focus:
+        tree.blur()
 
 
 def _rebuild_tree(tree: PiespectorTree, state: PiespectorState, items: list) -> None:
