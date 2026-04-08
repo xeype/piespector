@@ -592,7 +592,10 @@ TextArea {
     height: 1;
 }
 
-#url-input-hint {
+#url-input-hint,
+#params-input-hint,
+#headers-input-hint,
+#auth-field-input-hint {
     position: absolute;
     layer: above;
     width: auto;

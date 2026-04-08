@@ -457,15 +457,31 @@ class HomeScreen(PiespectorScreen):
 
     def on_input_changed(self, event: Input.Changed) -> None:
         app = self.app
-        if app is None or event.input.id != "url-input" or app.state.mode != MODE_HOME_URL_EDIT:
+        if app is None:
             return
-        # Auto-pair {{ → {{}}
         text = event.value
         cursor = event.input.cursor_position
-        if cursor >= 2 and text[cursor - 2 : cursor] == "{{" and text[cursor : cursor + 2] != "}}":
-            event.input.value = text[:cursor] + "}}" + text[cursor:]
-            event.input.cursor_position = cursor
-        app.call_after_refresh(app._refresh_home_url_bar_panel)
+        if event.input.id == "url-input" and app.state.mode == MODE_HOME_URL_EDIT:
+            # Auto-pair {{ → {{}}
+            if cursor >= 2 and text[cursor - 2 : cursor] == "{{" and text[cursor : cursor + 2] != "}}":
+                event.input.value = text[:cursor] + "}}" + text[cursor:]
+                event.input.cursor_position = cursor
+            app.call_after_refresh(app._refresh_home_url_bar_panel)
+        elif event.input.id == "request-params-input" and app.state.mode == MODE_HOME_PARAMS_EDIT:
+            if cursor >= 2 and text[cursor - 2 : cursor] == "{{" and text[cursor : cursor + 2] != "}}":
+                event.input.value = text[:cursor] + "}}" + text[cursor:]
+                event.input.cursor_position = cursor
+            app.call_after_refresh(app._refresh_request_input_hints_only)
+        elif event.input.id == "request-headers-input" and app.state.mode == MODE_HOME_HEADERS_EDIT:
+            if cursor >= 2 and text[cursor - 2 : cursor] == "{{" and text[cursor : cursor + 2] != "}}":
+                event.input.value = text[:cursor] + "}}" + text[cursor:]
+                event.input.cursor_position = cursor
+            app.call_after_refresh(app._refresh_request_input_hints_only)
+        elif event.input.id == "auth-field-input" and app.state.mode == MODE_HOME_AUTH_EDIT:
+            if cursor >= 2 and text[cursor - 2 : cursor] == "{{" and text[cursor : cursor + 2] != "}}":
+                event.input.value = text[:cursor] + "}}" + text[cursor:]
+                event.input.cursor_position = cursor
+            app.call_after_refresh(app._refresh_request_input_hints_only)
 
     def on_key(self, event: events.Key) -> None:
         app = self.app
@@ -480,6 +496,7 @@ class HomeScreen(PiespectorScreen):
             "request-overview-input",
             "request-params-input",
             "request-headers-input",
+            "auth-field-input",
             "request-body-input",
         }:
             return
@@ -529,6 +546,39 @@ class HomeScreen(PiespectorScreen):
                         focused.value = completed
                         focused.cursor_position = new_cursor
                         app.call_after_refresh(app._refresh_home_url_bar_panel)
+                event.stop()
+                return
+
+            input_mode_map = {
+                "request-params-input": MODE_HOME_PARAMS_EDIT,
+                "request-headers-input": MODE_HOME_HEADERS_EDIT,
+                "auth-field-input": MODE_HOME_AUTH_EDIT,
+            }
+            if focused.id in input_mode_map and app.state.mode == input_mode_map[focused.id]:
+                env_keys = sorted(app.state.env_pairs)
+                match = placeholder_match(focused.value, focused.cursor_position, env_keys)
+                if match is not None:
+                    anchor = app._input_env_completion_anchor
+                    stored = app._input_env_completion_matches
+                    if anchor and match.prefix in stored:
+                        matches = stored
+                        new_idx = (app._input_env_completion_index + 1) % len(matches)
+                    else:
+                        anchor = match.prefix
+                        matches = [k for k in env_keys if k.startswith(anchor)]
+                        new_idx = 0
+                    if matches:
+                        app._input_env_completion_anchor = anchor
+                        app._input_env_completion_matches = matches
+                        app._input_env_completion_index = new_idx
+                        suggestion = matches[new_idx]
+                        before = focused.value[: match.start]
+                        after = focused.value[match.end :]
+                        completed = f"{before}{{{{{suggestion}}}}}{after}"
+                        new_cursor = len(before) + 2 + len(suggestion)
+                        focused.value = completed
+                        focused.cursor_position = new_cursor
+                        app.call_after_refresh(app._refresh_request_input_hints_only)
             event.stop()
             return
 

@@ -23,7 +23,13 @@ from piespector.domain.editor import (
     TAB_HOME,
     TAB_ORDER,
 )
-from piespector.domain.modes import MODE_COMMAND, MODE_HOME_URL_EDIT
+from piespector.domain.modes import (
+    MODE_COMMAND,
+    MODE_HOME_AUTH_EDIT,
+    MODE_HOME_HEADERS_EDIT,
+    MODE_HOME_PARAMS_EDIT,
+    MODE_HOME_URL_EDIT,
+)
 from piespector.placeholders import placeholder_match
 from piespector.screens.base import PiespectorScreen
 from piespector.screens.env import render as env_render
@@ -69,6 +75,7 @@ class ScreenRefreshCoordinator:
             "_refresh_history_screen": self.refresh_history_screen,
             "_refresh_home_jump_cues": self.refresh_home_jump_cues,
             "_refresh_home_request_panel": self.refresh_home_request_panel,
+            "_refresh_request_input_hints_only": self.refresh_request_input_hints_only,
             "_refresh_home_response_panel": self.refresh_home_response_panel,
             "_refresh_home_screen": self.refresh_home_screen,
             "_refresh_home_sidebar_panel": self.refresh_home_sidebar_panel,
@@ -267,6 +274,43 @@ class ScreenRefreshCoordinator:
             request_title,
             request_subtitle,
         )
+        self._refresh_request_input_hints(request_tabs)
+
+    def _refresh_request_input_hints(self, request_tabs: TabbedContent) -> None:
+        env_keys = sorted(self.state.env_pairs)
+        hint_configs = [
+            ("#request-params-input", "#params-input-hint", MODE_HOME_PARAMS_EDIT),
+            ("#request-headers-input", "#headers-input-hint", MODE_HOME_HEADERS_EDIT),
+            ("#auth-field-input", "#auth-field-input-hint", MODE_HOME_AUTH_EDIT),
+        ]
+        for input_id, hint_id, edit_mode in hint_configs:
+            try:
+                input_widget = request_tabs.query_one(input_id, Input)
+                hint_widget = self.app._query_current(hint_id, Static)
+            except NoMatches:
+                continue
+            if self.state.mode == edit_mode and input_widget.display:
+                match = placeholder_match(
+                    input_widget.value,
+                    input_widget.cursor_position,
+                    env_keys,
+                )
+                if match is not None and match.suggestion != match.prefix:
+                    cursor_offset = input_widget.cursor_screen_offset
+                    hint_widget.update(match.suggestion)
+                    hint_widget.offset = (cursor_offset.x, cursor_offset.y + 1)
+                    hint_widget.remove_class("hidden")
+                    continue
+            hint_widget.add_class("hidden")
+
+    def refresh_request_input_hints_only(self) -> None:
+        if not self.app._has_live_screen():
+            return
+        try:
+            request_tabs = self.app._query_current("#request-tabs", TabbedContent)
+        except NoMatches:
+            return
+        self._refresh_request_input_hints(request_tabs)
 
     def refresh_home_response_panel(self) -> None:
         if not self.app._has_live_screen():
