@@ -171,6 +171,10 @@ def refresh_env_widgets(
     refresh_env_table(env_table, state)
     if env_input is not None:
         _sync_env_input(env_input, state)
+    if state.mode == MODE_NORMAL and not env_tree.has_focus:
+        env_tree.focus()
+    elif state.mode != MODE_NORMAL and env_tree.has_focus:
+        env_tree.blur()
     if env_sidebar_container is not None:
         env_sidebar_container.set_class(state.mode == MODE_NORMAL, FOCUS_FRAME_CLASS)
     if env_main is not None:
