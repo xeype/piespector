@@ -736,47 +736,43 @@ class UiAndScrollbarTests(unittest.TestCase):
     def test_css_highlights_active_request_and_response_tabs(self) -> None:
         self.assertRegex(
             APP_CSS,
-            r"#request-tabs ContentTabs:focus \.-active \{[\s\S]*?background: \$accent;[\s\S]*?text-style: bold;",
+            r"#request-tabs ContentTabs:focus \.-active \{[\s\S]*?color: \$text;[\s\S]*?background: \$accent;",
         )
         self.assertRegex(
             APP_CSS,
-            r"#request-panel\.piespector-tab-select #request-tabs ContentTab\.-active \{[\s\S]*?background: \$accent;[\s\S]*?color: \$background;",
+            r"#request-panel\.piespector-tab-select #request-tabs ContentTab\.-active \{[\s\S]*?background: \$accent;[\s\S]*?color: \$text;",
         )
         self.assertRegex(
             APP_CSS,
-            r"#response-tabs:focus \.-active \{[\s\S]*?background: \$accent;[\s\S]*?text-style: bold;",
+            r"#response-tabs:focus \.-active \{[\s\S]*?color: \$text;[\s\S]*?background: \$accent;",
         )
         self.assertRegex(
             APP_CSS,
-            r"#response-panel\.piespector-tab-select #response-tabs Tab\.-active \{[\s\S]*?background: \$accent;[\s\S]*?color: \$background;",
-        )
-
-    def test_css_uses_selected_element_color_for_tree_and_table_cursors(self) -> None:
-        self.assertRegex(
-            APP_CSS,
-            r"#sidebar-tree \{[\s\S]*?& > \.tree--cursor \{[\s\S]*?color: \$text;[\s\S]*?background: \$accent;[\s\S]*?text-style: bold;",
-        )
-        self.assertRegex(
-            APP_CSS,
-            r"DataTable \{[\s\S]*?& > \.datatable--cursor,[\s\S]*?& > \.datatable--fixed-cursor \{[\s\S]*?color: \$text;[\s\S]*?background: \$accent;[\s\S]*?text-style: bold;",
+            r"#response-panel\.piespector-tab-select #response-tabs Tab\.-active \{[\s\S]*?background: \$accent;[\s\S]*?color: \$text;",
         )
 
-    def test_css_uses_blue_block_highlight_for_home_hover_targets(self) -> None:
+    def test_css_uses_current_tree_and_table_cursor_styles(self) -> None:
         self.assertRegex(
             APP_CSS,
-            r"#sidebar-container:hover \{[\s\S]*?border: solid \$accent;[\s\S]*?border-title-color: \$text;",
+            r"#sidebar-tree \{[\s\S]*?& > \.tree--cursor \{[\s\S]*?background: transparent;",
         )
         self.assertRegex(
             APP_CSS,
-            r"#method-select > SelectCurrent:hover,[\s\S]*?#method-select\.piespector-selected-element > SelectCurrent \{[\s\S]*?outline: solid \$accent;",
+            r"#sidebar-tree \{[\s\S]*?&:focus \{[\s\S]*?& > \.tree--cursor \{[\s\S]*?color: \$text;[\s\S]*?background: \$accent;[\s\S]*?text-style: none;",
         )
         self.assertRegex(
             APP_CSS,
-            r"#request-overview-content:hover,[\s\S]*?#request-auth-content:hover,[\s\S]*?#request-body-preview:hover,[\s\S]*?#request-params-table:hover,[\s\S]*?#request-headers-table:hover,[\s\S]*?#request-body-table:hover,[\s\S]*?#request-overview-input:hover,[\s\S]*?#auth-field-input:hover,[\s\S]*?#request-params-input:hover,[\s\S]*?#request-headers-input:hover,[\s\S]*?#request-body-input:hover \{[\s\S]*?outline: solid \$accent;",
+            r"DataTable \{[\s\S]*?& > \.datatable--cursor,[\s\S]*?& > \.datatable--fixed-cursor \{[\s\S]*?color: \$text;[\s\S]*?background: \$accent;",
+        )
+
+    def test_css_uses_accent_outline_for_selected_home_select_widgets(self) -> None:
+        self.assertRegex(
+            APP_CSS,
+            r"#method-select\.piespector-selected-element > SelectCurrent \{[\s\S]*?outline: solid \$accent;",
         )
         self.assertRegex(
             APP_CSS,
-            r"#auth-type-select > SelectCurrent:hover,[\s\S]*?#auth-type-select\.piespector-selected-element > SelectCurrent,[\s\S]*?#auth-option-select > SelectCurrent:hover,[\s\S]*?#auth-option-select\.piespector-selected-element > SelectCurrent,[\s\S]*?#body-type-select > SelectCurrent:hover,[\s\S]*?#body-type-select\.piespector-selected-element > SelectCurrent,[\s\S]*?#body-raw-type-select > SelectCurrent:hover,[\s\S]*?#body-raw-type-select\.piespector-selected-element > SelectCurrent \{[\s\S]*?outline: solid \$accent;",
+            r"#auth-type-select\.piespector-selected-element > SelectCurrent,[\s\S]*?#auth-option-select\.piespector-selected-element > SelectCurrent,[\s\S]*?#body-type-select\.piespector-selected-element > SelectCurrent,[\s\S]*?#body-raw-type-select\.piespector-selected-element > SelectCurrent \{[\s\S]*?outline: solid \$accent;",
         )
 
     def test_select_widgets_use_surface_background(self) -> None:

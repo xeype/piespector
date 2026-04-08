@@ -27,8 +27,8 @@ class PiespectorTree(Tree, inherit_bindings=False):
     """
 
     BINDINGS = [
-        Binding("j", "cursor_down", "Down", show=False),
-        Binding("k", "cursor_up", "Up", show=False),
+        Binding("j", "cursor_down", "Browse Down", show=False),
+        Binding("k", "cursor_up", "Browse Up", show=False),
         Binding("e", "confirm", "Confirm", show=False),
     ]
 

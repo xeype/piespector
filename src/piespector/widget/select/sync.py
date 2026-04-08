@@ -49,7 +49,6 @@ def sync(
     if sync_needed(options, value, state.signature):
         state.syncing = True
         state.suppress_changes = True
-        state.ignored_change_value = value
         try:
             select.set_options([opt.as_textual() for opt in options])
             select.value = value

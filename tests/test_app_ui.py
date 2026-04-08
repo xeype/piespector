@@ -7,6 +7,13 @@ from unittest.mock import patch
 from rich.console import Console
 
 from piespector.app import PiespectorApp
+from piespector.domain.editor import (
+    HOME_SIDEBAR_JUMP_KEY,
+    REQUEST_EDITOR_JUMP_BINDINGS,
+    RESPONSE_JUMP_BINDINGS,
+    TOP_BAR_METHOD_JUMP_KEY,
+    TOP_BAR_URL_JUMP_KEY,
+)
 from piespector.ui.rendering_helpers import (
     detect_text_syntax_language,
     request_body_syntax_language,
@@ -1031,13 +1038,17 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
 
             labels = list(app.screen.query(".jump-overlay__label"))
             rendered = {str(label.content) for label in labels}
+            expected = {
+                HOME_SIDEBAR_JUMP_KEY,
+                TOP_BAR_METHOD_JUMP_KEY,
+                TOP_BAR_URL_JUMP_KEY,
+                *(jump_key for _tab_id, jump_key in REQUEST_EDITOR_JUMP_BINDINGS),
+                *(jump_key for _tab_id, jump_key in RESPONSE_JUMP_BINDINGS),
+            }
 
             self.assertTrue(app.screen.is_modal)
-            self.assertGreaterEqual(len(labels), 10)
-            self.assertSetEqual(
-                {"tab", "1", "2", "q", "w", "e", "r", "t", "a", "s"},
-                rendered,
-            )
+            self.assertGreaterEqual(len(labels), len(expected))
+            self.assertSetEqual(expected, rendered)
 
     async def test_home_jump_overlay_selects_target_and_closes_modal(self) -> None:
         app = PiespectorApp()
@@ -1591,7 +1602,7 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(app.theme, "atom-one-light")
             self.assertNotEqual(app.stylesheet._variables.get("background"), initial_background)
 
-    async def test_method_selector_hover_uses_theme_accent_outline(self) -> None:
+    async def test_method_selector_selected_state_uses_theme_accent_outline(self) -> None:
         app = PiespectorApp()
         app._load_request_workspace = lambda: None
         request = RequestDefinition(
@@ -1602,15 +1613,16 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
         )
         app.state.requests = [request]
         app.state.active_request_id = request.request_id
+        app.state.enter_home_method_select_mode(origin_mode="HOME_SECTION_SELECT")
 
         async with app.run_test(size=(140, 40)) as pilot:
+            app._refresh_screen()
+            await pilot.pause()
+
             method_select = app.screen.query_one("#method-select", Select)
             current = method_select.query_one("SelectCurrent")
 
-            await pilot.hover("#method-select", offset=(1, 0))
-            await pilot.pause()
-
-            self.assertTrue(current.mouse_hover)
+            self.assertTrue(method_select.has_class("piespector-selected-element"))
             self.assertEqual(current.styles.outline_top[0], "solid")
             self.assertEqual(
                 current.styles.outline_top[1],

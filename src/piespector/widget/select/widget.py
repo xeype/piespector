@@ -75,25 +75,43 @@ class PiespectorSelect(Select):
 
         value = self._options[event.option_index][1]
         label = self._options[event.option_index][0]
+        state = self.sync_state
 
         if value != self.value:
-            # Triggers Select.Changed internally; intercepted by _stop_native_changed.
+            # Triggers Select.Changed internally; adapted by _on_native_changed.
             self.value = value
+        elif self._should_ignore_changed(value):
+            return
 
         self.focus()
         self.expanded = False
-
-        state = self.sync_state
-        if state.syncing or state.suppress_changes:
-            return
-
-        if state.ignored_change_value == value:
-            state.ignored_change_value = None
-            return
-
         self.post_message(SelectionChanged(self, SelectOption(value=value, label=label)))
 
     @on(Select.Changed)
-    def _stop_native_changed(self, event: Select.Changed) -> None:
-        """Stop Select.Changed from bubbling — callers handle SelectionChanged instead."""
+    def _on_native_changed(self, event: Select.Changed) -> None:
+        """Adapt Textual's Select.Changed into piespector's SelectionChanged."""
         event.stop()
+        value = event.value
+        if self._should_ignore_changed(value):
+            return
+        self.post_message(
+            SelectionChanged(
+                self,
+                SelectOption(value=value, label=self._label_for_value(value)),
+            )
+        )
+
+    def _should_ignore_changed(self, value) -> bool:
+        del value
+        state = self.sync_state
+        if state.signature is None:
+            return True
+        if state.syncing or state.suppress_changes:
+            return True
+        return False
+
+    def _label_for_value(self, value) -> object:
+        for label, option_value in self._options:
+            if option_value == value:
+                return label
+        return value
