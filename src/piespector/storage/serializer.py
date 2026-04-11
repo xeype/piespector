@@ -326,6 +326,7 @@ def load_collections_from_dir(
 
     workspace = json.loads(workspace_file.read_text(encoding="utf-8"))
     collection_order: list[str] = workspace.get("collection_order", [])
+    root_requests = _load_requests_payload(workspace.get("root_requests"))
 
     file_map: dict[str, tuple[Path, dict]] = {}
     for file_path in dir_path.glob("*.json"):
@@ -342,7 +343,7 @@ def load_collections_from_dir(
 
     collections: list[CollectionDefinition] = []
     folders: list[FolderDefinition] = []
-    requests: list[RequestDefinition] = []
+    requests: list[RequestDefinition] = list(root_requests)
     collapsed_collection_ids: set[str] = set()
     collapsed_folder_ids: set[str] = set()
 
@@ -397,6 +398,7 @@ def save_collections_to_dir(
 ) -> None:
     dir_path.mkdir(parents=True, exist_ok=True)
 
+    collection_ids = {collection.collection_id for collection in collections}
     collapsed_cids = collapsed_collection_ids or set()
     collapsed_fids = collapsed_folder_ids or set()
 
@@ -404,9 +406,14 @@ def save_collections_to_dir(
     for folder in folders:
         folders_by_collection.setdefault(folder.collection_id, []).append(folder)
 
+    root_requests = [
+        req
+        for req in requests
+        if not req.transient and not req.collection_id
+    ]
     requests_by_collection: dict[str, list[RequestDefinition]] = {}
     for req in requests:
-        if not req.transient and req.collection_id:
+        if not req.transient and req.collection_id in collection_ids:
             requests_by_collection.setdefault(req.collection_id, []).append(req)
 
     written_files: set[str] = {"_workspace.json"}
@@ -443,7 +450,13 @@ def save_collections_to_dir(
 
         (dir_path / file_name).write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
-    workspace = {"collection_order": [c.collection_id for c in collections]}
+    workspace = {
+        "collection_order": [c.collection_id for c in collections],
+        "root_requests": [
+            _serialize_request_definition(req)
+            for req in root_requests
+        ],
+    }
     (dir_path / "_workspace.json").write_text(
         json.dumps(workspace, indent=2), encoding="utf-8"
     )

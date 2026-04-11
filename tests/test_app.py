@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from pathlib import Path
+from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
 from textual.binding import Binding
 
+from piespector import storage
 from piespector.app import PiespectorApp
 from piespector.commands import command_palette_commands
 from piespector.domain.editor import TAB_HOME
@@ -260,6 +263,37 @@ class AppCommandModeTests(unittest.TestCase):
         self.assertEqual(app.state.open_request_ids, [])
         refresh_viewport.assert_called_once_with()
         self.assertTrue(event.stopped)
+
+    def test_load_request_workspace_migrates_root_requests_before_persisting(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            app_data_dir = root / "app-data"
+            workspace_dir = root / "workspace"
+            workspace_dir.mkdir()
+            legacy_requests_path = workspace_dir / ".piespector.requests.json"
+            request = RequestDefinition(request_id="r1", name="Health")
+            storage.save_request_workspace(
+                legacy_requests_path,
+                [],
+                [],
+                [request],
+                set(),
+                set(),
+            )
+            paths = storage.discover_workspace_paths(
+                base_dir=app_data_dir,
+                cwd=workspace_dir,
+            )
+
+            with patch("piespector.app.discover_workspace_paths", return_value=paths):
+                app = PiespectorApp(persist_state=True)
+                app._load_request_workspace()
+
+            _collections, _folders, requests, _collapsed_collections, _collapsed_folders = (
+                storage.load_collections_from_dir(paths.collections_dir)
+            )
+
+        self.assertEqual([item.request_id for item in requests], ["r1"])
 
     def test_history_response_select_j_cycles_detail_block(self) -> None:
         app = PiespectorApp()

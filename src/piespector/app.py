@@ -197,6 +197,7 @@ class PiespectorApp(App[None]):
             self._persist_history_entries()
 
     def _load_request_workspace(self) -> None:
+        migrated_from_flat_workspace = False
         if self._storage_paths.use_collections_dir:
             (
                 collections,
@@ -213,13 +214,15 @@ class PiespectorApp(App[None]):
                 collapsed_collection_ids,
                 collapsed_folder_ids,
             ) = load_request_workspace(self._storage_paths.requests_source_path)
-            self._persist_requests()
+            migrated_from_flat_workspace = True
         self.state.collections = collections
         self.state.folders = folders
         self.state.requests = requests
         self.state.collapsed_collection_ids = collapsed_collection_ids
         self.state.collapsed_folder_ids = collapsed_folder_ids
         self.state.ensure_request_workspace()
+        if migrated_from_flat_workspace:
+            self._persist_requests()
 
     def on_resize(self) -> None:
         self._refresh_screen()

@@ -419,6 +419,91 @@ class StorageTests(unittest.TestCase):
         self.assertEqual(request.body.graphql_text, "query Health { health }")
         self.assertEqual(request.body_text, "query Health { health }")
 
+    def test_collections_dir_round_trips_root_requests_outside_collections(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            dir_path = Path(tmp_dir) / "collections"
+            collection = CollectionDefinition(collection_id="c1", name="Alpha")
+            folder = FolderDefinition(
+                folder_id="f1",
+                name="Auth",
+                collection_id=collection.collection_id,
+            )
+            root_request = RequestDefinition(request_id="r-root", name="Health")
+            collection_request = RequestDefinition(
+                request_id="r-collection",
+                name="Login",
+                collection_id=collection.collection_id,
+                folder_id=folder.folder_id,
+            )
+            transient_root_request = RequestDefinition(
+                request_id="r-transient",
+                name="Scratch",
+                transient=True,
+            )
+
+            storage.save_collections_to_dir(
+                dir_path,
+                [collection],
+                [folder],
+                [root_request, collection_request, transient_root_request],
+                {collection.collection_id},
+                {folder.folder_id},
+            )
+            workspace = json.loads(
+                (dir_path / "_workspace.json").read_text(encoding="utf-8")
+            )
+            (
+                loaded_collections,
+                loaded_folders,
+                loaded_requests,
+                collapsed_collections,
+                collapsed_folders,
+            ) = storage.load_collections_from_dir(dir_path)
+
+        self.assertEqual(workspace["collection_order"], [collection.collection_id])
+        self.assertEqual(
+            [item["request_id"] for item in workspace["root_requests"]],
+            ["r-root"],
+        )
+        self.assertEqual(
+            [loaded_collection.collection_id for loaded_collection in loaded_collections],
+            [collection.collection_id],
+        )
+        self.assertEqual(
+            [loaded_folder.folder_id for loaded_folder in loaded_folders],
+            [folder.folder_id],
+        )
+        self.assertEqual(
+            [request.request_id for request in loaded_requests],
+            ["r-root", "r-collection"],
+        )
+        self.assertIsNone(loaded_requests[0].collection_id)
+        self.assertIsNone(loaded_requests[0].folder_id)
+        self.assertEqual(loaded_requests[1].collection_id, collection.collection_id)
+        self.assertEqual(loaded_requests[1].folder_id, folder.folder_id)
+        self.assertEqual(collapsed_collections, {collection.collection_id})
+        self.assertEqual(collapsed_folders, {folder.folder_id})
+
+    def test_collections_dir_round_trips_root_requests_without_any_collections(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            dir_path = Path(tmp_dir) / "collections"
+            request = RequestDefinition(request_id="r1", name="Health")
+
+            storage.save_collections_to_dir(dir_path, [], [], [request], set(), set())
+            (
+                loaded_collections,
+                loaded_folders,
+                loaded_requests,
+                collapsed_collections,
+                collapsed_folders,
+            ) = storage.load_collections_from_dir(dir_path)
+
+        self.assertEqual(loaded_collections, [])
+        self.assertEqual(loaded_folders, [])
+        self.assertEqual([item.request_id for item in loaded_requests], ["r1"])
+        self.assertEqual(collapsed_collections, set())
+        self.assertEqual(collapsed_folders, set())
+
     def test_load_request_workspace_ignores_legacy_flat_auth_and_body_fields(self) -> None:
         with TemporaryDirectory() as tmp_dir:
             path = Path(tmp_dir) / "legacy-requests.json"
