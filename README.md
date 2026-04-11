@@ -9,7 +9,7 @@
 
 Organize HTTP requests into collections and folders, manage named env sets, replay history, and work from a keyboard-driven TUI.
 
-![piespector screenshot](https://raw.githubusercontent.com/xeype/piespector/c1b22c1/docs/images/welcome.png)
+![piespector screenshot](./docs/images/welcome.svg)
 
 ## Installation
 
