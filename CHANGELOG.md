@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.3.2 - 2026-04-11
+
+- Improved editing flow by handling `Escape` correctly in URL edit mode and preventing it from collapsing the Home sidebar.
+- Fixed env placeholder handling for hyphenated names, preserved placeholders in header previews, and expanded placeholder highlighting across request views.
+- Persisted root-level requests across restarts and added coverage for the related storage behavior.
+- Updated the packaged welcome screenshot from PNG to SVG for sharper README rendering.
+
 ## 0.3.1 - 2026-04-11
 
 - Updated the packaged README screenshot URL to a cache-busting, commit-pinned asset URL for package indexes.
