@@ -79,7 +79,7 @@ def command_line_content(state: PiespectorState) -> CommandLineContent | None:
         )
 
     if state.mode == MODE_HOME_URL_EDIT:
-        return CommandLineContent("Editing URL. Enter saves.")
+        return CommandLineContent("Editing URL. Enter saves, Esc cancels.")
 
     if state.mode == MODE_HOME_AUTH_EDIT:
         field = state.selected_auth_field()

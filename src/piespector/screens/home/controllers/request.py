@@ -178,4 +178,15 @@ class HomeRequestController(HomeControllerBase):
                 event.stop()
 
     def handle_home_url_edit_key(self, event: events.Key) -> None:
-        return
+        url_input = self.live_input("#url-input")
+        if url_input is not None and url_input.display:
+            if event.key == KEY_ESCAPE:
+                self.state.leave_home_url_edit_mode()
+                self.app._refresh_screen()
+                event.stop()
+            return
+
+        if event.key == KEY_ESCAPE:
+            self.state.leave_home_url_edit_mode()
+            self.app._refresh_screen()
+            event.stop()

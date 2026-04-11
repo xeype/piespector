@@ -279,7 +279,7 @@ class AppUiTests(unittest.TestCase):
             app.on_key(FakeKeyEvent("escape"))
         self.assertEqual(app.state.mode, "HOME_SECTION_SELECT")
 
-    def test_app_on_key_url_edit_escape_does_not_leave_mode(self) -> None:
+    def test_app_on_key_url_edit_escape_leaves_mode(self) -> None:
         app = PiespectorApp()
         request = RequestDefinition(
             name="Health",
@@ -293,7 +293,7 @@ class AppUiTests(unittest.TestCase):
 
         with patch.object(app, "_refresh_screen"):
             app.on_key(FakeKeyEvent("escape"))
-        self.assertEqual(app.state.mode, "HOME_URL_EDIT")
+        self.assertEqual(app.state.mode, "HOME_SECTION_SELECT")
 
     def test_method_selector_does_not_block_jump_action(self) -> None:
         app = PiespectorApp()
@@ -1381,7 +1381,7 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(request.url, "https://example.com/ready")
             self.assertEqual(app.state.mode, "NORMAL")
 
-    async def test_url_input_escape_does_not_cancel_edit(self) -> None:
+    async def test_url_input_escape_cancels_edit(self) -> None:
         app = PiespectorApp()
         app._persist_requests = lambda: None
         app._load_request_workspace = lambda: None
@@ -1401,12 +1401,14 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
             inline_input = app.screen.query_one("#url-input", Input)
             self.assertTrue(inline_input.display)
             self.assertTrue(inline_input.has_focus)
+            inline_input.value = "https://example.com/changed"
 
             await pilot.press("escape")
             await pilot.pause()
 
-            self.assertEqual(app.state.mode, "HOME_URL_EDIT")
-            self.assertTrue(inline_input.display)
+            self.assertEqual(app.state.mode, "NORMAL")
+            self.assertEqual(request.url, "https://example.com/health")
+            self.assertFalse(app.screen.query_one("#url-input", Input).display)
 
     async def test_ctrl_p_opens_command_palette(self) -> None:
         app = PiespectorApp()

@@ -65,7 +65,7 @@ HOME_HELP_KEY_LINES = {
         "Method edit: up/down choose, e or Enter confirm, Esc back",
     ),
     MODE_HOME_URL_EDIT: (
-        "URL edit: Enter save, Tab placeholder completion, ctrl+v paste",
+        "URL edit: Enter save, Esc cancel, Tab placeholder completion, ctrl+v paste",
     ),
     MODE_HOME_AUTH_SELECT: (
         "Auth: h/l tabs, j/k rows, e or Enter edit, s send, v response, ctrl+u/d response scroll, Esc back",

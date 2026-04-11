@@ -229,7 +229,7 @@ def status_hint_items(state: PiespectorState) -> list[HintItem]:
         ]
 
     if state.mode == MODE_HOME_URL_EDIT:
-        return [("enter", "save"), ("tab", "complete"), ("ctrl+v", "paste")]
+        return [("enter", "save"), ("tab", "complete"), ("ctrl+v", "paste"), ("esc", "cancel")]
 
     if state.mode in INLINE_EDIT_MODES:
         return [("enter", "save"), ("ctrl+v", "paste"), ("esc", "cancel")]

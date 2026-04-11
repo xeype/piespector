@@ -122,6 +122,20 @@ class RenderingMiscTests(unittest.TestCase):
         self.assertIn("Params: h/l tabs, j/k rows, H/L fields, e or Enter edit", rendered)
         self.assertNotIn("left/right fields", rendered)
 
+    def test_render_help_viewport_home_url_edit_context_shows_escape_cancel(self) -> None:
+        state = PiespectorState(
+            current_tab="help",
+            help_source_tab="home",
+            help_source_mode="HOME_URL_EDIT",
+        )
+
+        rendered = render_plain(render_help_viewport(state), width=160)
+
+        self.assertIn(
+            "URL edit: Enter save, Esc cancel, Tab placeholder completion, ctrl+v paste",
+            rendered,
+        )
+
     def test_render_help_viewport_home_body_context_uses_shift_field_keys(self) -> None:
         state = PiespectorState(
             current_tab="help",
@@ -359,6 +373,14 @@ class RenderingMiscTests(unittest.TestCase):
         self.assertEqual(status.hints, ())
         self.assertNotIn("Headers", status.context_label)
         self.assertNotIn("Body", status.context_label)
+
+    def test_url_edit_uses_escape_in_command_line_and_status_hints(self) -> None:
+        state = PiespectorState(current_tab="home", mode="HOME_URL_EDIT")
+
+        command_line = build_command_line_text(state).plain
+
+        self.assertEqual(command_line, "Editing URL. Enter saves, Esc cancels.")
+        self.assertIn(("esc", "cancel"), status_hint_items(state))
 
     def test_render_jump_panel_title_omits_fake_jump_padding_outside_jump_mode(self) -> None:
         title = render_jump_panel_title(
