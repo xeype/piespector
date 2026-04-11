@@ -46,7 +46,7 @@ HELP_IMPORT_EXPORT_LINES: tuple[str, ...] = (
 
 HOME_HELP_KEY_LINES = {
     MODE_NORMAL: (
-        "Normal: j/k browse, J/K folders, ctrl+j/k collections, h/l pinned requests, c close opened request, / search, s send, e pin request or toggle folders/collections, ctrl+p commands, Esc collapse",
+        "Normal: j/k browse, J/K folders, ctrl+j/k collections, h/l pinned requests, c close opened request, / search, s send, e pin request or toggle folders/collections, ctrl+p commands",
         "PageUp/PageDown scroll the sidebar list.",
     ),
     MODE_HOME_SECTION_SELECT: (

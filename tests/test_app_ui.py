@@ -2975,6 +2975,64 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(selected.node_id, first_folder.folder_id)
             self.assertEqual(tree.cursor_line, app.state.selected_sidebar_index)
 
+    async def test_home_escape_does_not_collapse_expanded_sidebar_nodes(self) -> None:
+        app = PiespectorApp()
+        app._persist_requests = lambda: None
+        app._load_request_workspace = lambda: None
+        collection = CollectionDefinition(collection_id="c1", name="Alpha")
+        folder = FolderDefinition(
+            folder_id="f1",
+            name="Auth",
+            collection_id=collection.collection_id,
+        )
+        app.state.collections = [collection]
+        app.state.folders = [folder]
+        app.state.requests = [
+            RequestDefinition(
+                request_id="r1",
+                name="Health",
+                method="GET",
+                collection_id=collection.collection_id,
+                folder_id=folder.folder_id,
+            ),
+        ]
+        app.state.collapsed_collection_ids = set()
+        app.state.collapsed_folder_ids = set()
+        app.state._set_selected_sidebar_node("collection", collection.collection_id)
+
+        async with app.run_test(size=(140, 40)) as pilot:
+            await pilot.pause()
+
+            tree = app.screen.query_one("#sidebar-tree")
+            app._refresh_viewport()
+            app._sync_home_sidebar_cursor()
+            await pilot.pause()
+
+            visible_lines = len(tree._tree_lines)
+            self.assertGreaterEqual(visible_lines, 3)
+
+            await pilot.press("escape")
+            await pilot.pause()
+
+            self.assertNotIn(collection.collection_id, app.state.collapsed_collection_ids)
+            self.assertEqual(len(tree._tree_lines), visible_lines)
+
+            app.state._set_selected_sidebar_node("folder", folder.folder_id)
+            app._refresh_viewport()
+            app._sync_home_sidebar_cursor()
+            await pilot.pause()
+
+            selected = app.state.get_selected_sidebar_node()
+            self.assertIsNotNone(selected)
+            self.assertEqual(selected.kind, "folder")
+            self.assertEqual(selected.node_id, folder.folder_id)
+
+            await pilot.press("escape")
+            await pilot.pause()
+
+            self.assertNotIn(folder.folder_id, app.state.collapsed_folder_ids)
+            self.assertEqual(len(tree._tree_lines), visible_lines)
+
 
 if __name__ == "__main__":
     unittest.main()

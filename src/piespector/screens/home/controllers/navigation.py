@@ -82,34 +82,8 @@ class HomeNavigationController(HomeControllerBase):
             return True
 
         if event.key == KEY_ESCAPE:
-            tree = self.sidebar_tree()
-            if tree is None:
-                if self.state.collapse_selected_context():
-                    self.app._refresh_home_sidebar_panel()
-                    event.stop()
-                    return True
-            else:
-                if not tree.has_focus:
-                    tree.focus()
-                cursor_node = tree.cursor_node
-                if cursor_node is None:
-                    return False
-                if cursor_node.allow_expand and cursor_node.is_expanded:
-                    tree.action_toggle_node()
-                    event.stop()
-                    return True
-                parent = cursor_node.parent
-                if (
-                    parent is not None
-                    and not parent.is_root
-                    and parent.allow_expand
-                    and parent.is_expanded
-                ):
-                    tree.action_cursor_parent()
-                    tree.action_toggle_node()
-                    event.stop()
-                    return True
-            return False
+            event.stop()
+            return True
 
         if event.key == KEY_PAGE_DOWN:
             tree = self.sidebar_tree()

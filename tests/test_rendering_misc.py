@@ -104,6 +104,7 @@ class RenderingMiscTests(unittest.TestCase):
 
         self.assertIn("c close opened request", rendered)
         self.assertIn("/ search, s send", rendered)
+        self.assertNotIn("Esc collapse", rendered)
 
     def test_render_help_viewport_env_select_context_shows_current_keys(self) -> None:
         state = PiespectorState(current_tab="help", help_source_tab="env", help_source_mode="ENV_SELECT")
@@ -439,6 +440,11 @@ class RenderingMiscTests(unittest.TestCase):
 
         self.assertEqual(command_line, "Editing URL. Enter saves, Esc cancels.")
         self.assertIn(("esc", "cancel"), status_hint_items(state))
+
+    def test_home_normal_status_hints_do_not_advertise_escape_collapse(self) -> None:
+        state = PiespectorState(current_tab="home")
+
+        self.assertNotIn(("esc", "collapse"), status_hint_items(state))
 
     def test_render_jump_panel_title_omits_fake_jump_padding_outside_jump_mode(self) -> None:
         title = render_jump_panel_title(
