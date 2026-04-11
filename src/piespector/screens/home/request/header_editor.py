@@ -10,6 +10,7 @@ from textual.widgets._data_table import RowDoesNotExist, RowKey
 from piespector.domain.modes import MODE_HOME_HEADERS_EDIT, MODE_HOME_HEADERS_SELECT
 from piespector.domain.requests import RequestDefinition
 from piespector.request_builder import preview_auto_headers
+from piespector.secrets import auth_preview_header_display_overrides, mask_header_display
 from piespector.screens.home import messages
 from piespector.state import PiespectorState
 from piespector.ui.selection import effective_mode, selected_element_style
@@ -54,6 +55,7 @@ def refresh_request_headers_table(
     mode = effective_mode(state)
     headers = request.header_items
     auto_headers = preview_auto_headers(request, state.env_pairs)
+    auth_display_overrides = auth_preview_header_display_overrides(request, state.env_pairs)
     total_count = len(headers) + len(auto_headers)
     state.clamp_selected_header_index(total_count)
 
@@ -77,19 +79,24 @@ def refresh_request_headers_table(
     table.add_columns("#", "On", key_header, value_header)
 
     for index, item in enumerate(headers):
+        display_value = mask_header_display(item.key, item.value)
         table.add_row(
             str(index + 1),
             Text("[x]" if item.enabled else "[ ]"),
             Text(item.key),
-            Text(item.value or "-"),
+            Text(display_value),
         )
 
     for key, value, enabled in auto_headers:
+        display_value = auth_display_overrides.get(
+            key.strip().lower(),
+            mask_header_display(key, value),
+        )
         table.add_row(
             "auto",
             Text("[x]" if enabled else "[ ]"),
             Text(key),
-            Text(value or "-"),
+            Text(display_value),
         )
 
     add_row_key = table.add_row("+", "", Text("Add header"), "")
@@ -110,6 +117,7 @@ def render_request_headers_fallback(
     rendered = Text()
     headers = request.header_items
     auto_headers = preview_auto_headers(request, state.env_pairs)
+    auth_display_overrides = auth_preview_header_display_overrides(request, state.env_pairs)
 
     if not headers and not auto_headers:
         rendered.append("No headers.")
@@ -119,14 +127,18 @@ def render_request_headers_fallback(
             status = "[x]" if item.enabled else "[ ]"
             row = Text()
             row.append(f"{index:>2} {status} {item.key}")
-            row.append(f" = {item.value or '-'}")
+            row.append(f" = {mask_header_display(item.key, item.value)}")
             rows.append(row)
         for key, value, enabled in auto_headers:
             row = Text()
             row.append("auto ")
             row.append("[x]" if enabled else "[ ]")
             row.append(f" {key}")
-            row.append(f" = {value or '-'}")
+            display_value = auth_display_overrides.get(
+                key.strip().lower(),
+                mask_header_display(key, value),
+            )
+            row.append(f" = {display_value}")
             rows.append(row)
         for index, row in enumerate(rows):
             rendered.append_text(row)

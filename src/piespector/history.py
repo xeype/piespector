@@ -7,6 +7,7 @@ from piespector.domain.history import HistoryEntry
 from piespector.domain.requests import RequestDefinition, ResponseSummary
 from piespector.placeholders import resolve_placeholders
 from piespector.request_builder import preview_effective_headers, preview_request_url
+from piespector.secrets import is_sensitive_header_name
 
 BODY_STORAGE_LIMIT = 1_048_576
 SENSITIVE_HEADER_MARKER = "<redacted>"
@@ -130,27 +131,8 @@ def _redact_headers(
     redacted: list[tuple[str, str]] = []
     for key, value in headers:
         header_name = str(key)
-        if header_name.strip().lower() in sensitive_names or _is_sensitive_header_name(header_name):
+        if header_name.strip().lower() in sensitive_names or is_sensitive_header_name(header_name):
             redacted.append((str(key), SENSITIVE_HEADER_MARKER))
         else:
             redacted.append((str(key), str(value)))
     return redacted
-
-
-def _is_sensitive_header_name(header_name: str) -> bool:
-    normalized = header_name.strip().lower()
-    if not normalized:
-        return False
-    if normalized in {
-        "authorization",
-        "proxy-authorization",
-        "cookie",
-        "set-cookie",
-        "x-api-key",
-        "api-key",
-    }:
-        return True
-    return any(
-        token in normalized
-        for token in ("token", "secret", "session", "apikey")
-    )

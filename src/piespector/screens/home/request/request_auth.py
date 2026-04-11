@@ -17,6 +17,7 @@ from piespector.domain.modes import (
     MODE_HOME_AUTH_TYPE_EDIT,
 )
 from piespector.domain.requests import RequestDefinition
+from piespector.secrets import mask_secret_display
 from piespector.screens.home import messages
 from piespector.screens.home.request.dropdown import render_dropdown_value
 from piespector.state import PiespectorState
@@ -153,8 +154,4 @@ def auth_option_select_context(
 
 
 def render_auth_secret(value: str) -> str:
-    if not value:
-        return "-"
-    if len(value) <= 4:
-        return "*" * len(value)
-    return f"{'*' * max(len(value) - 4, 4)}{value[-4:]}"
+    return mask_secret_display(value)
