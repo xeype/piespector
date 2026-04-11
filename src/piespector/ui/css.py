@@ -551,30 +551,10 @@ TextArea {
     background: $background;
 }
 
-#command-prompt {
-    width: auto;
-    color: $footer-key-foreground;
-    background: transparent;
-}
-
 #command-line-content {
     width: 1fr;
     color: $footer-description-foreground;
     background: transparent;
-}
-
-#command-input {
-    width: 1fr;
-    height: 1;
-    background: $background;
-    color: $footer-foreground;
-    border: none;
-
-    &:focus {
-        background: $background;
-        background-tint: 0%;
-        border: none;
-    }
 }
 
 #body-editor-header {

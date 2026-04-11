@@ -6,7 +6,6 @@ import shlex
 
 from piespector.domain.editor import TAB_ENV, TAB_HISTORY, TAB_HOME
 from piespector.domain.modes import (
-    MODE_COMMAND,
     MODE_HOME_AUTH_EDIT,
     MODE_HOME_AUTH_LOCATION_EDIT,
     MODE_HOME_AUTH_SELECT,
@@ -92,8 +91,6 @@ HOME_PAGE_COMMAND_CONTEXT_MODES = frozenset({MODE_NORMAL})
 
 
 def command_context_mode(state: PiespectorState) -> str:
-    if state.mode == MODE_COMMAND:
-        return state.command_context_mode or MODE_NORMAL
     return state.mode
 
 
@@ -582,10 +579,13 @@ def _quote_command_value(
     return f"{quote}{escaped}{closing}"
 
 
-def run_command(state: PiespectorState, raw_command: str) -> CommandOutcome:
-    previous_mode = command_context_mode(state)
-    if state.mode == MODE_COMMAND:
-        state.leave_command_mode()
+def run_command(
+    state: PiespectorState,
+    raw_command: str,
+    *,
+    context_mode: str | None = None,
+) -> CommandOutcome:
+    previous_mode = context_mode or command_context_mode(state)
 
     parsed = _parse_command(raw_command)
     if parsed.error:

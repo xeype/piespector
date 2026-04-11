@@ -16,7 +16,6 @@ from piespector.domain.editor import (
     TAB_HISTORY,
 )
 from piespector.domain.modes import (
-    MODE_COMMAND,
     MODE_CONFIRM,
     MODE_ENV_EDIT,
     MODE_HOME_AUTH_EDIT,

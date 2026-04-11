@@ -182,21 +182,20 @@ class AppCommandModeTests(unittest.TestCase):
         self.assertEqual(app._env_screen.selected_env_index, 3)
         self.assertEqual(app._history_screen.selected_history_response_tab, "headers")
 
-    def test_command_mode_escape_leaves_mode(self) -> None:
+    def test_execute_command_uses_current_mode_context_then_returns_to_normal(self) -> None:
         app = PiespectorApp()
-        app.state.enter_command_mode()
-        event = FakeKeyEvent("escape")
+        app.state.mode = MODE_HOME_SECTION_SELECT
 
         with patch.object(
             app,
             "_refresh_screen",
         ):
-            app.interaction_controller.handle_command_key(event)
+            app.execute_command("import foo.json")
 
         self.assertEqual(app.state.mode, MODE_NORMAL)
-        self.assertTrue(event.stopped)
+        self.assertEqual(app.state.message, "Import is only available from the Home or Env page.")
 
-    def test_command_mode_suggestions_follow_current_tab_context(self) -> None:
+    def test_command_palette_suggestions_follow_current_tab_context(self) -> None:
         app = PiespectorApp()
         app.state.current_tab = "env"
         app.state.mode = MODE_NORMAL

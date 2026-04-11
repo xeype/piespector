@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING
 from textual import events
 from textual.app import ScreenStackError
 
-from piespector.commands import run_command
 from piespector.domain.editor import (
     REQUEST_EDITOR_JUMP_KEY_TO_TAB,
     RESPONSE_JUMP_KEY_TO_TAB,
@@ -16,7 +15,6 @@ from piespector.domain.editor import (
     TOP_BAR_JUMP_KEY_TO_TARGET,
 )
 from piespector.domain.modes import (
-    MODE_COMMAND,
     MODE_CONFIRM,
     MODE_ENV_EDIT,
     MODE_ENV_SELECT,
@@ -28,17 +26,13 @@ from piespector.domain.modes import (
 from piespector.interactions.keys import (
     CONFIRM_ACCEPT_KEYS,
     CONFIRM_CANCEL_KEYS,
-    KEY_ESCAPE,
     KEY_TAB,
-    LEFT_KEYS,
-    RIGHT_KEYS,
+    KEY_ESCAPE,
 )
-from piespector.search import activate_search_target
 from piespector.ui.jump_overlay import JumpOverlay
 
 if TYPE_CHECKING:
     from piespector.app import PiespectorApp
-    from piespector.search import SearchTarget
 
 
 class InteractionController:
@@ -50,12 +44,6 @@ class InteractionController:
     @property
     def state(self):
         return self.app.state
-
-    def handle_command_key(self, event: events.Key) -> None:
-        if event.key == KEY_ESCAPE:
-            self.state.leave_command_mode()
-            self.app._refresh_screen()
-            event.stop()
 
     def handle_confirm_key(self, event: events.Key) -> None:
         if event.key in CONFIRM_CANCEL_KEYS:
@@ -153,22 +141,6 @@ class InteractionController:
         self.state.selected_home_response_tab = tab_id
         self.state.enter_home_response_select_mode(origin_mode=MODE_HOME_SECTION_SELECT)
 
-    def run_command(self, raw_command: str) -> None:
-        outcome = run_command(self.state, raw_command)
-        if outcome.send_request:
-            self.app._send_selected_request()
-            return
-        if outcome.should_exit:
-            self.app.exit()
-            return
-        self.app._refresh_screen()
-
-    def open_search_target(self, target: SearchTarget) -> None:
-        self.state.mode = MODE_NORMAL
-        if not activate_search_target(self.state, target):
-            self.state.message = f"Could not open {target.display}."
-        self.app._refresh_screen()
-
 
 class EventRouter:
     """Routes application key events to the appropriate controller."""
@@ -193,10 +165,6 @@ class EventRouter:
 
         if self.state.mode == MODE_CONFIRM:
             self.app.interaction_controller.handle_confirm_key(event)
-            return
-
-        if self.state.mode == MODE_COMMAND:
-            self.app.interaction_controller.handle_command_key(event)
             return
 
         if self.state.current_tab == TAB_HOME:

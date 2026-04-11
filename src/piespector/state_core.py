@@ -1,18 +1,10 @@
 from __future__ import annotations
 
 from piespector.domain.editor import TAB_ENV, TAB_HELP, TAB_HISTORY, TAB_HOME, TAB_LABELS, TAB_ORDER
-from piespector.domain.modes import MODE_COMMAND, MODE_CONFIRM, MODE_JUMP, MODE_NORMAL
+from piespector.domain.modes import MODE_CONFIRM, MODE_JUMP, MODE_NORMAL
 
 
 class CoreStateMixin:
-    def enter_command_mode(self) -> None:
-        self.command_context_mode = self.mode
-        self.mode = MODE_COMMAND
-        self.message = ""
-
-    def leave_command_mode(self) -> None:
-        self.mode = MODE_NORMAL
-
     def enter_jump_mode(self) -> None:
         self.jump_return_mode = self.mode
         self.mode = MODE_JUMP

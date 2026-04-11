@@ -78,9 +78,7 @@ class PiespectorCommandProvider(PiespectorProvider):
 
     def _entry_callback(self, entry: PaletteCommand):
         if entry.runnable:
-            return lambda command=entry.text.strip(): self.piespector_app.interaction_controller.run_command(
-                command
-            )
+            return lambda command=entry.text.strip(): self.piespector_app.execute_command(command)
         return lambda command=entry.text: self.piespector_app.open_command_palette(command)
 
     async def discover(self):
@@ -113,9 +111,7 @@ class PiespectorCommandProvider(PiespectorProvider):
             yield Hit(
                 max(0.0, 1.0 - (index * 0.01)),
                 completion,
-                lambda command=completion: self.piespector_app.interaction_controller.run_command(
-                    command
-                ),
+                lambda command=completion: self.piespector_app.execute_command(command),
                 text=completion,
                 help="Run this command.",
             )
@@ -135,9 +131,7 @@ class PiespectorCommandProvider(PiespectorProvider):
         yield Hit(
             0.05,
             f"Run {normalized_query}",
-            lambda command=normalized_query: self.piespector_app.interaction_controller.run_command(
-                command
-            ),
+            lambda command=normalized_query: self.piespector_app.execute_command(command),
             text=normalized_query,
             help="Run the command exactly as typed.",
         )
@@ -145,9 +139,7 @@ class PiespectorCommandProvider(PiespectorProvider):
 
 class PiespectorSearchProvider(PiespectorProvider):
     def _target_callback(self, target: SearchTarget):
-        return lambda target=target: self.piespector_app.interaction_controller.open_search_target(
-            target
-        )
+        return lambda target=target: self.piespector_app.open_search_target(target)
 
     def _target_help(self, target: SearchTarget) -> str:
         return f"Open this {target.kind}."

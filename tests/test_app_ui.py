@@ -27,6 +27,7 @@ from piespector.ui.command_line_content import build_command_line_text
 from piespector.ui.help_panel import PiespectorHelpPanel
 from piespector.ui.selection import selected_element_style
 from piespector.state import HistoryEntry, RequestDefinition, RequestKeyValue, ResponseSummary
+from textual.css.query import NoMatches
 from textual.color import Color
 from textual.command import CommandInput, CommandPalette
 from textual.widgets import DataTable, Input, Label, Select, Static, TabbedContent, Tabs, TextArea
@@ -1605,6 +1606,18 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
             await pilot.pause()
 
             self.assertEqual([collection.name for collection in app.state.collections], ["Desserts"])
+
+    async def test_base_screen_no_longer_mounts_hidden_command_input(self) -> None:
+        app = PiespectorApp()
+        app._load_request_workspace = lambda: None
+
+        async with app.run_test(size=(140, 40)) as pilot:
+            await pilot.pause()
+
+            with self.assertRaises(NoMatches):
+                app.screen.query_one("#command-input")
+            with self.assertRaises(NoMatches):
+                app.screen.query_one("#command-prompt")
 
     async def test_command_provider_does_not_shadow_exact_theme_system_command(self) -> None:
         app = PiespectorApp()

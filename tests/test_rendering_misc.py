@@ -718,13 +718,14 @@ class UiAndScrollbarTests(unittest.TestCase):
             r"#sidebar-tree \{[\s\S]*?scrollbar-size: 1 1;",
         )
 
-    def test_command_input_uses_app_background(self) -> None:
-        self.assertIn("#command-input {", APP_CSS)
+    def test_command_line_uses_app_background(self) -> None:
+        self.assertIn("#command-line {", APP_CSS)
+        self.assertNotIn("#command-input {", APP_CSS)
         self.assertIn("background: $background;", APP_CSS)
         self.assertNotIn("background: $footer-background;", APP_CSS)
         self.assertRegex(
             APP_CSS,
-            r"#command-input \{[\s\S]*?&:focus \{[\s\S]*?background: \$background;[\s\S]*?background-tint: 0%;",
+            r"#command-line \{[\s\S]*?background: \$background;",
         )
 
     def test_sidebar_tree_uses_app_background(self) -> None:

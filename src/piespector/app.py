@@ -9,7 +9,6 @@ from textual.app import App, SystemCommand
 from textual.command import CommandPalette
 from textual.css.query import NoMatches
 from textual import work
-from textual.suggester import SuggestFromList
 from textual.widgets import (
     Input,
     Select,
@@ -20,7 +19,7 @@ from textual.widgets import (
     Tree,
 )
 
-from piespector.commands import command_context_mode, help_commands
+from piespector.commands import run_command
 from piespector.domain.editor import (
     HOME_SIDEBAR_JUMP_KEY,
     REQUEST_EDITOR_JUMP_BINDINGS,
@@ -35,7 +34,6 @@ from piespector.domain.editor import (
 )
 from piespector.domain.modes import COMMAND_BLOCKED_MODES, REQUEST_RESPONSE_SHORTCUT_MODES
 from piespector.domain.modes import (
-    MODE_COMMAND,
     MODE_HOME_URL_EDIT,
     MODE_NORMAL,
 )
@@ -237,11 +235,7 @@ class PiespectorApp(App[None]):
         self.overlay_controller.postprocess_body_editor_brace()
 
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
-        if action in {
-            "enter_command_mode",
-            "command_palette",
-            "search_workspace",
-        } and self.state.mode in COMMAND_BLOCKED_MODES:
+        if action in {"command_palette", "search_workspace"} and self.state.mode in COMMAND_BLOCKED_MODES:
             return False
 
         if action == "enter_jump_mode":
@@ -282,9 +276,6 @@ class PiespectorApp(App[None]):
             )
             return
         self._refresh_jump_state()
-
-    def action_enter_command_mode(self) -> None:
-        self.action_command_palette()
 
     def open_palette(
         self,
@@ -331,6 +322,30 @@ class PiespectorApp(App[None]):
 
     def action_search_workspace(self) -> None:
         self.open_search_palette()
+
+    def execute_command(self, raw_command: str) -> None:
+        outcome = run_command(
+            self.state,
+            raw_command,
+            context_mode=self.state.mode,
+        )
+        if self.state.mode != MODE_NORMAL:
+            self.state.mode = MODE_NORMAL
+        if outcome.should_exit:
+            self.exit()
+            return
+        if outcome.send_request:
+            self._send_selected_request()
+            return
+        self._refresh_screen()
+
+    def open_search_target(self, target) -> None:
+        from piespector.search import activate_search_target
+
+        self.state.mode = MODE_NORMAL
+        if not activate_search_target(self.state, target):
+            self.state.message = f"Could not open {target.display}."
+        self._refresh_screen()
 
     def navigate_to_history_entry(self, history_id: str) -> None:
         for index, entry in enumerate(self.state.history_entries):
@@ -494,34 +509,6 @@ class PiespectorApp(App[None]):
             except NoMatches:
                 pass
 
-    def _sync_command_input(self, command_input: Input) -> None:
-        suggestions = self._command_suggestions()
-        command_input.suggester = SuggestFromList(suggestions, case_sensitive=False)
-
-        focus_token = (
-            self.state.current_tab,
-            self.state.command_context_mode,
-        )
-        if getattr(command_input, "_piespector_focus_token", None) == focus_token:
-            return
-
-        command_input._piespector_focus_token = focus_token
-        command_input.value = ""
-        command_input.focus()
-
-    def _command_input_widget(self) -> Input | None:
-        try:
-            return self._query_current("#command-input", Input)
-        except NoMatches:
-            return None
-
-    def _command_suggestions(self) -> list[str]:
-        return help_commands(
-            self.state,
-            self.state.current_tab,
-            command_context_mode(self.state),
-        )
-
     def _persist_env_pairs(self) -> None:
         self.persistence_manager.persist_env_workspace()
 
@@ -605,12 +592,6 @@ class PiespectorApp(App[None]):
     def _reset_edit_path_completion(self) -> None:
         self._edit_path_completion_anchor = ""
         self._edit_path_completion_index = -1
-
-    def on_input_submitted(self, event: Input.Submitted) -> None:
-        if event.input.id != "command-input" or self.state.mode != MODE_COMMAND:
-            return
-        event.stop()
-        self.interaction_controller.run_command(event.value)
 
     def _paste_text(self) -> str | None:
         system = platform.system()

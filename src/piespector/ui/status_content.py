@@ -4,7 +4,6 @@ from dataclasses import dataclass
 
 from piespector.domain.editor import TAB_ENV, TAB_HELP, TAB_HISTORY, TAB_HOME, TAB_LABELS
 from piespector.domain.modes import (
-    MODE_COMMAND,
     MODE_CONFIRM,
     MODE_ENV_EDIT,
     MODE_ENV_SELECT,
@@ -67,8 +66,6 @@ def mode_and_context(state: PiespectorState) -> tuple[str, str]:
         return (MODE_JUMP, TAB_LABELS.get(state.current_tab, state.current_tab.title()))
 
     if state.current_tab == TAB_HELP:
-        if state.mode == MODE_COMMAND:
-            return (MODE_COMMAND, TAB_LABELS[TAB_HELP])
         return (MODE_NORMAL, TAB_LABELS[TAB_HELP])
 
     if state.current_tab == TAB_ENV:
@@ -82,8 +79,6 @@ def mode_and_context(state: PiespectorState) -> tuple[str, str]:
             return (STATUS_DISPLAY_EDIT, f"Env / {env_label} / {env_key} / {field_label}")
         if state.mode == MODE_ENV_SELECT:
             return (STATUS_DISPLAY_SELECT, f"Env / {env_label} / {env_key} / {field_label}")
-        if state.mode == MODE_COMMAND:
-            return (MODE_COMMAND, f"Env / {env_label}")
         return (MODE_NORMAL, f"Env / {env_label}")
 
     if state.current_tab == TAB_HISTORY:
@@ -93,8 +88,6 @@ def mode_and_context(state: PiespectorState) -> tuple[str, str]:
             or entry.source_request_path.strip()
             or STATUS_CONTEXT_HISTORY
         ) if entry is not None else STATUS_CONTEXT_HISTORY
-        if state.mode == MODE_COMMAND:
-            return (MODE_COMMAND, STATUS_CONTEXT_HISTORY)
         if state.mode == MODE_HISTORY_RESPONSE_SELECT:
             return (STATUS_DISPLAY_SELECT, f"History / {history_label} / {STATUS_CONTEXT_RESPONSE}")
         return (MODE_NORMAL, f"History / {history_label}")
@@ -107,8 +100,6 @@ def mode_and_context(state: PiespectorState) -> tuple[str, str]:
         if node is not None:
             return (MODE_CONFIRM, f"{STATUS_CONTEXT_DELETE} / {node.label}")
         return (MODE_CONFIRM, STATUS_CONTEXT_DELETE)
-    if state.mode == MODE_COMMAND:
-        return (MODE_COMMAND, f"{state.current_tab.title()} / {current_request_label}")
     if state.mode == MODE_HOME_SECTION_SELECT:
         current_section = state.home_editor_tab.replace("-", " ").title()
         return (STATUS_DISPLAY_SELECT, f"{current_request_label} / {current_section}")

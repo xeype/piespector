@@ -3,7 +3,6 @@ from __future__ import annotations
 from piespector.domain.editor import BODY_KEY_VALUE_TYPES, TAB_ENV, TAB_HELP, TAB_HISTORY, TAB_HOME
 from piespector.domain.modes import (
     INLINE_EDIT_MODES,
-    MODE_COMMAND,
     MODE_CONFIRM,
     MODE_ENV_SELECT,
     MODE_HISTORY_RESPONSE_SELECT,
@@ -31,7 +30,6 @@ HintItem = tuple[str, str]
 
 MODE_HINTS: dict[str, tuple[HintItem, ...]] = {
     MODE_CONFIRM: (("y", "confirm"), ("n", "cancel"), ("esc", "cancel")),
-    MODE_COMMAND: (("enter", "run"), ("esc", "cancel")),
     MODE_HOME_SECTION_SELECT: (
         ("h/l", "sections"),
         ("j/k", "enter"),

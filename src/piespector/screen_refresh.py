@@ -24,7 +24,6 @@ from piespector.domain.editor import (
     TAB_ORDER,
 )
 from piespector.domain.modes import (
-    MODE_COMMAND,
     MODE_HOME_AUTH_EDIT,
     MODE_HOME_HEADERS_EDIT,
     MODE_HOME_PARAMS_EDIT,
@@ -156,7 +155,6 @@ class ScreenRefreshCoordinator:
             self.app._query_current("#status-line")
             self.app._query_current("#command-line")
             self.app._query_current("#command-line-content", Static)
-            self.app._query_current("#command-input", Input)
         except NoMatches:
             return False
         return True
@@ -393,23 +391,7 @@ class ScreenRefreshCoordinator:
         footer.set_status_content(status_bar_content(self.state))
 
     def refresh_command_line(self) -> None:
-        command_prompt = self.app._query_current("#command-prompt", Static)
         command_content = self.app._query_current("#command-line-content", Static)
-        command_input = self.app._query_current("#command-input", Input)
-
-        if self.state.mode == MODE_COMMAND:
-            command_prompt.display = True
-            command_content.display = False
-            command_input.display = True
-            self.app._sync_command_input(command_input)
-            return
-
-        command_prompt.display = False
-        command_input.display = False
-        command_input._piespector_focus_token = None
-        if command_input.value:
-            command_input.value = ""
-        command_content.display = True
         command_content.update(build_command_line_text(self.state))
 
     def env_visible_rows(self) -> int:

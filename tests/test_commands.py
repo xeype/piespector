@@ -92,7 +92,7 @@ class CommandTests(unittest.TestCase):
         self.assertEqual(state.message, "Moved request login.")
 
     def test_import_completion_quotes_filesystem_paths_with_spaces(self) -> None:
-        state = PiespectorState(current_tab="env", mode="COMMAND", command_context_mode="NORMAL")
+        state = PiespectorState(current_tab="env")
         with TemporaryDirectory() as tmp_dir:
             root = Path(tmp_dir)
             (root / "My Env.env").write_text("A=1\n", encoding="utf-8")
@@ -102,7 +102,7 @@ class CommandTests(unittest.TestCase):
         self.assertEqual(completion, 'import "My Env.env"')
 
     def test_import_completion_returns_all_matching_files_in_order(self) -> None:
-        state = PiespectorState(current_tab="env", mode="COMMAND", command_context_mode="NORMAL")
+        state = PiespectorState(current_tab="env")
         with TemporaryDirectory() as tmp_dir:
             root = Path(tmp_dir)
             (root / "alpha.env").write_text("A=1\n", encoding="utf-8")
@@ -130,7 +130,7 @@ class CommandTests(unittest.TestCase):
             name="login",
             collection_id=source_collection.collection_id,
         )
-        state = PiespectorState(current_tab="home", mode="COMMAND", command_context_mode="NORMAL")
+        state = PiespectorState(current_tab="home")
         state.collections = [source_collection, target_collection]
         state.folders = [target_folder]
         state.requests = [request]
@@ -162,7 +162,7 @@ class CommandTests(unittest.TestCase):
         self.assertEqual(state.env_sets["Default"][0].value, "x")
 
     def test_page_only_commands_are_blocked_in_request_editor_context(self) -> None:
-        state = PiespectorState(current_tab="home", mode="HOME_SECTION_SELECT", command_context_mode="HOME_SECTION_SELECT")
+        state = PiespectorState(current_tab="home", mode="HOME_SECTION_SELECT")
 
         self.assertIsNone(command_completion(state, "imp"))
         self.assertIsNone(command_completion(state, "cp"))

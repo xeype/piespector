@@ -69,7 +69,6 @@ class HistoryScreenState:
 class UISessionState:
     mode: str = MODE_NORMAL
     current_tab: str = TAB_HOME
-    command_context_mode: str = MODE_NORMAL
     jump_return_mode: str = MODE_NORMAL
     message: str = ""
     confirm_prompt: str = ""
