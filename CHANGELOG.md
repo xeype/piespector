@@ -2,11 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.3.1 - 2026-04-11
+
+- Updated the packaged README screenshot URL to a cache-busting, commit-pinned asset URL for package indexes.
+
 ## 0.3.0 - 2026-04-11
 
-- Added packaging and release workflow updates for published installs through `uv` and `pipx`.
-- Added CI artifact smoke checks so the installed `piespector` command is exercised outside the repository root.
-- Updated installation and publishing docs for the packaged CLI workflow.
+- Refactored the application architecture into dedicated domain, state, storage, screen, interaction, and UI modules, and removed the legacy rendering facade.
+- Reworked the Home, Env, and History screens with dedicated controllers/screens, sidebar tree navigation, improved layout/state flow, and more stable focus, overlay, jump-mode, and search behavior.
+- Expanded request editing with `HEAD` and `OPTIONS` methods, a new `Options` tab, SSL certificate verification, Description and Follow Redirects fields, a new request hotkey, body-editor copy support, and improved request/body/header/param editing flows.
+- Added broader autocomplete and navigation support, including env-var autocomplete in the URL bar, tab/path completion improvements, `H`/`L` field cycling, add-row UI for request tables, and multiple bindings and selection-handling fixes.
+- Introduced and adopted refactored custom `Select` and `Tree` widgets, plus theme/styling updates for method coloring, focus states, selected elements, and sidebar/request panel highlighting.
+- Split collections and envs into directory-based workspace files, expanded storage/path handling and migration behavior, and improved request/auth/body/env serialization coverage.
+- Updated packaging and release automation with packaged `.tcss` assets, richer project metadata URLs, CI distribution builds plus installed-wheel smoke tests, a TestPyPI publishing workflow, README installation guidance for `uv`/`pipx`, and an updated screenshot asset.
+- Expanded automated coverage across app UI, rendering, commands, state/workspace logic, storage, auth, and request body handling.
 
 ## 0.2.0 - 2026-03-29
 
