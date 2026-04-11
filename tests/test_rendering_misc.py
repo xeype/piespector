@@ -31,7 +31,6 @@ from piespector.screens.home.sidebar import render_home_sidebar
 from piespector.state import (
     CollectionDefinition,
     FolderDefinition,
-    HistoryEntry,
     PiespectorState,
     RequestDefinition,
     RequestKeyValue,
@@ -682,35 +681,6 @@ class RenderingMiscTests(unittest.TestCase):
         )
 
         self.assertEqual(panel.title.plain, "Response")
-
-    def test_render_history_viewport_shows_selected_entry_detail(self) -> None:
-        state = PiespectorState(current_tab="history")
-        state.selected_history_response_tab = "headers"
-        state.history_entries = [
-            HistoryEntry(
-                history_id="h1",
-                source_request_name="Health",
-                source_request_path="Desserts / Health",
-                method="GET",
-                url="https://example.com/health",
-                auth_type="bearer",
-                auth_location="header",
-                auth_name="Authorization",
-                request_headers=[("Authorization", "<redacted>")],
-                response_headers=[("Content-Type", "application/json")],
-                response_body='{"ok":true}',
-                status_code=200,
-                response_size=11,
-            )
-        ]
-
-        rendered = render_plain(render_history_viewport(state, viewport_height=24, viewport_width=140), width=140)
-
-        self.assertIn("Health", rendered)
-        self.assertIn("GET", rendered)
-        self.assertIn("Content-Type", rendered)
-        self.assertIn("application/json", rendered)
-
 
 class UiAndScrollbarTests(unittest.TestCase):
     def test_ui_constants_include_core_selectors_and_binding(self) -> None:

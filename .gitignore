@@ -13,3 +13,4 @@ dist/
 .piespector.log
 .piespector.requests.json
 .piespector.history.jsonl
+docs/refactor/ui-refactor-target.md
