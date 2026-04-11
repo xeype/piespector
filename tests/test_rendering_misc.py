@@ -4,6 +4,7 @@ import unittest
 
 from rich.console import Console
 
+from piespector.placeholders import PLACEHOLDER_HIGHLIGHT_COLOR
 from piespector.domain.editor import (
     REQUEST_EDITOR_TAB_TO_JUMP_KEY,
     REQUEST_EDITOR_TABS,
@@ -24,7 +25,8 @@ from piespector.screens.home.response_panel import (
     render_response_summary_line,
     response_status_style,
 )
-from piespector.screens.home.request.url_bar import render_top_url_bar
+from piespector.screens.home.request.request_auth import render_request_auth_editor
+from piespector.screens.home.request.url_bar import render_request_url_display, render_top_url_bar
 from piespector.screens.home.sidebar import render_home_sidebar
 from piespector.state import (
     CollectionDefinition,
@@ -32,6 +34,7 @@ from piespector.state import (
     HistoryEntry,
     PiespectorState,
     RequestDefinition,
+    RequestKeyValue,
     ResponseSummary,
 )
 from piespector.ui.status_content import status_bar_content
@@ -225,7 +228,7 @@ class RenderingMiscTests(unittest.TestCase):
             "Body  |  Lines 1-5 of 5  |  Error: HTTP Error 500: Internal Server Error",
         )
 
-    def test_render_home_editor_header_shows_blue_url_without_env_or_resolved_block(self) -> None:
+    def test_render_home_editor_header_keeps_placeholder_url_without_resolved_block(self) -> None:
         request = RequestDefinition(
             request_id="r1",
             name="Health",
@@ -241,7 +244,8 @@ class RenderingMiscTests(unittest.TestCase):
 
         rendered = render_plain(render_home_viewport(state, viewport_height=24, viewport_width=140), width=140)
 
-        self.assertIn("https://example.com/health", rendered)
+        self.assertIn("{{BASE_URL}}/health", rendered)
+        self.assertNotIn("https://example.com/health", rendered)
         self.assertNotIn("Env Default", rendered)
         self.assertNotIn("Resolved URL:", rendered)
 
@@ -321,7 +325,7 @@ class RenderingMiscTests(unittest.TestCase):
         self.assertIn("https://example.com/health", compact_rendered)
         self.assertNotIn("\n        GET", compact_rendered)
 
-    def test_render_top_url_bar_url_edit_keeps_resolved_url_preview(self) -> None:
+    def test_render_top_url_bar_url_edit_keeps_placeholder_url_preview(self) -> None:
         request = RequestDefinition(
             request_id="r1",
             name="Health",
@@ -336,8 +340,62 @@ class RenderingMiscTests(unittest.TestCase):
 
         rendered = render_plain(render_top_url_bar(state), width=100)
 
-        self.assertIn("https://example.com/health", rendered)
+        self.assertIn("{{BASE_URL}}/health", rendered)
+        self.assertNotIn("https://example.com/health", rendered)
         self.assertNotIn("env: BASE_URL", rendered)
+
+    def test_render_request_url_display_uses_multiple_styles_for_url_parts(self) -> None:
+        request = RequestDefinition(
+            request_id="r1",
+            name="Docs",
+            method="GET",
+            url="https://{{HOST}}/health",
+            query_items=[
+                RequestKeyValue(key="page", value="{{PAGE}}"),
+            ],
+        )
+
+        rendered = render_request_url_display(request)
+
+        self.assertEqual(rendered.plain, "https://{{HOST}}/health?page={{PAGE}}")
+        self.assertGreaterEqual(len(rendered.spans), 6)
+        placeholder_spans = [
+            span
+            for span in rendered.spans
+            if rendered.plain[span.start : span.end] in {"{{HOST}}", "{{PAGE}}"}
+        ]
+        self.assertEqual(
+            {rendered.plain[span.start : span.end] for span in placeholder_spans},
+            {"{{HOST}}", "{{PAGE}}"},
+        )
+        self.assertTrue(all(span.style.bold is not True for span in placeholder_spans))
+        self.assertTrue(
+            all(str(span.style) == PLACEHOLDER_HIGHLIGHT_COLOR for span in placeholder_spans)
+        )
+
+    def test_render_request_auth_editor_highlights_placeholder_values_when_not_editing(self) -> None:
+        request = RequestDefinition(
+            request_id="r1",
+            name="Auth",
+            auth_type="bearer",
+            auth_bearer_prefix="Bearer",
+            auth_bearer_token="{{TOKEN}}",
+        )
+        state = PiespectorState(current_tab="home")
+
+        rendered = render_request_auth_editor(request, state, include_type_selector=False)
+        table = rendered.renderables[0]
+        token_cell = table.columns[1]._cells[1]
+
+        self.assertEqual(token_cell.plain, "{{TOKEN}}")
+        self.assertEqual(
+            [
+                token_cell.plain[span.start : span.end]
+                for span in token_cell.spans
+                if str(span.style) == PLACEHOLDER_HIGHLIGHT_COLOR
+            ],
+            ["{{TOKEN}}"],
+        )
 
     def test_render_home_viewport_without_active_request_uses_single_empty_workspace(self) -> None:
         collection = CollectionDefinition(collection_id="c1", name="Desserts")

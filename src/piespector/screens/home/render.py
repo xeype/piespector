@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from rich import box
 from rich.align import Align
 from rich.columns import Columns
 from rich.console import Group, RenderableType
@@ -55,7 +54,7 @@ from piespector.domain.modes import (
     REQUEST_RESPONSE_SHORTCUT_MODES,
 )
 from piespector.domain.requests import RequestDefinition
-from piespector.request_builder import preview_auto_headers, preview_request_url
+from piespector.request_builder import preview_auto_headers
 from piespector.screens.home import messages
 from piespector.screens.home.layout import (
     home_request_list_visible_rows,
@@ -89,9 +88,12 @@ from piespector.screens.home.request.request_metadata import (
 from piespector.screens.home.request.request_options import render_request_options_editor
 from piespector.screens.home.request.header_editor import RequestHeadersTable, refresh_request_headers_table
 from piespector.screens.home.request.query_editor import RequestParamsTable, refresh_request_params_table
+from piespector.screens.home.request.url_bar import (
+    preview_request_url_template,
+    render_request_url_display,
+    render_top_url_bar,
+)
 from piespector.widget.select import option_list, sync
-from piespector.screens.home.request.url_bar import render_request_url_preview
-from piespector.screens.home.request.url_bar import render_top_url_bar
 from piespector.screens.home.response_panel import (
     render_request_response,
     render_response_summary,
@@ -411,18 +413,7 @@ def refresh_home_url_bar(
     if getattr(url_display, "_piespector_signature", None) == url_display_signature:
         return
 
-    line = Text()
-    url_preview = render_request_url_preview(active_request, state)
-    line.append(
-        url_preview or "No URL set",
-        style=(
-            Style(meta={"@click": "app.copy_active_request_url"})
-            if url_preview
-            else None
-        ),
-    )
-
-    url_display.update(line)
+    url_display.update(render_request_url_display(active_request))
     url_display._piespector_signature = url_display_signature
 
 
@@ -448,7 +439,7 @@ def _url_line_signature(
         return ("no-opened-request",)
 
     mode = effective_mode(state)
-    url_preview = render_request_url_preview(active_request, state)
+    url_preview = preview_request_url_template(active_request)
 
     if mode in {MODE_HOME_REQUEST_METHOD_EDIT, MODE_HOME_REQUEST_METHOD_SELECT}:
         return (

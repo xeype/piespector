@@ -22,6 +22,7 @@ from piespector.screens.home.request.dropdown import render_dropdown_value
 from piespector.screens.home.request.request_metadata import request_label
 from piespector.ui.rendering_helpers import (
     preview_syntax_language,
+    render_placeholder_text,
     request_body_syntax_language,
 )
 from piespector.state import PiespectorState
@@ -152,8 +153,8 @@ def refresh_request_body_table(
         table.add_row(
             str(index),
             Text("[x]" if item.enabled else "[ ]"),
-            Text(item.key),
-            Text(item.value or "-"),
+            render_placeholder_text(item.key),
+            render_placeholder_text(item.value, empty="-"),
         )
 
     add_row_key = table.add_row("+", "", Text(add_label), "")
@@ -182,8 +183,10 @@ def render_body_items_fallback(
 
     for index, item in enumerate(items, start=1):
         status = "[x]" if item.enabled else "[ ]"
-        rendered.append(f"{index:>2} {status} {item.key}")
-        rendered.append(f" = {item.value or '-'}")
+        rendered.append(f"{index:>2} {status} ")
+        rendered.append_text(render_placeholder_text(item.key))
+        rendered.append(" = ")
+        rendered.append_text(render_placeholder_text(item.value, empty="-"))
         if index < len(items):
             rendered.append("\n")
     return rendered

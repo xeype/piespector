@@ -37,10 +37,11 @@ from piespector.domain.modes import (
 )
 from piespector.screens.home.controller import HomeController
 from piespector.domain.workspace import CollectionDefinition, FolderDefinition
+from piespector.placeholders import PLACEHOLDER_HIGHLIGHT_COLOR
 from piespector.widget.tree import PiespectorTree as SidebarTree
 from piespector.state import PiespectorState, RequestDefinition
 from piespector.ui.help_panel import _hide_binding
-from piespector.ui.input import PiespectorInput
+from piespector.ui.input import PLACEHOLDER_INPUT_HIGHLIGHTER, PiespectorInput
 
 
 class FakeKeyEvent:
@@ -575,6 +576,17 @@ class AppCommandModeTests(unittest.TestCase):
         self.assertFalse(
             any(binding.action == "copy" for binding in PiespectorInput.BINDINGS)
         )
+
+    def test_placeholder_input_highlighter_highlights_placeholder_tokens(self) -> None:
+        highlighted = PLACEHOLDER_INPUT_HIGHLIGHTER("{{BASE_URL}}/health")
+        placeholder_spans = [
+            span
+            for span in highlighted.spans
+            if highlighted.plain[span.start : span.end] == "{{BASE_URL}}"
+        ]
+
+        self.assertEqual(len(placeholder_spans), 1)
+        self.assertEqual(str(placeholder_spans[0].style), PLACEHOLDER_HIGHLIGHT_COLOR)
 
     def test_help_panel_filters_ctrl_c_and_super_c_bindings(self) -> None:
         self.assertTrue(_hide_binding(Binding("ctrl+c,super+c", "copy", "Copy")))

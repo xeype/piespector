@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import re
 
 PLACEHOLDER_RE = re.compile(r"\{\{\s*([^{}]+?)\s*\}\}")
+PLACEHOLDER_HIGHLIGHT_COLOR = "bright_yellow"
 
 
 @dataclass(frozen=True)

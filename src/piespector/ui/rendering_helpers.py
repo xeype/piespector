@@ -9,7 +9,20 @@ from rich.syntax import Syntax
 from rich.table import Table
 from rich.text import Text
 
+from piespector.placeholders import PLACEHOLDER_HIGHLIGHT_COLOR, PLACEHOLDER_RE
 from piespector.domain.requests import RequestDefinition
+
+
+def render_placeholder_text(
+    value: str,
+    *,
+    empty: str | None = None,
+    style: str | None = None,
+) -> Text:
+    display_value = value if value else (empty or "")
+    text = Text(display_value, style=style)
+    text.highlight_regex(PLACEHOLDER_RE, PLACEHOLDER_HIGHLIGHT_COLOR)
+    return text
 
 
 def request_body_syntax_language(request: RequestDefinition | None) -> str | None:

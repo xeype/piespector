@@ -13,6 +13,7 @@ from piespector.request_builder import preview_auto_headers
 from piespector.secrets import auth_preview_header_display_overrides, mask_header_display
 from piespector.screens.home import messages
 from piespector.state import PiespectorState
+from piespector.ui.rendering_helpers import render_placeholder_text
 from piespector.ui.selection import effective_mode, selected_element_style
 
 
@@ -83,8 +84,8 @@ def refresh_request_headers_table(
         table.add_row(
             str(index + 1),
             Text("[x]" if item.enabled else "[ ]"),
-            Text(item.key),
-            Text(display_value),
+            render_placeholder_text(item.key),
+            render_placeholder_text(display_value),
         )
 
     for key, value, enabled in auto_headers:
@@ -95,8 +96,8 @@ def refresh_request_headers_table(
         table.add_row(
             "auto",
             Text("[x]" if enabled else "[ ]"),
-            Text(key),
-            Text(display_value),
+            render_placeholder_text(key),
+            render_placeholder_text(display_value),
         )
 
     add_row_key = table.add_row("+", "", Text("Add header"), "")
@@ -126,19 +127,25 @@ def render_request_headers_fallback(
         for index, item in enumerate(headers, start=1):
             status = "[x]" if item.enabled else "[ ]"
             row = Text()
-            row.append(f"{index:>2} {status} {item.key}")
-            row.append(f" = {mask_header_display(item.key, item.value)}")
+            row.append(f"{index:>2} {status} ")
+            row.append_text(render_placeholder_text(item.key))
+            row.append(" = ")
+            row.append_text(
+                render_placeholder_text(mask_header_display(item.key, item.value))
+            )
             rows.append(row)
         for key, value, enabled in auto_headers:
             row = Text()
             row.append("auto ")
             row.append("[x]" if enabled else "[ ]")
-            row.append(f" {key}")
+            row.append(" ")
+            row.append_text(render_placeholder_text(key))
             display_value = auth_display_overrides.get(
                 key.strip().lower(),
                 mask_header_display(key, value),
             )
-            row.append(f" = {display_value}")
+            row.append(" = ")
+            row.append_text(render_placeholder_text(display_value))
             rows.append(row)
         for index, row in enumerate(rows):
             rendered.append_text(row)

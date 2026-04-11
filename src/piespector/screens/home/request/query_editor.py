@@ -10,6 +10,7 @@ from textual.widgets._data_table import RowDoesNotExist, RowKey
 from piespector.domain.modes import MODE_HOME_PARAMS_EDIT, MODE_HOME_PARAMS_SELECT
 from piespector.domain.requests import RequestDefinition
 from piespector.state import PiespectorState
+from piespector.ui.rendering_helpers import render_placeholder_text
 from piespector.ui.selection import effective_mode, selected_element_style
 
 
@@ -76,8 +77,8 @@ def refresh_request_params_table(
         table.add_row(
             str(index + 1),
             Text("[x]" if item.enabled else "[ ]"),
-            Text(item.key),
-            Text(item.value or "-"),
+            render_placeholder_text(item.key),
+            render_placeholder_text(item.value, empty="-"),
         )
 
     add_row_key = table.add_row("+", "", Text("Add parameter"), "")
@@ -102,8 +103,10 @@ def render_request_params_fallback(
     rendered = Text()
     for index, item in enumerate(params, start=1):
         status = "[x]" if item.enabled else "[ ]"
-        rendered.append(f"{index:>2} {status} {item.key}")
-        rendered.append(f" = {item.value or '-'}")
+        rendered.append(f"{index:>2} {status} ")
+        rendered.append_text(render_placeholder_text(item.key))
+        rendered.append(" = ")
+        rendered.append_text(render_placeholder_text(item.value, empty="-"))
         if index < len(params):
             rendered.append("\n")
     return rendered

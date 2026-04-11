@@ -7,6 +7,7 @@ from unittest.mock import patch
 from rich.console import Console
 
 from piespector.app import PiespectorApp
+from piespector.placeholders import PLACEHOLDER_HIGHLIGHT_COLOR
 from piespector.domain.editor import (
     HOME_SIDEBAR_JUMP_KEY,
     REQUEST_EDITOR_JUMP_BINDINGS,
@@ -741,12 +742,13 @@ class AppUiTests(unittest.TestCase):
         app.state.active_request_id = request.request_id
         app.state.env_pairs = {"BASE_URL": "https://example.com"}
 
-        with patch.object(app, "_copy_text", return_value=True), patch.object(
+        with patch.object(app, "_copy_text", return_value=True) as copy_text, patch.object(
             app,
             "_refresh_command_line",
         ):
             app.action_copy_active_request_url()
 
+        copy_text.assert_called_once_with("https://example.com/health")
         self.assertEqual(app.state.message, "Copied resolved URL.")
 
     def test_binary_body_uses_input_widget_not_textarea_mode(self) -> None:
@@ -872,6 +874,74 @@ class AppUiTests(unittest.TestCase):
 
 
 class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
+    async def test_url_display_highlights_placeholder_tokens_when_not_editing(self) -> None:
+        app = PiespectorApp()
+        app._persist_requests = lambda: None
+        app._load_request_workspace = lambda: None
+        request = RequestDefinition(
+            request_id="r1",
+            name="Health",
+            url="https://{{HOST}}/health?page={{PAGE}}",
+        )
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+
+        async with app.run_test(size=(140, 40)) as pilot:
+            app._refresh_screen()
+            await pilot.pause()
+
+            url_display = app.screen.query_one("#url-display", Static)
+            segments = list(url_display.render_line(0)._segments)
+            highlighted = [
+                segment.text
+                for segment in segments
+                if getattr(segment.style.color, "number", None) == 11
+            ]
+
+            self.assertIn("{{HOST}}", highlighted)
+            self.assertIn("{{PAGE}}", highlighted)
+
+    async def test_request_headers_table_highlights_placeholder_tokens_when_not_editing(self) -> None:
+        app = PiespectorApp()
+        app._persist_requests = lambda: None
+        app._load_request_workspace = lambda: None
+        request = RequestDefinition(
+            request_id="r1",
+            name="Health",
+            header_items=[RequestKeyValue(key="X-{{NAME}}", value="{{VALUE}}")],
+        )
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+        app.state.home_editor_tab = "headers"
+        app.state.mode = "HOME_HEADERS_SELECT"
+
+        async with app.run_test(size=(140, 40)) as pilot:
+            app._refresh_screen()
+            await pilot.pause()
+
+            table = app.screen.query_one("#request-headers-table", DataTable)
+            key_cell = table.get_cell_at((0, 2))
+            value_cell = table.get_cell_at((0, 3))
+
+            self.assertEqual(key_cell.plain, "X-{{NAME}}")
+            self.assertEqual(value_cell.plain, "{{VALUE}}")
+            self.assertEqual(
+                [
+                    key_cell.plain[span.start : span.end]
+                    for span in key_cell.spans
+                    if str(span.style) == PLACEHOLDER_HIGHLIGHT_COLOR
+                ],
+                ["{{NAME}}"],
+            )
+            self.assertEqual(
+                [
+                    value_cell.plain[span.start : span.end]
+                    for span in value_cell.spans
+                    if str(span.style) == PLACEHOLDER_HIGHLIGHT_COLOR
+                ],
+                ["{{VALUE}}"],
+            )
+
     async def test_tab_advances_focus_in_normal_mode(self) -> None:
         app = PiespectorApp()
         app._load_request_workspace = lambda: None

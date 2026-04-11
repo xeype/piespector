@@ -378,6 +378,13 @@ class HomeScreen(PiespectorScreen):
         self.app.set_focus(None)
         self.app._refresh_screen()
 
+    @on(events.Click, "#url-display")
+    def _on_url_display_clicked(self, event: events.Click) -> None:
+        if self.app.state.mode == MODE_HOME_URL_EDIT:
+            return
+        self.app.action_copy_active_request_url()
+        event.stop()
+
     def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
         app = self.app
         if app is None or not getattr(self, "_tab_activation_ready", False):
@@ -581,5 +588,4 @@ class HomeScreen(PiespectorScreen):
                         app.call_after_refresh(app._refresh_request_input_hints_only)
             event.stop()
             return
-
 

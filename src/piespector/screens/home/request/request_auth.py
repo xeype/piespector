@@ -21,6 +21,7 @@ from piespector.secrets import mask_secret_display
 from piespector.screens.home import messages
 from piespector.screens.home.request.dropdown import render_dropdown_value
 from piespector.state import PiespectorState
+from piespector.ui.rendering_helpers import render_placeholder_text
 from piespector.ui.selection import effective_mode, selected_element_style
 
 
@@ -98,7 +99,7 @@ def render_request_auth_editor(
                 display_value = render_auth_secret(raw_value)
             else:
                 display_value = raw_value or "-"
-            current_value = Text(display_value)
+            current_value = render_placeholder_text(display_value)
 
         row_style = selected_element_style(
             state,
