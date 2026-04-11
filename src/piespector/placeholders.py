@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import re
 
-PLACEHOLDER_RE = re.compile(r"\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}")
+PLACEHOLDER_RE = re.compile(r"\{\{\s*([^{}]+?)\s*\}\}")
 
 
 @dataclass(frozen=True)
@@ -16,7 +16,7 @@ class PlaceholderMatch:
 
 def resolve_placeholders(text: str, env_pairs: dict[str, str]) -> str:
     def replace(match: re.Match[str]) -> str:
-        key = match.group(1)
+        key = match.group(1).strip()
         return env_pairs.get(key, match.group(0))
 
     return PLACEHOLDER_RE.sub(replace, text)

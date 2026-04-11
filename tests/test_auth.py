@@ -115,6 +115,21 @@ class AuthTests(unittest.TestCase):
 
         self.assertEqual(effective_headers["Authorization"], "JWT abc123")
 
+    def test_api_key_auth_resolves_hyphenated_env_key_values(self) -> None:
+        request = RequestDefinition(
+            auth_type="api-key",
+            auth_api_key_name="X-API-Key",
+            auth_api_key_value="{{X-API-Key}}",
+            auth_api_key_location="header",
+        )
+
+        effective_headers, _auto_headers = preview_effective_headers(
+            request,
+            {"X-API-Key": "secret-token"},
+        )
+
+        self.assertEqual(effective_headers["X-API-Key"], "secret-token")
+
     def test_oauth_client_credentials_fetches_token_before_api_request(self) -> None:
         request = RequestDefinition(
             method="GET",

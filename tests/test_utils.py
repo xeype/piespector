@@ -14,6 +14,7 @@ from piespector.placeholders import (
     apply_placeholder_completion,
     auto_pair_placeholder,
     placeholder_match,
+    resolve_placeholders,
 )
 from piespector.search import (
     activate_search_target,
@@ -73,6 +74,14 @@ class PlaceholderTests(unittest.TestCase):
 
     def test_apply_placeholder_completion_returns_none_when_no_match(self) -> None:
         self.assertIsNone(apply_placeholder_completion("GET {{ZZ}}", 8, ["TOKEN"]))
+
+    def test_resolve_placeholders_supports_hyphenated_env_keys(self) -> None:
+        resolved = resolve_placeholders(
+            "Authorization: {{X-API-Key}}",
+            {"X-API-Key": "secret-token"},
+        )
+
+        self.assertEqual(resolved, "Authorization: secret-token")
 
 
 class HistoryTests(unittest.TestCase):
