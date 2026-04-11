@@ -1,9 +1,9 @@
-name: Publish TestPyPI
+name: Publish PyPI
 
 on:
   push:
     tags:
-      - "test-v*"
+      - "v*"
 
 jobs:
   publish:
@@ -27,7 +27,5 @@ jobs:
           python -m build
           python -m twine check dist/*
 
-      - name: Publish to TestPyPI
+      - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          repository-url: https://test.pypi.org/legacy/
