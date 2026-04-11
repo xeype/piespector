@@ -32,7 +32,10 @@ dependencies = [
 [project.urls]
 Homepage = "https://www.piespector.com"
 Documentation = "https://www.piespector.com"
-Installation = "https://www.piespector.com/getting-started/installation/#install-from-source"
+Installation = "https://www.piespector.com/getting-started/installation/"
+Repository = "https://github.com/xeype/piespector"
+Issues = "https://github.com/xeype/piespector/issues"
+Changelog = "https://github.com/xeype/piespector/blob/main/CHANGELOG.md"
 
 [project.scripts]
 piespector = "piespector.__main__:main"

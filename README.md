@@ -1,7 +1,7 @@
 # piespector
 
 [![Website](https://img.shields.io/badge/website-piespector.com-0f172a?style=flat-square)](https://www.piespector.com)
-[![Install from Source](https://img.shields.io/badge/docs-install%20from%20source-2563eb?style=flat-square)](https://www.piespector.com/getting-started/installation/#install-from-source)
+[![Installation](https://img.shields.io/badge/docs-installation-2563eb?style=flat-square)](https://www.piespector.com/getting-started/installation/)
 [![License](https://img.shields.io/badge/license-MIT-16a34a?style=flat-square)](./LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%2B-f59e0b?style=flat-square)](https://www.python.org/downloads/)
 
@@ -9,11 +9,20 @@
 
 Organize HTTP requests into collections and folders, manage named env sets, replay history, and work from a keyboard-driven TUI.
 
-![piespector screenshot](docs/images/welcome.png)
+![piespector screenshot](https://raw.githubusercontent.com/xeype/piespector/main/docs/images/welcome.png)
 
 ## Installation
 
-[Install from source](https://www.piespector.com/getting-started/installation/#install-from-source).
+Install the published app with `uv` or `pipx`:
+
+```bash
+uv tool install piespector
+pipx install piespector
+```
+
+`piespector` installs a global `piespector` command and stores app data in the platform user data directory, so you can launch it from any working directory.
+
+Or install [from source](https://www.piespector.com/getting-started/installation/#install-from-source).
 
 ## Documentation
 

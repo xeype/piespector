@@ -125,6 +125,29 @@ class StorageTests(unittest.TestCase):
         self.assertTrue(paths.needs_history_migration)
         self.assertEqual(paths.log_path, app_data_dir / ".piespector.log")
 
+    def test_discover_workspace_paths_use_app_data_paths_when_cwd_has_no_legacy_files(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            app_data_dir = root / "app-data"
+            workspace_dir = root / "workspace"
+            workspace_dir.mkdir()
+
+            paths = storage.discover_workspace_paths(
+                base_dir=app_data_dir,
+                cwd=workspace_dir,
+            )
+
+        self.assertEqual(paths.env_workspace_path, app_data_dir / ".piespector.env.json")
+        self.assertEqual(paths.env_workspace_source_path, app_data_dir / ".piespector.env.json")
+        self.assertEqual(paths.requests_path, app_data_dir / ".piespector.requests.json")
+        self.assertEqual(paths.requests_source_path, app_data_dir / ".piespector.requests.json")
+        self.assertEqual(paths.history_path, app_data_dir / ".piespector.history.jsonl")
+        self.assertEqual(paths.history_source_path, app_data_dir / ".piespector.history.jsonl")
+        self.assertFalse(paths.needs_env_workspace_migration)
+        self.assertFalse(paths.needs_requests_migration)
+        self.assertFalse(paths.needs_history_migration)
+        self.assertEqual(paths.log_path, app_data_dir / ".piespector.log")
+
     def test_save_request_workspace_creates_parent_directory(self) -> None:
         with TemporaryDirectory() as tmp_dir:
             path = Path(tmp_dir) / "nested" / "workspace" / "requests.json"

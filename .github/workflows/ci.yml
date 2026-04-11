@@ -27,7 +27,18 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install package
-        run: python -m pip install --upgrade pip && pip install .
+        run: python -m pip install --upgrade pip build && pip install .
 
       - name: Run tests
         run: python -m unittest discover -s tests -v
+
+      - name: Build distributions
+        run: python -m build
+
+      - name: Smoke test installed wheel outside the repository
+        run: |
+          python -m venv /tmp/piespector-smoke
+          /tmp/piespector-smoke/bin/pip install --upgrade pip
+          /tmp/piespector-smoke/bin/pip install dist/*.whl
+          cd /tmp
+          /tmp/piespector-smoke/bin/piespector --version

@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.3.0 - 2026-04-11
+
+- Added packaging and release workflow updates for published installs through `uv` and `pipx`.
+- Added CI artifact smoke checks so the installed `piespector` command is exercised outside the repository root.
+- Updated installation and publishing docs for the packaged CLI workflow.
+
 ## 0.2.0 - 2026-03-29
 
 - Added `Cookie Auth`, `Custom Header`, and `OAuth 2.0` client credentials support.
