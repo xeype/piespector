@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.3.3 - 2026-04-11
+
+- Fixed the packaged README for PyPI by switching the screenshot and license badge links to absolute GitHub-hosted URLs instead of repo-relative paths.
+- Reduced the CI test matrix to Python `3.12` only.
+
 ## 0.3.2 - 2026-04-11
 
 - Improved editing flow by handling `Escape` correctly in URL edit mode and preventing it from collapsing the Home sidebar.
