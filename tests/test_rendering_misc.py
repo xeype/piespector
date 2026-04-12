@@ -36,6 +36,7 @@ from piespector.state import (
     RequestKeyValue,
     ResponseSummary,
 )
+from piespector.ui.body_editor_modal import BodyEditorModal, BodyTextEditor
 from piespector.ui.status_content import status_bar_content
 from piespector.ui.status_hints import status_hint_items
 from piespector.ui import APP_BINDINGS, APP_CSS
@@ -685,7 +686,9 @@ class RenderingMiscTests(unittest.TestCase):
 class UiAndScrollbarTests(unittest.TestCase):
     def test_ui_constants_include_core_selectors_and_binding(self) -> None:
         self.assertIn("#response-modal", APP_CSS)
-        self.assertIn("#body-editor-modal", APP_CSS)
+        self.assertNotIn("#body-editor-modal", APP_CSS)
+        self.assertIn("#body-editor-modal", BodyEditorModal.DEFAULT_CSS)
+        self.assertIn("BodyTextEditor", BodyTextEditor.DEFAULT_CSS)
         self.assertNotIn("#response-viewer", APP_CSS)
         self.assertIn("#command-line", APP_CSS)
         self.assertNotIn("#sidebar-tree:focus", APP_CSS)

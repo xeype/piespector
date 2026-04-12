@@ -57,6 +57,12 @@ def body_editor_footer_text(request: RequestDefinition | None) -> str:
 
 
 class BodyTextEditor(TextArea):
+    DEFAULT_CSS = """
+    BodyTextEditor {
+        background: transparent;
+    }
+    """
+
     BINDINGS = [
         Binding(KEY_SAVE, "save_body", "Save", show=False),
         Binding(KEY_ESCAPE, "cancel_body", "Cancel", show=False),
@@ -129,6 +135,37 @@ class BodyEditorModal(ModalScreen[None]):
     BodyEditorModal {
         align: center middle;
         background: $background 70%;
+    }
+    
+    #body-editor {
+        border: none;
+    }
+
+    #body-editor-modal {
+        width: 92%;
+        height: 92%;
+        max-width: 160;
+        margin: 1 2;
+        border: round $accent;
+    }
+
+    #body-editor-header {
+        height: auto;
+        margin-bottom: 1;
+        color: $accent;
+        text-style: bold;
+    }
+
+    #body-editor-hint {
+        position: absolute;
+        layer: above;
+        width: auto;
+        height: 1;
+    }
+
+    #body-editor-footer {
+        height: auto;
+        color: $accent;
     }
     """
 
@@ -252,8 +289,8 @@ class BodyEditorModal(ModalScreen[None]):
             cursor_offset = editor.cursor_screen_offset
             hint.update(match.suggestion)
             hint.offset = (
-                editor.region.x + cursor_offset.x + 1,
-                editor.region.y + cursor_offset.y,
+                cursor_offset.x - 3,
+                cursor_offset.y - 3,
             )
             hint.remove_class("hidden")
             return

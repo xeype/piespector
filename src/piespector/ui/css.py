@@ -557,28 +557,6 @@ TextArea {
     background: transparent;
 }
 
-#body-editor-modal {
-    width: 92%;
-    height: 92%;
-    max-width: 160;
-    margin: 1 2;
-}
-
-#body-editor-header {
-    height: auto;
-}
-
-#body-editor {
-    height: 1fr;
-}
-
-#body-editor-hint {
-    position: absolute;
-    layer: above;
-    width: auto;
-    height: 1;
-}
-
 #url-input-hint,
 #params-input-hint,
 #headers-input-hint,
@@ -587,10 +565,6 @@ TextArea {
     layer: above;
     width: auto;
     height: 1;
-}
-
-#body-editor-footer {
-    height: auto;
 }
 
 #response-modal {
