@@ -14,7 +14,7 @@ from textual.widgets import (
     Tabs,
 )
 
-from piespector.widget.tree import PiespectorTree, move_cursor as tree_move_cursor
+from piespector.widget.tree import PiespectorTree
 
 from piespector.domain.editor import (
     HOME_SIDEBAR_LABEL,
@@ -31,11 +31,11 @@ from piespector.domain.modes import (
 )
 from piespector.placeholders import placeholder_match
 from piespector.screens.base import PiespectorScreen
+from piespector.screens.home.collections_sidebar import CollectionsSidebar
 from piespector.screens.home.layout import home_top_bar_height
 from piespector.screens.home.render import (
     refresh_home_request_content,
     refresh_home_response,
-    refresh_home_sidebar,
     refresh_home_url_bar,
     sync_home_focus_highlights,
 )
@@ -90,14 +90,10 @@ class ScreenRefreshCoordinator:
         if self.state.current_tab != TAB_HOME or not self.app._has_live_screen():
             return
         try:
-            tree = self.app._query_current("#sidebar-tree", PiespectorTree)
+            sidebar = self.app._query_current("#sidebar-container", CollectionsSidebar)
         except NoMatches:
             return
-        item_count = len(self.state.get_sidebar_nodes())
-        if item_count <= 0:
-            return
-        selected_index = max(0, min(self.state.selected_sidebar_index, item_count - 1))
-        tree_move_cursor(tree, selected_index)
+        sidebar.sync_cursor(self.state.selected_sidebar_index)
 
     def switch_screen_visibility(self) -> None:
         if not self.app._screens_installed:
@@ -207,19 +203,9 @@ class ScreenRefreshCoordinator:
         if not self.app._has_live_screen():
             self.app._refresh_viewport()
             return
-        tree = self.app._query_current("#sidebar-tree", PiespectorTree)
-        sidebar_subtitle = self.app._query_current("#sidebar-subtitle", Static)
-        sidebar_container = self.app._query_current("#sidebar-container")
-        sidebar_title = self.app._query_current("#sidebar-title", Static)
+        sidebar = self.app._query_current("#sidebar-container", CollectionsSidebar)
         visible_rows = self.app._home_request_list_visible_rows()
-        refresh_home_sidebar(
-            self.state,
-            tree,
-            sidebar_subtitle,
-            sidebar_container,
-            sidebar_title,
-            visible_rows,
-        )
+        sidebar.refresh_from_state(self.state, visible_rows)
 
     def refresh_home_url_bar_panel(self) -> None:
         if not self.app._has_live_screen():

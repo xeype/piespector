@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from textual import events, on
 from textual.app import ComposeResult
-from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
-from textual.widgets import ContentSwitcher, DataTable, Input, Static, Tab, TabbedContent, TabPane, Tabs, Tree
+from textual.widgets import ContentSwitcher, DataTable, Input, Static, Tab, TabbedContent, TabPane, Tabs
 
 from piespector.domain.editor import (
     AUTH_API_KEY_LOCATION_OPTIONS,
@@ -39,6 +38,7 @@ from piespector.domain.modes import (
 from piespector.commands import filesystem_path_completions
 from piespector.placeholders import placeholder_match
 from piespector.screens.home import messages
+from piespector.screens.home.collections_sidebar import CollectionsSidebar
 from piespector.screens.base import PiespectorScreen
 from piespector.screens.home.request.header_editor import RequestHeadersTable
 from piespector.screens.home.request.query_editor import RequestParamsTable
@@ -46,7 +46,6 @@ from piespector.screens.home.request.request_body import RequestBodyTable
 from piespector.ui.body_editor_modal import BodyEditorModal
 from piespector.ui.input import PiespectorInput
 from piespector.widget.select import PiespectorSelect, SelectionChanged, option_list
-from piespector.widget.tree import PiespectorTree
 
 
 class HomeScreen(PiespectorScreen):
@@ -77,10 +76,7 @@ class HomeScreen(PiespectorScreen):
                         select_on_focus=False,
                     )
             with Horizontal(id="home-workspace"):
-                with Vertical(id="sidebar-container"):
-                    yield Static("Collections", classes="panel-title", id="sidebar-title")
-                    yield PiespectorTree("Collections", id="sidebar-tree")
-                    yield Static("", classes="panel-subtitle", id="sidebar-subtitle")
+                yield CollectionsSidebar(id="sidebar-container")
                 with Vertical(id="home-main"):
                     with Vertical(id="request-panel"):
                         yield Static("Request", classes="panel-title", id="request-title")
@@ -194,9 +190,6 @@ class HomeScreen(PiespectorScreen):
     def on_mount(self) -> None:
         super().on_mount()
         self._tab_activation_ready = False
-        tree = self.query_one("#sidebar-tree", PiespectorTree)
-        tree.show_root = False
-        tree.focus()
         self.disable_focus("open-request-tabs")
         for widget_id in (
             "request-content-note",
@@ -252,43 +245,33 @@ class HomeScreen(PiespectorScreen):
         app._refresh_screen()
         app.call_after_refresh(app._clear_home_jump_focus)
 
-    def _sync_sidebar_selection(self, node: Tree.NodeHighlighted | Tree.NodeSelected | Tree.NodeExpanded | Tree.NodeCollapsed) -> bool:
+    @on(CollectionsSidebar.SelectionChanged)
+    def _on_sidebar_selection_changed(self, event: CollectionsSidebar.SelectionChanged) -> None:
         app = self.app
-        if app is None or node.control.id != "sidebar-tree":
-            return False
-        index = node.node.data
-        if not isinstance(index, int):
-            return False
-        tree = node.control
-        if isinstance(tree, PiespectorTree) and tree.sync_state.ignore_highlight_index == index:
-            tree.sync_state.ignore_highlight_index = None
-            return False
-        app.state.sync_sidebar_selection(index)
-        return True
-
-    def on_tree_node_highlighted(self, event: Tree.NodeHighlighted) -> None:
-        if self._sync_sidebar_selection(event):
-            self.app._refresh_screen()
-
-    def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:
-        if not self._sync_sidebar_selection(event):
+        if app is None:
             return
-        if self.app.state.get_selected_request() is None:
-            return
-        self.app.state.open_selected_request(pin=True)
-        self.app._refresh_screen()
+        app.state.sync_sidebar_selection(event.index)
+        app._refresh_screen()
 
-    def on_tree_node_expanded(self, event: Tree.NodeExpanded) -> None:
-        if not self._sync_sidebar_selection(event):
+    @on(CollectionsSidebar.RequestOpened)
+    def _on_sidebar_request_opened(self, event: CollectionsSidebar.RequestOpened) -> None:
+        app = self.app
+        if app is None:
             return
-        self.app.state.set_selected_sidebar_node_expanded(True)
-        self.app._refresh_screen()
+        app.state.sync_sidebar_selection(event.index)
+        if app.state.get_selected_request() is None:
+            return
+        app.state.open_selected_request(pin=True)
+        app._refresh_screen()
 
-    def on_tree_node_collapsed(self, event: Tree.NodeCollapsed) -> None:
-        if not self._sync_sidebar_selection(event):
+    @on(CollectionsSidebar.ExpansionChanged)
+    def _on_sidebar_expansion_changed(self, event: CollectionsSidebar.ExpansionChanged) -> None:
+        app = self.app
+        if app is None:
             return
-        self.app.state.set_selected_sidebar_node_expanded(False)
-        self.app._refresh_screen()
+        app.state.sync_sidebar_selection(event.index)
+        app.state.set_selected_sidebar_node_expanded(event.expanded)
+        app._refresh_screen()
 
     def _sync_request_table_row(self, table: DataTable, cursor_row: int) -> bool:
         app = self.app

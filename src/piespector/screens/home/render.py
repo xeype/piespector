@@ -10,8 +10,6 @@ from rich.text import Text
 from textual.css.query import NoMatches
 from textual.widgets import ContentSwitcher, DataTable, Input, Select, Static, Tab, TabbedContent, Tabs
 
-from piespector.widget.tree import PiespectorTree, rebuild as rebuild_tree
-
 from piespector.domain.editor import (
     AUTH_TYPE_OPTIONS,
     BODY_KEY_VALUE_TYPES,
@@ -58,7 +56,6 @@ from piespector.screens.home import messages
 from piespector.screens.home.layout import (
     home_request_list_visible_rows,
     home_response_visible_rows,
-    home_sidebar_width,
     home_top_bar_height,
     response_scroll_step,
 )
@@ -243,100 +240,6 @@ def sync_home_focus_highlights(
 
     if method_select is not None:
         set_selected(method_select, selection.method_selected)
-
-
-# ================================================================
-#  Sidebar Tree refresh
-# ================================================================
-
-def refresh_home_sidebar(
-    state: PiespectorState,
-    tree: PiespectorTree,
-    subtitle: Static,
-    container,
-    title: Static,
-    visible_rows: int,
-) -> None:
-    items = state.get_sidebar_nodes()
-    _rebuild_tree(tree, state, items)
-    _ensure_tree_cursor(tree, state, len(items))
-
-    start = state.request_scroll_offset
-    end = min(start + visible_rows, len(items))
-    caption = messages.home_sidebar_caption(state, start, end, len(items))
-    subtitle.update(caption)
-
-    del container, title
-    selected = home_selection(state).panel == "sidebar"
-    if selected and tree.can_focus and not tree.has_focus:
-        tree.focus()
-    elif not selected and tree.has_focus:
-        tree.blur()
-
-
-def _rebuild_tree(tree: PiespectorTree, state: PiespectorState, items: list) -> None:
-    signature = (
-        tuple(
-            (
-                item.node_id,
-                item.kind,
-                item.label,
-                item.request_id,
-                item.request_index,
-                item.method,
-                item.depth,
-            )
-            for item in items
-        ),
-        tuple(sorted(state.collapsed_collection_ids)),
-        tuple(sorted(state.collapsed_folder_ids)),
-    )
-
-    def build(t: PiespectorTree) -> None:
-        parent_stack: list[tuple[object, int]] = [(t.root, -1)]
-        for index, item in enumerate(items):
-            while len(parent_stack) > 1 and parent_stack[-1][1] >= item.depth:
-                parent_stack.pop()
-            parent_node = parent_stack[-1][0]
-
-            if item.kind == "request":
-                label = Text()
-                label.append(f"{item.method:7s}", style=method_color(item.method))
-                label.append(item.label)
-                parent_node.add_leaf(label, data=index)
-            elif item.kind == "collection":
-                marker = "[+]" if item.node_id in state.collapsed_collection_ids else "[-]"
-                label = Text(f"{marker} {item.label}")
-                node = parent_node.add(
-                    label,
-                    data=index,
-                    expand=item.node_id not in state.collapsed_collection_ids,
-                )
-                parent_stack.append((node, item.depth))
-            else:
-                marker = "[+]" if item.node_id in state.collapsed_folder_ids else "[-]"
-                label = Text(f"{marker} {item.label}")
-                node = parent_node.add(
-                    label,
-                    data=index,
-                    expand=item.node_id not in state.collapsed_folder_ids,
-                )
-                parent_stack.append((node, item.depth))
-
-    rebuild_tree(tree, signature, build)
-
-
-def _ensure_tree_cursor(tree: PiespectorTree, state: PiespectorState, item_count: int) -> None:
-    if not item_count:
-        return
-
-    cursor_line = tree.cursor_line
-    if 0 <= cursor_line < item_count:
-        return
-
-    selected_index = max(0, min(state.selected_sidebar_index, item_count - 1))
-    tree.cursor_line = selected_index
-    tree.scroll_to_line(selected_index, animate=False)
 
 
 # ================================================================

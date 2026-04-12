@@ -15,6 +15,7 @@ from piespector.domain.editor import (
     TOP_BAR_METHOD_JUMP_KEY,
     TOP_BAR_URL_JUMP_KEY,
 )
+from piespector.screens.home.collections_sidebar import CollectionsSidebar
 from piespector.ui.rendering_helpers import (
     detect_text_syntax_language,
     request_body_syntax_language,
@@ -2882,6 +2883,10 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
             await pilot.pause()
             app._refresh_screen()
             self.assertEqual(app.screen.query_one("#home-screen").id, "home-screen")
+            self.assertIsInstance(
+                app.screen.query_one("#sidebar-container"),
+                CollectionsSidebar,
+            )
             sidebar_tree = app.screen.query_one("#sidebar-tree")
             self.assertEqual(sidebar_tree.id, "sidebar-tree")
             self.assertTrue(sidebar_tree.can_focus)
