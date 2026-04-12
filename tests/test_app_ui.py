@@ -16,6 +16,7 @@ from piespector.domain.editor import (
     TOP_BAR_URL_JUMP_KEY,
 )
 from piespector.screens.home.collections_sidebar import CollectionsSidebar
+from piespector.screens.home.request.auth_pane import RequestAuthPane
 from piespector.screens.home.request.overview_pane import RequestOverviewPane
 from piespector.screens.home.response_panel import ResponsePanel
 from piespector.screens.home.url_bar import UrlBar
@@ -2789,6 +2790,56 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
             await pilot.pause()
 
             self.assertEqual(request.auth_type, "bearer")
+            self.assertEqual(app.state.mode, "HOME_AUTH_SELECT")
+
+    async def test_auth_tab_is_composed_as_request_auth_pane(self) -> None:
+        app = PiespectorApp()
+        app._load_request_workspace = lambda: None
+        request = RequestDefinition(request_id="r1", name="Health", auth_type="bearer")
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+        app.state.home_editor_tab = "auth"
+
+        async with app.run_test(size=(140, 40)) as pilot:
+            app._refresh_screen()
+            await pilot.pause()
+
+            auth_pane = app.screen.query_one("#request-auth-pane", RequestAuthPane)
+
+            self.assertIsInstance(auth_pane.query_one("#auth-type-select", Select), Select)
+            self.assertIsInstance(auth_pane.query_one("#request-auth-content", Static), Static)
+            self.assertIsInstance(auth_pane.query_one("#auth-field-input", Input), Input)
+
+    async def test_auth_field_input_submission_is_handled_by_auth_pane(self) -> None:
+        app = PiespectorApp()
+        app._persist_requests = lambda: None
+        app._load_request_workspace = lambda: None
+        request = RequestDefinition(
+            request_id="r1",
+            name="Health",
+            auth_type="bearer",
+            auth_bearer_token="old-token",
+        )
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+        app.state.home_editor_tab = "auth"
+        app.state.enter_home_auth_select_mode()
+        app.state.selected_auth_index = 2
+        app.state.enter_home_auth_edit_mode()
+
+        async with app.run_test(size=(140, 40)) as pilot:
+            app._refresh_screen()
+            await pilot.pause()
+
+            auth_input = app.screen.query_one("#auth-field-input", Input)
+            self.assertTrue(auth_input.display)
+            self.assertEqual(auth_input.value, "old-token")
+            auth_input.value = "new-token"
+
+            await pilot.press("enter")
+            await pilot.pause()
+
+            self.assertEqual(request.auth_bearer_token, "new-token")
             self.assertEqual(app.state.mode, "HOME_AUTH_SELECT")
 
     async def test_auth_option_select_change_persists_api_key_location(self) -> None:

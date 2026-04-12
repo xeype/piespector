@@ -6,8 +6,6 @@ from textual.containers import Horizontal, Vertical
 from textual.widgets import DataTable, Input, Static, TabbedContent, TabPane
 
 from piespector.domain.editor import (
-    AUTH_API_KEY_LOCATION_OPTIONS,
-    AUTH_TYPE_OPTIONS,
     BODY_KEY_VALUE_TYPES,
     BODY_TYPE_OPTIONS,
     HOME_EDITOR_TAB_AUTH,
@@ -20,8 +18,6 @@ from piespector.domain.editor import (
 )
 from piespector.domain.modes import (
     MODE_HOME_AUTH_EDIT,
-    MODE_HOME_AUTH_LOCATION_EDIT,
-    MODE_HOME_AUTH_TYPE_EDIT,
     MODE_HOME_BODY_EDIT,
     MODE_HOME_BODY_RAW_TYPE_EDIT,
     MODE_HOME_BODY_SELECT,
@@ -35,6 +31,7 @@ from piespector.screens.home import messages
 from piespector.screens.home.collections_sidebar import CollectionsSidebar
 from piespector.screens.home.response_panel import ResponsePanel
 from piespector.screens.home.url_bar import UrlBar
+from piespector.screens.home.request.auth_pane import RequestAuthPane
 from piespector.screens.base import PiespectorScreen
 from piespector.screens.home.request.overview_pane import RequestOverviewPane
 from piespector.screens.home.request.header_editor import RequestHeadersTable
@@ -58,28 +55,7 @@ class HomeScreen(PiespectorScreen):
                             with TabPane("Request", id=HOME_EDITOR_TAB_REQUEST):
                                 yield RequestOverviewPane(id="request-overview-pane")
                             with TabPane("Auth", id=HOME_EDITOR_TAB_AUTH):
-                                yield PiespectorSelect(
-                                    option_list(*AUTH_TYPE_OPTIONS),
-                                    id="auth-type-select",
-                                    allow_blank=False,
-                                    value=AUTH_TYPE_OPTIONS[0][0],
-                                    compact=True,
-                                )
-                                yield Static("", id="auth-option-label")
-                                yield PiespectorSelect(
-                                    option_list(*AUTH_API_KEY_LOCATION_OPTIONS),
-                                    id="auth-option-select",
-                                    allow_blank=False,
-                                    value=AUTH_API_KEY_LOCATION_OPTIONS[0][0],
-                                    compact=True,
-                                )
-                                yield Static("", id="request-auth-content")
-                                yield PiespectorInput(
-                                    "",
-                                    id="auth-field-input",
-                                    compact=True,
-                                    select_on_focus=False,
-                                )
+                                yield RequestAuthPane(id="request-auth-pane")
                             with TabPane("Params", id=HOME_EDITOR_TAB_PARAMS):
                                 yield RequestParamsTable(
                                     id="request-params-table",
@@ -138,16 +114,12 @@ class HomeScreen(PiespectorScreen):
                     yield ResponsePanel(id="response-panel")
         yield Static("", id="params-input-hint", classes="hidden")
         yield Static("", id="headers-input-hint", classes="hidden")
-        yield Static("", id="auth-field-input-hint", classes="hidden")
 
     def on_mount(self) -> None:
         super().on_mount()
         self._tab_activation_ready = False
         for widget_id in (
             "request-content-note",
-            "auth-option-label",
-            "auth-option-select",
-            "auth-field-input",
             "body-raw-type-select",
             "request-body-table",
             "request-body-input",
@@ -323,22 +295,6 @@ class HomeScreen(PiespectorScreen):
         app.set_focus(None)
         app._refresh_screen()
 
-    @on(SelectionChanged, "#auth-type-select")
-    def _on_auth_type_selected(self, event: SelectionChanged) -> None:
-        if self.app.state.mode != MODE_HOME_AUTH_TYPE_EDIT:
-            return
-        self.app.state.save_home_auth_type_selection(event.value)
-        self.app.set_focus(None)
-        self.app._refresh_screen()
-
-    @on(SelectionChanged, "#auth-option-select")
-    def _on_auth_option_selected(self, event: SelectionChanged) -> None:
-        if self.app.state.mode != MODE_HOME_AUTH_LOCATION_EDIT:
-            return
-        self.app.state.save_home_auth_option_selection(event.value)
-        self.app.set_focus(None)
-        self.app._refresh_screen()
-
     @on(SelectionChanged, "#body-type-select")
     def _on_body_type_selected(self, event: SelectionChanged) -> None:
         if self.app.state.mode != MODE_HOME_BODY_TYPE_EDIT:
@@ -417,11 +373,6 @@ class HomeScreen(PiespectorScreen):
         ):
             app.state.save_selected_header_field(event.value)
         elif (
-            event.input.id == "auth-field-input"
-            and app.state.mode == MODE_HOME_AUTH_EDIT
-        ):
-            app.state.save_selected_auth_field(event.value)
-        elif (
             event.input.id == "request-body-input"
             and app.state.mode == MODE_HOME_BODY_EDIT
         ):
@@ -449,16 +400,20 @@ class HomeScreen(PiespectorScreen):
                 event.input.value = text[:cursor] + "}}" + text[cursor:]
                 event.input.cursor_position = cursor
             app.call_after_refresh(app._refresh_request_input_hints_only)
-        elif event.input.id == "auth-field-input" and app.state.mode == MODE_HOME_AUTH_EDIT:
-            if cursor >= 2 and text[cursor - 2 : cursor] == "{{" and text[cursor : cursor + 2] != "}}":
-                event.input.value = text[:cursor] + "}}" + text[cursor:]
-                event.input.cursor_position = cursor
-            app.call_after_refresh(app._refresh_request_input_hints_only)
 
     def on_key(self, event: events.Key) -> None:
         app = self.app
         if app is None:
             return
+
+        if (
+            event.key == "tab"
+            and app.state.home_editor_tab == HOME_EDITOR_TAB_AUTH
+            and app.state.mode == MODE_HOME_AUTH_EDIT
+        ):
+            auth_pane = self.query_one("#request-auth-pane", RequestAuthPane)
+            if auth_pane.handle_input_key(event):
+                return
 
         focused = app.focused
         if not isinstance(focused, Input):
@@ -467,7 +422,6 @@ class HomeScreen(PiespectorScreen):
             "request-overview-input",
             "request-params-input",
             "request-headers-input",
-            "auth-field-input",
             "request-body-input",
         }:
             return
@@ -494,7 +448,6 @@ class HomeScreen(PiespectorScreen):
             input_mode_map = {
                 "request-params-input": MODE_HOME_PARAMS_EDIT,
                 "request-headers-input": MODE_HOME_HEADERS_EDIT,
-                "auth-field-input": MODE_HOME_AUTH_EDIT,
             }
             if focused.id in input_mode_map and app.state.mode == input_mode_map[focused.id]:
                 env_keys = sorted(app.state.env_pairs)

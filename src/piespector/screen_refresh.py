@@ -22,7 +22,6 @@ from piespector.domain.editor import (
     TAB_ORDER,
 )
 from piespector.domain.modes import (
-    MODE_HOME_AUTH_EDIT,
     MODE_HOME_HEADERS_EDIT,
     MODE_HOME_PARAMS_EDIT,
 )
@@ -224,7 +223,6 @@ class ScreenRefreshCoordinator:
         hint_configs = [
             ("#request-params-input", "#params-input-hint", MODE_HOME_PARAMS_EDIT),
             ("#request-headers-input", "#headers-input-hint", MODE_HOME_HEADERS_EDIT),
-            ("#auth-field-input", "#auth-field-input-hint", MODE_HOME_AUTH_EDIT),
         ]
         for input_id, hint_id, edit_mode in hint_configs:
             try:

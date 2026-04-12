@@ -11,7 +11,6 @@ from textual.css.query import NoMatches
 from textual.widgets import DataTable, Input, Select, Static, TabbedContent
 
 from piespector.domain.editor import (
-    AUTH_TYPE_OPTIONS,
     BODY_KEY_VALUE_TYPES,
     BODY_TYPE_OPTIONS,
     HOME_EDITOR_TAB_AUTH,
@@ -38,10 +37,6 @@ from piespector.domain.modes import (
     MODE_HOME_RESPONSE_SELECT,
     MODE_HOME_SECTION_SELECT,
     MODE_HOME_URL_EDIT,
-    MODE_HOME_AUTH_EDIT,
-    MODE_HOME_AUTH_LOCATION_EDIT,
-    MODE_HOME_AUTH_SELECT,
-    MODE_HOME_AUTH_TYPE_EDIT,
     MODE_NORMAL,
     REQUEST_RESPONSE_SHORTCUT_MODES,
 )
@@ -57,11 +52,7 @@ from piespector.screens.home.selection import (
     home_selection,
     request_panel_selected,
 )
-from piespector.screens.home.request.request_auth import (
-    auth_option_select_context,
-    render_auth_secret,
-    render_request_auth_editor,
-)
+from piespector.screens.home.request.auth_pane import RequestAuthPane
 from piespector.screens.home.request.request_body import (
     RequestBodyTable,
     body_context_label,
@@ -74,7 +65,6 @@ from piespector.screens.home.request.request_options import render_request_optio
 from piespector.screens.home.request.header_editor import RequestHeadersTable, refresh_request_headers_table
 from piespector.screens.home.request.query_editor import RequestParamsTable, refresh_request_params_table
 from piespector.screens.home.request.url_bar import render_top_url_bar
-from piespector.widget.select import option_list, sync
 from piespector.screens.home.response_panel import render_request_response
 from piespector.screens.home.sidebar import render_home_sidebar as render_home_sidebar_panel
 from piespector.state import PiespectorState
@@ -270,11 +260,7 @@ def refresh_home_request_content(
         tabs.active = state.home_editor_tab
 
     overview_pane = tabs.query_one("#request-overview-pane", RequestOverviewPane)
-    auth_type_select = tabs.query_one("#auth-type-select", Select)
-    auth_option_label = tabs.query_one("#auth-option-label", Static)
-    auth_option_select = tabs.query_one("#auth-option-select", Select)
-    auth_content = tabs.query_one("#request-auth-content", Static)
-    auth_field_input = tabs.query_one("#auth-field-input", Input)
+    auth_pane = tabs.query_one("#request-auth-pane", RequestAuthPane)
     note = tabs.query_one("#request-content-note", Static)
     body_type_select = tabs.query_one("#body-type-select", Select)
     body_raw_type_select = tabs.query_one("#body-raw-type-select", Select)
@@ -287,26 +273,19 @@ def refresh_home_request_content(
     body_preview = tabs.query_one("#request-body-preview", Static)
     options_content = tabs.query_one("#request-options-content", Static)
 
-    mode = effective_mode(state)
     selection = home_selection(state)
 
-    set_selected(auth_type_select, selection.auth_type_selected)
     set_selected(body_type_select, selection.body_type_selected)
     set_selected(body_raw_type_select, selection.body_raw_type_selected)
-    set_selected(auth_option_select, selection.auth_option_selected)
     set_selected(body_preview, False)
     overview_pane.refresh_from_state(state)
+    auth_pane.refresh_from_state(state)
 
     if active_request is None:
         empty = Text(messages.HOME_NO_ACTIVE_REQUEST)
-        _sync_input_widget(auth_field_input, "", display=False)
-        auth_content.update(empty)
         options_content.update(empty)
         body_preview.update(empty)
         note.update("")
-        auth_type_select.display = False
-        auth_option_label.display = False
-        auth_option_select.display = False
         body_type_select.display = False
         body_raw_type_select.display = False
         _sync_input_widget(params_input, "", display=False)
@@ -330,15 +309,11 @@ def refresh_home_request_content(
         return
 
     subtitle.update(messages.home_editor_subtitle(state))
-    auth_type_select.display = state.home_editor_tab == HOME_EDITOR_TAB_AUTH
     body_type_select.display = state.home_editor_tab == HOME_EDITOR_TAB_BODY
-    auth_option_label.display = False
-    auth_option_select.display = False
     body_raw_type_select.display = False
     note.display = False
     body_table.display = False
     body_preview.display = False
-    _sync_input_widget(auth_field_input, "", display=False)
     _sync_input_widget(params_input, "", display=False)
     _sync_input_widget(headers_input, "", display=False)
     _sync_input_widget(body_input, "", display=False)
@@ -347,62 +322,6 @@ def refresh_home_request_content(
         return
 
     if state.home_editor_tab == HOME_EDITOR_TAB_AUTH:
-        sync(
-            auth_type_select,
-            option_list(*AUTH_TYPE_OPTIONS),
-            active_request.auth_type,
-            auto_open_token=(
-                ("auth-type", active_request.request_id, state.mode)
-                if state.mode == MODE_HOME_AUTH_TYPE_EDIT
-                else None
-            ),
-        )
-        option_context = auth_option_select_context(active_request, state)
-        if option_context is not None:
-            label, options, current_value = option_context
-            auth_option_label.update(label)
-            auth_option_label.display = True
-            sync(
-                auth_option_select,
-                option_list(*options),
-                current_value,
-                display=True,
-                auto_open_token=(
-                    (
-                        "auth-option",
-                        active_request.request_id,
-                        state.selected_auth_index,
-                        state.mode,
-                    )
-                    if state.mode == MODE_HOME_AUTH_LOCATION_EDIT
-                    else None
-                ),
-            )
-        auth_content.update(
-            render_request_auth_editor(
-                active_request,
-                state,
-                include_type_selector=False,
-            )
-        )
-        auth_field = state.selected_auth_field()
-        if auth_field is not None and state.mode == MODE_HOME_AUTH_EDIT:
-            field_name, field_label = auth_field
-            auth_initial = str(getattr(active_request, field_name) or "")
-            _sync_input_widget(
-                auth_field_input,
-                auth_initial,
-                display=True,
-                placeholder=f"Auth {field_label.lower()}",
-                focus_token=(
-                    "auth-field",
-                    active_request.request_id,
-                    state.selected_auth_index,
-                    field_name,
-                ),
-            )
-        else:
-            _sync_input_widget(auth_field_input, "", display=False)
         return
 
     if state.home_editor_tab == HOME_EDITOR_TAB_PARAMS:
