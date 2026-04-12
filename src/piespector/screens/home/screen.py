@@ -3,6 +3,7 @@ from __future__ import annotations
 from textual import events, on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
+from textual.reactive import reactive
 from textual.widgets import Input, Static, TabbedContent, TabPane
 
 from piespector.domain.editor import (
@@ -28,6 +29,9 @@ from piespector.ui.body_editor_modal import BodyEditorModal
 
 
 class HomeScreen(PiespectorScreen):
+    params_creating_new: reactive[bool] = reactive(False)
+    headers_creating_new: reactive[bool] = reactive(False)
+
     def compose_workspace(self) -> ComposeResult:
         with Vertical(id="home-screen"):
             yield UrlBar(id="url-bar-container")

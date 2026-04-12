@@ -194,6 +194,18 @@ for _home_field_name in HOME_SCREEN_FIELD_NAMES:
         _session_group_field_property("home", _home_field_name),
     )
 
+# Home screen — select UI fields live exclusively on HomeScreen reactive attrs.
+_HOME_SCREEN_ONLY_DEFAULTS: dict[str, object] = {
+    "params_creating_new": False,
+    "headers_creating_new": False,
+}
+for _home_only_field_name, _home_only_default in _HOME_SCREEN_ONLY_DEFAULTS.items():
+    setattr(
+        PiespectorState,
+        _home_only_field_name,
+        _screen_only_field_property("home", _home_only_field_name, _home_only_default),
+    )
+
 # Env screen — UI state lives exclusively on EnvScreen reactive attrs.
 _ENV_SCREEN_DEFAULTS: dict[str, object] = {
     "selected_env_index": 0,
@@ -228,5 +240,6 @@ for _history_field_name, _history_default in _HISTORY_SCREEN_DEFAULTS.items():
 
 del _session_field_name
 del _home_field_name
+del _home_only_field_name, _home_only_default
 del _env_field_name, _env_default
 del _history_field_name, _history_default

@@ -39,8 +39,6 @@ class HomeScreenState:
     home_body_content_return_mode: str = MODE_HOME_BODY_SELECT
     home_body_select_return_mode: str = MODE_HOME_SECTION_SELECT
     home_response_select_return_mode: str = MODE_NORMAL
-    params_creating_new: bool = False
-    headers_creating_new: bool = False
     body_creating_new: bool = False
 
 
