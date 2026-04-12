@@ -28,7 +28,6 @@ from piespector.domain.modes import (
     MODE_HOME_BODY_TYPE_EDIT,
     MODE_HOME_HEADERS_EDIT,
     MODE_HOME_PARAMS_EDIT,
-    MODE_HOME_REQUEST_EDIT,
 )
 from piespector.commands import filesystem_path_completions
 from piespector.placeholders import placeholder_match
@@ -37,6 +36,7 @@ from piespector.screens.home.collections_sidebar import CollectionsSidebar
 from piespector.screens.home.response_panel import ResponsePanel
 from piespector.screens.home.url_bar import UrlBar
 from piespector.screens.base import PiespectorScreen
+from piespector.screens.home.request.overview_pane import RequestOverviewPane
 from piespector.screens.home.request.header_editor import RequestHeadersTable
 from piespector.screens.home.request.query_editor import RequestParamsTable
 from piespector.screens.home.request.request_body import RequestBodyTable
@@ -56,13 +56,7 @@ class HomeScreen(PiespectorScreen):
                         yield Static("Request", classes="panel-title", id="request-title")
                         with TabbedContent(id="request-tabs", initial=HOME_EDITOR_TAB_REQUEST):
                             with TabPane("Request", id=HOME_EDITOR_TAB_REQUEST):
-                                yield Static("", id="request-overview-content")
-                                yield PiespectorInput(
-                                    "",
-                                    id="request-overview-input",
-                                    compact=True,
-                                    select_on_focus=False,
-                                )
+                                yield RequestOverviewPane(id="request-overview-pane")
                             with TabPane("Auth", id=HOME_EDITOR_TAB_AUTH):
                                 yield PiespectorSelect(
                                     option_list(*AUTH_TYPE_OPTIONS),
@@ -158,7 +152,6 @@ class HomeScreen(PiespectorScreen):
             "request-body-table",
             "request-body-input",
             "request-body-preview",
-            "request-overview-input",
             "request-params-input",
             "request-headers-input",
         ):
@@ -362,6 +355,19 @@ class HomeScreen(PiespectorScreen):
         self.app.set_focus(None)
         self.app._refresh_screen()
 
+    @on(RequestOverviewPane.FieldSaved)
+    def _on_request_overview_field_saved(
+        self,
+        event: RequestOverviewPane.FieldSaved,
+    ) -> None:
+        app = self.app
+        if app is None:
+            return
+
+        app.state.save_selected_request_field(event.value)
+        app.set_focus(None)
+        app._refresh_screen()
+
     def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
         app = self.app
         if app is None or not getattr(self, "_tab_activation_ready", False):
@@ -401,11 +407,6 @@ class HomeScreen(PiespectorScreen):
             return
 
         if (
-            event.input.id == "request-overview-input"
-            and app.state.mode == MODE_HOME_REQUEST_EDIT
-        ):
-            app.state.save_selected_request_field(event.value)
-        elif (
             event.input.id == "request-params-input"
             and app.state.mode == MODE_HOME_PARAMS_EDIT
         ):

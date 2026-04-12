@@ -32,7 +32,6 @@ from piespector.domain.modes import (
     MODE_HOME_HEADERS_SELECT,
     MODE_HOME_PARAMS_EDIT,
     MODE_HOME_PARAMS_SELECT,
-    MODE_HOME_REQUEST_EDIT,
     MODE_HOME_REQUEST_METHOD_EDIT,
     MODE_HOME_REQUEST_METHOD_SELECT,
     MODE_HOME_REQUEST_SELECT,
@@ -70,10 +69,7 @@ from piespector.screens.home.request.request_body import (
     render_request_body_preview,
 )
 from piespector.screens.home.request.request_editor import render_home_editor as render_home_editor_panel
-from piespector.screens.home.request.request_metadata import (
-    render_request_overview_fields,
-    request_label,
-)
+from piespector.screens.home.request.overview_pane import RequestOverviewPane
 from piespector.screens.home.request.request_options import render_request_options_editor
 from piespector.screens.home.request.header_editor import RequestHeadersTable, refresh_request_headers_table
 from piespector.screens.home.request.query_editor import RequestParamsTable, refresh_request_params_table
@@ -273,8 +269,7 @@ def refresh_home_request_content(
     if tabs.query(f"TabPane#{state.home_editor_tab}"):
         tabs.active = state.home_editor_tab
 
-    overview_content = tabs.query_one("#request-overview-content", Static)
-    overview_input = tabs.query_one("#request-overview-input", Input)
+    overview_pane = tabs.query_one("#request-overview-pane", RequestOverviewPane)
     auth_type_select = tabs.query_one("#auth-type-select", Select)
     auth_option_label = tabs.query_one("#auth-option-label", Static)
     auth_option_select = tabs.query_one("#auth-option-select", Select)
@@ -300,11 +295,10 @@ def refresh_home_request_content(
     set_selected(body_raw_type_select, selection.body_raw_type_selected)
     set_selected(auth_option_select, selection.auth_option_selected)
     set_selected(body_preview, False)
+    overview_pane.refresh_from_state(state)
 
     if active_request is None:
         empty = Text(messages.HOME_NO_ACTIVE_REQUEST)
-        overview_content.update(empty)
-        _sync_input_widget(overview_input, "", display=False)
         _sync_input_widget(auth_field_input, "", display=False)
         auth_content.update(empty)
         options_content.update(empty)
@@ -344,26 +338,12 @@ def refresh_home_request_content(
     note.display = False
     body_table.display = False
     body_preview.display = False
-    _sync_input_widget(overview_input, "", display=False)
     _sync_input_widget(auth_field_input, "", display=False)
     _sync_input_widget(params_input, "", display=False)
     _sync_input_widget(headers_input, "", display=False)
     _sync_input_widget(body_input, "", display=False)
 
     if state.home_editor_tab == HOME_EDITOR_TAB_REQUEST:
-        overview_content.update(render_request_overview_fields(active_request, state))
-        field_name, field_label = state.selected_request_field()
-        _sync_input_widget(
-            overview_input,
-            str(getattr(active_request, field_name) or ""),
-            display=state.mode == MODE_HOME_REQUEST_EDIT,
-            placeholder=field_label,
-            focus_token=(
-                ("request", active_request.request_id, state.selected_request_field_index)
-                if state.mode == MODE_HOME_REQUEST_EDIT
-                else None
-            ),
-        )
         return
 
     if state.home_editor_tab == HOME_EDITOR_TAB_AUTH:

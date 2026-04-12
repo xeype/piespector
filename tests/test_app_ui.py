@@ -16,6 +16,7 @@ from piespector.domain.editor import (
     TOP_BAR_URL_JUMP_KEY,
 )
 from piespector.screens.home.collections_sidebar import CollectionsSidebar
+from piespector.screens.home.request.overview_pane import RequestOverviewPane
 from piespector.screens.home.response_panel import ResponsePanel
 from piespector.screens.home.url_bar import UrlBar
 from piespector.ui.rendering_helpers import (
@@ -1432,6 +1433,30 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(inline_input.display)
             self.assertEqual(inline_input.value, "Accept")
 
+    async def test_request_overview_pane_shows_inline_input_in_edit_mode(self) -> None:
+        app = PiespectorApp()
+        app._persist_requests = lambda: None
+        app._load_request_workspace = lambda: None
+        request = RequestDefinition(request_id="r1", name="Health")
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+        app.state.home_editor_tab = "request"
+        app.state.enter_home_request_edit_mode()
+
+        async with app.run_test(size=(140, 40)) as pilot:
+            app._refresh_screen()
+            await pilot.pause()
+
+            overview_pane = app.screen.query_one(
+                "#request-overview-pane",
+                RequestOverviewPane,
+            )
+            inline_input = overview_pane.query_one("#request-overview-input", Input)
+
+            self.assertTrue(inline_input.display)
+            self.assertTrue(inline_input.has_focus)
+            self.assertEqual(inline_input.value, "Health")
+
     async def test_request_name_input_submission_persists_request_name(self) -> None:
         app = PiespectorApp()
         app._persist_requests = lambda: None
@@ -1449,7 +1474,11 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
             await pilot.press("e")
             await pilot.pause()
 
-            inline_input = app.screen.query_one("#request-overview-input", Input)
+            overview_pane = app.screen.query_one(
+                "#request-overview-pane",
+                RequestOverviewPane,
+            )
+            inline_input = overview_pane.query_one("#request-overview-input", Input)
             self.assertTrue(inline_input.display)
             inline_input.value = "Health Check"
             await inline_input.action_submit()

@@ -22,6 +22,8 @@ def request_label(request: RequestDefinition | None) -> str:
 def render_request_overview_fields(
     request: RequestDefinition,
     state: PiespectorState,
+    *,
+    fields: tuple[tuple[str, str], ...] | None = None,
 ) -> RenderableType:
     mode = effective_mode(state)
     table = Table(
@@ -33,7 +35,7 @@ def render_request_overview_fields(
     table.add_column("Field", width=12)
     table.add_column("Value", ratio=1)
 
-    for index, (field_name, label) in enumerate(state.current_request_fields()):
+    for index, (field_name, label) in enumerate(fields or state.current_request_fields()):
         value = str(getattr(request, field_name) or "-").replace("\n", "\\n")
         row_style = selected_element_style(
             state,
