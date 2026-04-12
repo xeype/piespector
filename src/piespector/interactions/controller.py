@@ -168,11 +168,11 @@ class EventRouter:
         if self.state.current_tab == TAB_HISTORY:
             if (
                 self.state.mode == MODE_NORMAL
-                and self.app.history_controller.handle_history_view_key(event)
+                and self.app._history_screen.handle_view_key(event)
             ):
                 return
             if self.state.mode == MODE_HISTORY_RESPONSE_SELECT:
-                self.app.history_controller.handle_history_response_select_key(event)
+                self.app._history_screen.handle_response_select_key(event)
 
     def _current_screen(self):
         try:

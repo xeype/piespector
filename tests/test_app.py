@@ -190,6 +190,14 @@ class AppCommandModeTests(unittest.TestCase):
 
         refresh_from_state.assert_called_once_with()
 
+    def test_refresh_history_screen_delegates_to_history_screen(self) -> None:
+        app = PiespectorApp()
+
+        with patch.object(app._history_screen, "refresh_from_state") as refresh_from_state:
+            app.screen_refresh.refresh_history_screen()
+
+        refresh_from_state.assert_called_once_with()
+
     def test_execute_command_uses_current_mode_context_then_returns_to_normal(self) -> None:
         app = PiespectorApp()
         app.state.mode = MODE_HOME_SECTION_SELECT
@@ -311,7 +319,7 @@ class AppCommandModeTests(unittest.TestCase):
         event = FakeKeyEvent("j")
 
         with patch.object(app, "_refresh_viewport"):
-            app.history_controller.handle_history_response_select_key(event)
+            app._history_screen.handle_response_select_key(event)
 
         self.assertEqual(app.state.selected_history_detail_block, "response")
         self.assertTrue(event.stopped)
@@ -326,9 +334,9 @@ class AppCommandModeTests(unittest.TestCase):
         right_event = FakeKeyEvent("l")
 
         with patch.object(app, "_refresh_viewport"):
-            app.history_controller.handle_history_response_select_key(left_event)
+            app._history_screen.handle_response_select_key(left_event)
             left_tab = app.state.selected_history_response_tab
-            app.history_controller.handle_history_response_select_key(right_event)
+            app._history_screen.handle_response_select_key(right_event)
 
         self.assertEqual(left_tab, "headers")
         self.assertEqual(app.state.selected_history_response_tab, "body")

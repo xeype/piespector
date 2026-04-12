@@ -31,7 +31,6 @@ from piespector.domain.modes import (
 )
 from piespector.placeholders import placeholder_match
 from piespector.screens.base import PiespectorScreen
-from piespector.screens.history import render as history_render
 from piespector.screens.home.layout import home_top_bar_height
 from piespector.screens.home.render import (
     refresh_home_request_content,
@@ -61,9 +60,6 @@ class ScreenRefreshCoordinator:
             "_current_base_screen": self.current_base_screen,
             "_env_visible_rows": self.env_visible_rows,
             "_has_live_screen": self.has_live_screen,
-            "_history_detail_scroll_step": self.history_detail_scroll_step,
-            "_history_detail_visible_rows": self.history_detail_visible_rows,
-            "_history_visible_rows": self.history_visible_rows,
             "_home_request_list_visible_rows": self.home_request_list_visible_rows,
             "_home_response_scroll_step": self.home_response_scroll_step,
             "_home_response_visible_rows": self.home_response_visible_rows,
@@ -167,8 +163,6 @@ class ScreenRefreshCoordinator:
             self.state.ensure_env_selection_visible(visible_rows)
             self.app._refresh_env_screen()
         elif self.state.current_tab == TAB_HISTORY:
-            visible_rows = self.app._history_visible_rows()
-            self.state.ensure_history_selection_visible(visible_rows)
             self.app._refresh_history_screen()
 
     def refresh_home_screen(self) -> None:
@@ -352,21 +346,7 @@ class ScreenRefreshCoordinator:
         self.app._env_screen.refresh_from_state()
 
     def refresh_history_screen(self) -> None:
-        try:
-            history_sidebar_subtitle = self.app._query_current("#history-sidebar-subtitle", Static)
-        except NoMatches:
-            history_sidebar_subtitle = None
-        visible_rows = self.app._history_detail_visible_rows()
-        history_render.refresh_history_widgets(
-            self.state,
-            self.app._query_current("#history-list", DataTable),
-            self.app._query_current("#history-detail", Static),
-            self.app._query_current("#history-sidebar-container"),
-            self.app._query_current("#history-detail-container"),
-            history_sidebar_subtitle=history_sidebar_subtitle,
-            request_visible_rows=visible_rows,
-            response_visible_rows=visible_rows,
-        )
+        self.app._history_screen.refresh_from_state()
 
     def refresh_status_line(self) -> None:
         footer = self.app._query_current("#status-line", PiespectorFooter)
@@ -382,21 +362,6 @@ class ScreenRefreshCoordinator:
             return max(env_table.size.height - 2, 1)
         except NoMatches:
             return 20
-
-    def history_visible_rows(self) -> int:
-        try:
-            history_list = self.app._query_current("#history-list", DataTable)
-            return max(history_list.size.height - 2, 6)
-        except NoMatches:
-            return 14
-
-    def history_detail_visible_rows(self) -> int:
-        try:
-            detail = self.app._query_current("#history-detail", Static)
-            # subtract ~10 rows for summary block + tab label rows + separators
-            return max((detail.size.height - 10) // 2, 4)
-        except NoMatches:
-            return 8
 
     def home_request_list_visible_rows(self) -> int:
         try:
@@ -414,10 +379,3 @@ class ScreenRefreshCoordinator:
 
     def home_response_scroll_step(self) -> int:
         return max(self.app._home_response_visible_rows() // 2, 1)
-
-    def history_detail_scroll_step(self) -> int:
-        try:
-            history_detail = self.app._query_current("#history-detail", Static)
-            return max(history_detail.size.height // 4, 1)
-        except NoMatches:
-            return 4

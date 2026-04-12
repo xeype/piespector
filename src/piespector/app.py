@@ -20,10 +20,8 @@ from textual.widgets import (
 
 from piespector.commands import DeleteConfirmationRequest, run_command
 from piespector.domain.editor import (
-    HISTORY_DETAIL_BLOCK_REQUEST,
     HOME_SIDEBAR_JUMP_KEY,
     REQUEST_EDITOR_JUMP_BINDINGS,
-    RESPONSE_TAB_HEADERS,
     RESPONSE_JUMP_BINDINGS,
     TAB_ENV,
     TAB_HISTORY,
@@ -45,7 +43,6 @@ from piespector.persistence import PersistenceManager
 from piespector.request_executor import RequestExecutor
 from piespector.screens.env.controller import EnvController
 from piespector.screens.env.screen import EnvScreen
-from piespector.screens.history.controller import HistoryController
 from piespector.screens.history.screen import HistoryScreen
 from piespector.screens.home.controller import HomeController
 from piespector.screens.home.selection import home_selection
@@ -115,7 +112,6 @@ class PiespectorApp(App[None]):
         self.persistence_manager = PersistenceManager(self, enabled=persist_state)
         self.request_executor = RequestExecutor(self)
         self.env_controller = EnvController(self)
-        self.history_controller = HistoryController(self)
         self.home_controller = HomeController(self)
         self.interaction_controller = InteractionController(self)
         self.event_router = EventRouter(self)
@@ -124,6 +120,9 @@ class PiespectorApp(App[None]):
         self._home_screen = HomeScreen()
         self._env_screen = EnvScreen()
         self._history_screen = HistoryScreen()
+        self._home_screen._piespector_app = self
+        self._env_screen._piespector_app = self
+        self._history_screen._piespector_app = self
         self._screens_installed = False
 
     def on_mount(self) -> None:
@@ -357,13 +356,7 @@ class PiespectorApp(App[None]):
         self._refresh_screen()
 
     def navigate_to_history_entry(self, history_id: str) -> None:
-        for index, entry in enumerate(self.state.history_entries):
-            if entry.history_id == history_id:
-                self.state.history_filter_query = ""
-                self.state.selected_history_index = index
-                self.state.history_scroll_offset = 0
-                break
-        self._refresh_screen()
+        self._history_screen.navigate_to_history_entry(history_id)
 
     def action_show_home(self) -> None:
         self.state.switch_tab(TAB_HOME, TAB_LABELS[TAB_HOME])
@@ -731,48 +724,7 @@ class PiespectorApp(App[None]):
         )
 
     def _open_history_response_viewer(self, origin_mode: str | None = None) -> None:
-        entry = self.state.get_selected_history_entry()
-        if entry is None:
-            self.state.message = "No history entry selected."
-            self._refresh_screen()
-            return
-        if self.state.selected_history_detail_block == HISTORY_DETAIL_BLOCK_REQUEST:
-            if self.state.selected_history_request_tab == RESPONSE_TAB_HEADERS:
-                language = None
-                content = "\n".join(
-                    f"{key}: {value}" for key, value in entry.request_headers
-                ) or "-"
-            else:
-                body_text = format_response_body(entry.request_body)
-                language = text_area_syntax_language(
-                    detect_text_syntax_language(body_text)
-                )
-                content = body_text or entry.request_body or ""
-        elif self.state.selected_history_response_tab == RESPONSE_TAB_HEADERS:
-            language = None
-            content = "\n".join(
-                f"{key}: {value}" for key, value in entry.response_headers
-            ) or "-"
-        else:
-            body_text = format_response_body(entry.response_body)
-            language = text_area_syntax_language(
-                detect_text_syntax_language(body_text)
-            )
-            content = body_text or entry.response_body or ""
-        entry_name = (
-            entry.source_request_name.strip()
-            or entry.source_request_path.strip()
-            or "History"
-        )
-        self.push_screen(
-            BodyEditorModal.viewer(
-                title=f"History Viewer  [{entry_name}]",
-                footer=f"{self.response_copy_hint} copies selection/all   Esc closes",
-                body=content,
-                language=language,
-            ),
-            self._handle_response_viewer_closed,
-        )
+        self._history_screen.open_response_viewer(origin_mode=origin_mode)
 
     def _handle_response_viewer_closed(self, _result: None) -> None:
         self.set_focus(None)
