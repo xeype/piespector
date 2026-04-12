@@ -71,9 +71,6 @@ class UISessionState:
     current_tab: str = TAB_HOME
     jump_return_mode: str = MODE_NORMAL
     message: str = ""
-    confirm_prompt: str = ""
-    confirm_action: str | None = None
-    confirm_target_id: str | None = None
     open_request_ids: list[str] | None = None
     active_request_id: str | None = None
     preview_request_id: str | None = None

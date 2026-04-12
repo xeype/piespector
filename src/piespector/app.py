@@ -19,7 +19,7 @@ from textual.widgets import (
     Tree,
 )
 
-from piespector.commands import run_command
+from piespector.commands import DeleteConfirmationRequest, run_command
 from piespector.domain.editor import (
     HOME_SIDEBAR_JUMP_KEY,
     REQUEST_EDITOR_JUMP_BINDINGS,
@@ -67,6 +67,7 @@ from piespector.ui.command_palette import (
     PiespectorSearchProvider,
     PiespectorThemeProvider,
 )
+from piespector.ui.confirm_modal import ConfirmModal
 from piespector.ui.help_panel import PiespectorHelpPanel
 from piespector.ui.jump_overlay import JumpOverlay
 from piespector.ui.jumper import JumpTarget, Jumper
@@ -334,6 +335,9 @@ class PiespectorApp(App[None]):
         if outcome.should_exit:
             self.exit()
             return
+        if outcome.confirmation_request is not None:
+            self._open_delete_confirmation(outcome.confirmation_request)
+            return
         if outcome.send_request:
             self._send_selected_request()
             return
@@ -404,6 +408,48 @@ class PiespectorApp(App[None]):
         self.state.create_request()
         self._persist_requests()
         self._refresh_viewport()
+
+    def _open_delete_confirmation(self, request: DeleteConfirmationRequest) -> None:
+        self._refresh_screen()
+        self.push_screen(
+            ConfirmModal(request.prompt),
+            lambda confirmed, request=request: self._handle_delete_confirmation_result(
+                request,
+                confirmed,
+            ),
+        )
+
+    def _handle_delete_confirmation_result(
+        self,
+        request: DeleteConfirmationRequest,
+        confirmed: bool | None,
+    ) -> None:
+        if confirmed:
+            self._apply_delete_confirmation(request)
+        self.set_focus(None)
+        self._refresh_screen()
+        self.call_after_refresh(self._clear_home_jump_focus)
+
+    def _apply_delete_confirmation(self, request: DeleteConfirmationRequest) -> None:
+        if request.action == "delete_collection":
+            self.state._set_selected_sidebar_node("collection", request.target_id)
+            node = self.state.get_selected_sidebar_node()
+            if (
+                node is not None
+                and node.kind == "collection"
+                and node.node_id == request.target_id
+            ):
+                self.state.delete_selected_collection()
+            return
+        if request.action == "delete_folder":
+            self.state._set_selected_sidebar_node("folder", request.target_id)
+            node = self.state.get_selected_sidebar_node()
+            if (
+                node is not None
+                and node.kind == "folder"
+                and node.node_id == request.target_id
+            ):
+                self.state.delete_selected_folder()
 
     def _send_selected_request(self) -> None:
         self.request_executor.send_selected_request()
@@ -488,6 +534,15 @@ class PiespectorApp(App[None]):
                 url_input = None
             if url_input is not None and url_input.display:
                 self.set_focus(url_input)
+                return
+
+        if self.state.current_tab == TAB_HOME and home_selection(self.state).panel == "sidebar":
+            try:
+                tree = self._query_current("#sidebar-tree", Tree)
+            except NoMatches:
+                tree = None
+            if tree is not None and tree.can_focus:
+                self.set_focus(tree)
                 return
 
         if home_selection(self.state).panel != "sidebar":

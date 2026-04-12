@@ -16,7 +16,6 @@ from piespector.domain.editor import (
     TAB_HISTORY,
 )
 from piespector.domain.modes import (
-    MODE_CONFIRM,
     MODE_ENV_EDIT,
     MODE_HOME_AUTH_EDIT,
     MODE_HOME_AUTH_LOCATION_EDIT,
@@ -61,9 +60,6 @@ def command_line_content(state: PiespectorState) -> CommandLineContent | None:
             ),
             tone="primary",
         )
-
-    if state.mode == MODE_CONFIRM:
-        return CommandLineContent(state.confirm_prompt, tone="warning")
 
     if state.mode == MODE_HOME_REQUEST_EDIT:
         _field_name, label = state.selected_request_field()

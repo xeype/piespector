@@ -7,7 +7,13 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from piespector.commands import command_completion, command_completion_matches, help_commands, run_command
+from piespector.commands import (
+    DeleteConfirmationRequest,
+    command_completion,
+    command_completion_matches,
+    help_commands,
+    run_command,
+)
 from piespector.domain.requests import EnvVariable
 from piespector.state import (
     CollectionDefinition,
@@ -63,6 +69,64 @@ class CommandTests(unittest.TestCase):
         self.assertTrue(outcome.save_requests)
         self.assertEqual([collection.name for collection in state.collections], ["Books"])
         self.assertEqual(state.message, "Imported 1 collection.")
+
+    def test_del_collection_returns_confirmation_request(self) -> None:
+        collection = CollectionDefinition(name="Books")
+        request = RequestDefinition(
+            name="getBooks",
+            collection_id=collection.collection_id,
+        )
+        state = PiespectorState(current_tab="home")
+        state.collections = [collection]
+        state.requests = [request]
+        state.ensure_request_workspace()
+        state._set_selected_sidebar_node("collection", collection.collection_id)
+
+        outcome = run_command(state, "del")
+
+        self.assertEqual(
+            outcome.confirmation_request,
+            DeleteConfirmationRequest(
+                prompt=(
+                    f"Delete collection {collection.name} and all nested folders/requests? (y/n)"
+                ),
+                action="delete_collection",
+                target_id=collection.collection_id,
+            ),
+        )
+        self.assertEqual([item.name for item in state.collections], ["Books"])
+        self.assertEqual([item.name for item in state.requests], ["getBooks"])
+
+    def test_del_folder_returns_confirmation_request(self) -> None:
+        collection = CollectionDefinition(name="Books")
+        folder = FolderDefinition(
+            name="Auth",
+            collection_id=collection.collection_id,
+        )
+        request = RequestDefinition(
+            name="login",
+            collection_id=collection.collection_id,
+            folder_id=folder.folder_id,
+        )
+        state = PiespectorState(current_tab="home")
+        state.collections = [collection]
+        state.folders = [folder]
+        state.requests = [request]
+        state.ensure_request_workspace()
+        state._set_selected_sidebar_node("folder", folder.folder_id)
+
+        outcome = run_command(state, "del")
+
+        self.assertEqual(
+            outcome.confirmation_request,
+            DeleteConfirmationRequest(
+                prompt=f"Delete folder {folder.name} and all nested folders/requests? (y/n)",
+                action="delete_folder",
+                target_id=folder.folder_id,
+            ),
+        )
+        self.assertEqual([item.name for item in state.folders], ["Auth"])
+        self.assertEqual([item.name for item in state.requests], ["login"])
 
     def test_mv_supports_quoted_destination_path(self) -> None:
         source_collection = CollectionDefinition(name="Source")

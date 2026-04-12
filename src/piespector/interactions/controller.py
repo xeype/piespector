@@ -15,7 +15,6 @@ from piespector.domain.editor import (
     TOP_BAR_JUMP_KEY_TO_TARGET,
 )
 from piespector.domain.modes import (
-    MODE_CONFIRM,
     MODE_ENV_EDIT,
     MODE_ENV_SELECT,
     MODE_HISTORY_RESPONSE_SELECT,
@@ -24,8 +23,6 @@ from piespector.domain.modes import (
     MODE_NORMAL,
 )
 from piespector.interactions.keys import (
-    CONFIRM_ACCEPT_KEYS,
-    CONFIRM_CANCEL_KEYS,
     KEY_TAB,
     KEY_ESCAPE,
 )
@@ -44,25 +41,6 @@ class InteractionController:
     @property
     def state(self):
         return self.app.state
-
-    def handle_confirm_key(self, event: events.Key) -> None:
-        if event.key in CONFIRM_CANCEL_KEYS:
-            self.state.leave_confirm_mode()
-            self.app._refresh_screen()
-            event.stop()
-            return
-
-        if event.key not in CONFIRM_ACCEPT_KEYS:
-            return
-
-        if self.state.confirm_action == "delete_collection":
-            self.state.delete_selected_collection()
-        elif self.state.confirm_action == "delete_folder":
-            self.state.delete_selected_folder()
-
-        self.state.leave_confirm_mode()
-        self.app._refresh_screen()
-        event.stop()
 
     def handle_jump_key(self, event: events.Key) -> None:
         if event.key == KEY_ESCAPE:
@@ -161,10 +139,6 @@ class EventRouter:
 
         if self.state.mode == MODE_JUMP:
             self.app.interaction_controller.handle_jump_key(event)
-            return
-
-        if self.state.mode == MODE_CONFIRM:
-            self.app.interaction_controller.handle_confirm_key(event)
             return
 
         if self.state.current_tab == TAB_HOME:

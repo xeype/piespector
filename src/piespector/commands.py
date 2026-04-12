@@ -42,6 +42,14 @@ class CommandOutcome:
     save_requests: bool = False
     save_env_pairs: bool = False
     send_request: bool = False
+    confirmation_request: DeleteConfirmationRequest | None = None
+
+
+@dataclass(frozen=True)
+class DeleteConfirmationRequest:
+    prompt: str
+    action: str
+    target_id: str
 
 
 @dataclass(frozen=True)
@@ -927,19 +935,25 @@ def run_command(
             return CommandOutcome()
         node = state.get_selected_sidebar_node()
         if node is not None and node.kind == "collection":
-            state.enter_confirm_mode(
-                prompt=f"Delete collection {node.label} and all nested folders/requests? (y/n)",
-                action="delete_collection",
-                target_id=node.node_id,
+            return CommandOutcome(
+                confirmation_request=DeleteConfirmationRequest(
+                    prompt=(
+                        f"Delete collection {node.label} and all nested folders/requests? (y/n)"
+                    ),
+                    action="delete_collection",
+                    target_id=node.node_id,
+                )
             )
-            return CommandOutcome()
         if node is not None and node.kind == "folder":
-            state.enter_confirm_mode(
-                prompt=f"Delete folder {node.label} and all nested folders/requests? (y/n)",
-                action="delete_folder",
-                target_id=node.node_id,
+            return CommandOutcome(
+                confirmation_request=DeleteConfirmationRequest(
+                    prompt=(
+                        f"Delete folder {node.label} and all nested folders/requests? (y/n)"
+                    ),
+                    action="delete_folder",
+                    target_id=node.node_id,
+                )
             )
-            return CommandOutcome()
         deleted = state.delete_selected_request()
         if deleted is None:
             state.message = "No request selected."

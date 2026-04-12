@@ -7,7 +7,13 @@ from rich.console import Console
 
 from piespector.app import PiespectorApp
 from piespector.domain.requests import EnvVariable
-from piespector.state import HistoryEntry, RequestDefinition, ResponseSummary
+from piespector.state import (
+    CollectionDefinition,
+    FolderDefinition,
+    HistoryEntry,
+    RequestDefinition,
+    ResponseSummary,
+)
 from textual.command import CommandInput, CommandPalette
 from textual.widgets import Input, Static, Tabs
 
@@ -100,6 +106,118 @@ class TextualUiSafetyNetTests(unittest.IsolatedAsyncioTestCase):
 
             self.assertFalse(app.screen.is_modal)
             self.assertEqual(app.state.current_tab, "home")
+
+    async def test_collection_delete_uses_confirm_modal_and_deletes_on_yes(self) -> None:
+        app = build_test_app()
+        collection = CollectionDefinition(name="Books")
+        request = RequestDefinition(
+            request_id="r1",
+            name="Health",
+            collection_id=collection.collection_id,
+        )
+        app.state.collections = [collection]
+        app.state.requests = [request]
+        app.state.ensure_request_workspace()
+        app.state._set_selected_sidebar_node("collection", collection.collection_id)
+
+        async with app.run_test(size=(140, 40)) as pilot:
+            app._refresh_screen()
+            await pilot.pause()
+
+            app.execute_command("del")
+            await pilot.pause()
+
+            self.assertTrue(app.screen.is_modal)
+
+            await pilot.press("y")
+            await pilot.pause()
+
+            self.assertFalse(app.screen.is_modal)
+            self.assertEqual(app.state.collections, [])
+            self.assertEqual(app.state.requests, [])
+            self.assertEqual(app.state.message, "Deleted collection Books.")
+
+    async def test_folder_delete_uses_confirm_modal_and_deletes_on_enter(self) -> None:
+        app = build_test_app()
+        collection = CollectionDefinition(name="Books")
+        folder = FolderDefinition(
+            folder_id="f1",
+            name="Auth",
+            collection_id=collection.collection_id,
+        )
+        nested_folder = FolderDefinition(
+            folder_id="f2",
+            name="Nested",
+            collection_id=collection.collection_id,
+            parent_folder_id=folder.folder_id,
+        )
+        request = RequestDefinition(
+            request_id="r1",
+            name="Login",
+            collection_id=collection.collection_id,
+            folder_id=nested_folder.folder_id,
+        )
+        app.state.collections = [collection]
+        app.state.folders = [folder, nested_folder]
+        app.state.requests = [request]
+        app.state.ensure_request_workspace()
+        app.state._set_selected_sidebar_node("folder", folder.folder_id)
+
+        async with app.run_test(size=(140, 40)) as pilot:
+            app._refresh_screen()
+            await pilot.pause()
+
+            app.execute_command("del")
+            await pilot.pause()
+
+            self.assertTrue(app.screen.is_modal)
+
+            await pilot.press("enter")
+            await pilot.pause()
+
+            self.assertFalse(app.screen.is_modal)
+            self.assertEqual(app.state.folders, [])
+            self.assertEqual(app.state.requests, [])
+            self.assertEqual(app.state.message, "Deleted folder Auth.")
+
+    async def test_confirm_modal_returns_focus_to_sidebar_tree_after_esc_n_and_y(self) -> None:
+        for dismiss_key in ("escape", "n", "y"):
+            with self.subTest(dismiss_key=dismiss_key):
+                app = build_test_app()
+                first = CollectionDefinition(collection_id="c1", name="Books")
+                second = CollectionDefinition(collection_id="c2", name="Movies")
+                app.state.collections = [first, second]
+                app.state.ensure_request_workspace()
+                app.state._set_selected_sidebar_node("collection", first.collection_id)
+
+                async with app.run_test(size=(140, 40)) as pilot:
+                    app._refresh_screen()
+                    await pilot.pause()
+
+                    tree = app.screen.query_one("#sidebar-tree")
+                    self.assertTrue(tree.has_focus)
+
+                    app.execute_command("del")
+                    await pilot.pause()
+
+                    self.assertTrue(app.screen.is_modal)
+
+                    await pilot.press(dismiss_key)
+                    await pilot.pause()
+
+                    tree = app.screen.query_one("#sidebar-tree")
+                    self.assertFalse(app.screen.is_modal)
+                    self.assertTrue(tree.has_focus)
+                    if dismiss_key == "y":
+                        self.assertEqual(
+                            [collection.name for collection in app.state.collections],
+                            ["Movies"],
+                        )
+                    else:
+                        self.assertEqual(
+                            [collection.name for collection in app.state.collections],
+                            ["Books", "Movies"],
+                        )
 
     async def test_url_submit_updates_active_request(self) -> None:
         app = build_test_app()

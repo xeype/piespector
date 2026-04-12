@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from piespector.domain.editor import TAB_ENV, TAB_HELP, TAB_HISTORY, TAB_HOME, TAB_LABELS, TAB_ORDER
-from piespector.domain.modes import MODE_CONFIRM, MODE_JUMP, MODE_NORMAL
+from piespector.domain.modes import MODE_JUMP, MODE_NORMAL
 
 
 class CoreStateMixin:
@@ -13,24 +13,6 @@ class CoreStateMixin:
     def leave_jump_mode(self) -> None:
         self.mode = self.jump_return_mode or MODE_NORMAL
         self.message = ""
-
-    def enter_confirm_mode(
-        self,
-        *,
-        prompt: str,
-        action: str,
-        target_id: str,
-    ) -> None:
-        self.mode = MODE_CONFIRM
-        self.confirm_prompt = prompt
-        self.confirm_action = action
-        self.confirm_target_id = target_id
-
-    def leave_confirm_mode(self) -> None:
-        self.mode = MODE_NORMAL
-        self.confirm_prompt = ""
-        self.confirm_action = None
-        self.confirm_target_id = None
 
     def switch_tab(self, tab_id: str, label: str | None = None) -> None:
         self.mode = MODE_NORMAL

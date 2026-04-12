@@ -4,7 +4,6 @@ from dataclasses import dataclass
 
 from piespector.domain.editor import TAB_ENV, TAB_HELP, TAB_HISTORY, TAB_HOME, TAB_LABELS
 from piespector.domain.modes import (
-    MODE_CONFIRM,
     MODE_ENV_EDIT,
     MODE_ENV_SELECT,
     MODE_HISTORY_RESPONSE_SELECT,
@@ -41,7 +40,6 @@ STATUS_ENV_BADGE_LABEL = "env"
 STATUS_DISPLAY_EDIT = "EDIT"
 STATUS_DISPLAY_SELECT = "SELECT"
 STATUS_CONTEXT_COLLECTIONS = "Collections"
-STATUS_CONTEXT_DELETE = "Delete"
 STATUS_CONTEXT_HISTORY = "History"
 STATUS_CONTEXT_REQUEST = "Request"
 STATUS_CONTEXT_URL = "URL"
@@ -95,11 +93,6 @@ def mode_and_context(state: PiespectorState) -> tuple[str, str]:
     request = state.get_active_request()
     current_request_label = request_label(request)
 
-    if state.mode == MODE_CONFIRM:
-        node = state.get_selected_sidebar_node()
-        if node is not None:
-            return (MODE_CONFIRM, f"{STATUS_CONTEXT_DELETE} / {node.label}")
-        return (MODE_CONFIRM, STATUS_CONTEXT_DELETE)
     if state.mode == MODE_HOME_SECTION_SELECT:
         current_section = state.home_editor_tab.replace("-", " ").title()
         return (STATUS_DISPLAY_SELECT, f"{current_request_label} / {current_section}")
