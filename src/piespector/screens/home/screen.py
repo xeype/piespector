@@ -22,19 +22,16 @@ from piespector.domain.modes import (
     MODE_HOME_BODY_RAW_TYPE_EDIT,
     MODE_HOME_BODY_SELECT,
     MODE_HOME_BODY_TYPE_EDIT,
-    MODE_HOME_HEADERS_EDIT,
 )
 from piespector.commands import filesystem_path_completions
-from piespector.placeholders import placeholder_match
-from piespector.screens.home import messages
 from piespector.screens.home.collections_sidebar import CollectionsSidebar
 from piespector.screens.home.response_panel import ResponsePanel
 from piespector.screens.home.url_bar import UrlBar
 from piespector.screens.home.request.auth_pane import RequestAuthPane
+from piespector.screens.home.request.headers_pane import RequestHeadersPane
 from piespector.screens.home.request.params_pane import RequestParamsPane
 from piespector.screens.base import PiespectorScreen
 from piespector.screens.home.request.overview_pane import RequestOverviewPane
-from piespector.screens.home.request.header_editor import RequestHeadersTable
 from piespector.screens.home.request.request_body import RequestBodyTable
 from piespector.ui.body_editor_modal import BodyEditorModal
 from piespector.ui.input import PiespectorInput
@@ -58,18 +55,7 @@ class HomeScreen(PiespectorScreen):
                             with TabPane("Params", id=HOME_EDITOR_TAB_PARAMS):
                                 yield RequestParamsPane(id="request-params-pane")
                             with TabPane("Headers", id=HOME_EDITOR_TAB_HEADERS):
-                                yield Static("", id="request-content-note")
-                                yield RequestHeadersTable(
-                                    id="request-headers-table",
-                                    cursor_type="row",
-                                    zebra_stripes=True,
-                                )
-                                yield PiespectorInput(
-                                    "",
-                                    id="request-headers-input",
-                                    compact=True,
-                                    select_on_focus=False,
-                                )
+                                yield RequestHeadersPane(id="request-headers-pane")
                             with TabPane("Body", id=HOME_EDITOR_TAB_BODY):
                                 yield PiespectorSelect(
                                     option_list(*BODY_TYPE_OPTIONS),
@@ -101,18 +87,15 @@ class HomeScreen(PiespectorScreen):
                                 yield Static("", id="request-options-content")
                         yield Static("", classes="panel-subtitle", id="request-subtitle")
                     yield ResponsePanel(id="response-panel")
-        yield Static("", id="headers-input-hint", classes="hidden")
 
     def on_mount(self) -> None:
         super().on_mount()
         self._tab_activation_ready = False
         for widget_id in (
-            "request-content-note",
             "body-raw-type-select",
             "request-body-table",
             "request-body-input",
             "request-body-preview",
-            "request-headers-input",
         ):
             self.query_one(f"#{widget_id}").display = False
         request_tabs = self.query_one("#request-tabs", TabbedContent)
@@ -218,20 +201,7 @@ class HomeScreen(PiespectorScreen):
 
         self._sync_request_table_row(event.control, event.cursor_row)
 
-        if event.control.id == "request-headers-table":
-            request = app.state.get_active_request()
-            if request is None:
-                return
-            from piespector.request_builder import preview_auto_headers
-            auto_headers = preview_auto_headers(request, app.state.env_pairs)
-            total = len(request.header_items) + len(auto_headers)
-            if event.cursor_row >= total:
-                app.state.enter_home_headers_edit_mode(creating=True)
-            elif app.state.selected_header_index >= len(request.header_items):
-                app.state.message = messages.HOME_AUTO_HEADER_EDIT
-            else:
-                app.state.enter_home_headers_edit_mode()
-        elif event.control.id == "request-body-table":
+        if event.control.id == "request-body-table":
             request = app.state.get_active_request()
             if request is None or request.body_type not in BODY_KEY_VALUE_TYPES:
                 return
@@ -337,11 +307,6 @@ class HomeScreen(PiespectorScreen):
             return
 
         if (
-            event.input.id == "request-headers-input"
-            and app.state.mode == MODE_HOME_HEADERS_EDIT
-        ):
-            app.state.save_selected_header_field(event.value)
-        elif (
             event.input.id == "request-body-input"
             and app.state.mode == MODE_HOME_BODY_EDIT
         ):
@@ -352,18 +317,6 @@ class HomeScreen(PiespectorScreen):
         app.set_focus(None)
         app._refresh_screen()
         event.stop()
-
-    def on_input_changed(self, event: Input.Changed) -> None:
-        app = self.app
-        if app is None:
-            return
-        text = event.value
-        cursor = event.input.cursor_position
-        if event.input.id == "request-headers-input" and app.state.mode == MODE_HOME_HEADERS_EDIT:
-            if cursor >= 2 and text[cursor - 2 : cursor] == "{{" and text[cursor : cursor + 2] != "}}":
-                event.input.value = text[:cursor] + "}}" + text[cursor:]
-                event.input.cursor_position = cursor
-            app.call_after_refresh(app._refresh_request_input_hints_only)
 
     def on_key(self, event: events.Key) -> None:
         app = self.app
@@ -383,12 +336,15 @@ class HomeScreen(PiespectorScreen):
         if params_pane.handle_input_key(event):
             return
 
+        headers_pane = self.query_one("#request-headers-pane", RequestHeadersPane)
+        if headers_pane.handle_input_key(event):
+            return
+
         focused = app.focused
         if not isinstance(focused, Input):
             return
         if focused.id not in {
             "request-overview-input",
-            "request-headers-input",
             "request-body-input",
         }:
             return
@@ -411,34 +367,5 @@ class HomeScreen(PiespectorScreen):
                     focused.cursor_position = len(completed)
                 event.stop()
                 return
-
-            input_mode_map = {
-                "request-headers-input": MODE_HOME_HEADERS_EDIT,
-            }
-            if focused.id in input_mode_map and app.state.mode == input_mode_map[focused.id]:
-                env_keys = sorted(app.state.env_pairs)
-                match = placeholder_match(focused.value, focused.cursor_position, env_keys)
-                if match is not None:
-                    anchor = app._input_env_completion_anchor
-                    stored = app._input_env_completion_matches
-                    if anchor and match.prefix in stored:
-                        matches = stored
-                        new_idx = (app._input_env_completion_index + 1) % len(matches)
-                    else:
-                        anchor = match.prefix
-                        matches = [k for k in env_keys if k.startswith(anchor)]
-                        new_idx = 0
-                    if matches:
-                        app._input_env_completion_anchor = anchor
-                        app._input_env_completion_matches = matches
-                        app._input_env_completion_index = new_idx
-                        suggestion = matches[new_idx]
-                        before = focused.value[: match.start]
-                        after = focused.value[match.end :]
-                        completed = f"{before}{{{{{suggestion}}}}}{after}"
-                        new_cursor = len(before) + 2 + len(suggestion)
-                        focused.value = completed
-                        focused.cursor_position = new_cursor
-                        app.call_after_refresh(app._refresh_request_input_hints_only)
             event.stop()
             return

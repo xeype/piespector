@@ -17,6 +17,7 @@ from piespector.domain.editor import (
 )
 from piespector.screens.home.collections_sidebar import CollectionsSidebar
 from piespector.screens.home.request.auth_pane import RequestAuthPane
+from piespector.screens.home.request.headers_pane import RequestHeadersPane
 from piespector.screens.home.request.overview_pane import RequestOverviewPane
 from piespector.screens.home.request.params_pane import RequestParamsPane
 from piespector.screens.home.response_panel import ResponsePanel
@@ -535,9 +536,11 @@ class AppUiTests(unittest.TestCase):
         app.state.mode = "HOME_HEADERS_SELECT"
         app.state.selected_header_field_index = 0
         event = FakeKeyEvent("L")
+        headers_pane = RequestHeadersPane()
+        headers_pane._piespector_app = app
 
         with patch.object(app, "_refresh_home_request_panel"):
-            app.home_controller.headers.handle_home_headers_select_key(event)
+            headers_pane.handle_select_key(event)
 
         self.assertEqual(app.state.home_editor_tab, "headers")
         self.assertEqual(app.state.selected_header_field_index, 1)
@@ -577,9 +580,11 @@ class AppUiTests(unittest.TestCase):
         app.state.mode = "HOME_HEADERS_SELECT"
         app.state.selected_header_index = 0
         event = FakeKeyEvent("k")
+        headers_pane = RequestHeadersPane()
+        headers_pane._piespector_app = app
 
         with patch.object(app, "_refresh_screen"):
-            app.home_controller.headers.handle_home_headers_select_key(event)
+            headers_pane.handle_select_key(event)
 
         self.assertEqual(app.state.home_editor_tab, "headers")
         self.assertEqual(app.state.mode, "HOME_SECTION_SELECT")

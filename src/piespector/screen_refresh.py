@@ -6,12 +6,10 @@ from textual.app import ScreenStackError
 from textual.css.query import NoMatches
 from textual.widgets import (
     DataTable,
-    Input,
     Static,
     TabbedContent,
 )
 
-from piespector.placeholders import placeholder_match
 from piespector.widget.tree import PiespectorTree
 
 from piespector.domain.editor import (
@@ -21,12 +19,10 @@ from piespector.domain.editor import (
     TAB_HOME,
     TAB_ORDER,
 )
-from piespector.domain.modes import (
-    MODE_HOME_HEADERS_EDIT,
-)
 from piespector.screens.base import PiespectorScreen
 from piespector.screens.home.collections_sidebar import CollectionsSidebar
 from piespector.screens.home.layout import home_top_bar_height
+from piespector.screens.home.request.headers_pane import RequestHeadersPane
 from piespector.screens.home.render import refresh_home_request_content, sync_home_focus_highlights
 from piespector.screens.home.response_panel import ResponsePanel
 from piespector.screens.home.url_bar import UrlBar
@@ -215,41 +211,15 @@ class ScreenRefreshCoordinator:
             request_title,
             request_subtitle,
         )
-        self._refresh_request_input_hints(request_tabs)
-
-    def _refresh_request_input_hints(self, request_tabs: TabbedContent) -> None:
-        env_keys = sorted(self.state.env_pairs)
-        hint_configs = [
-            ("#request-headers-input", "#headers-input-hint", MODE_HOME_HEADERS_EDIT),
-        ]
-        for input_id, hint_id, edit_mode in hint_configs:
-            try:
-                input_widget = request_tabs.query_one(input_id, Input)
-                hint_widget = self.app._query_current(hint_id, Static)
-            except NoMatches:
-                continue
-            if self.state.mode == edit_mode and input_widget.display:
-                match = placeholder_match(
-                    input_widget.value,
-                    input_widget.cursor_position,
-                    env_keys,
-                )
-                if match is not None and match.suggestion != match.prefix:
-                    cursor_offset = input_widget.cursor_screen_offset
-                    hint_widget.update(match.suggestion)
-                    hint_widget.offset = (cursor_offset.x, cursor_offset.y + 1)
-                    hint_widget.remove_class("hidden")
-                    continue
-            hint_widget.add_class("hidden")
 
     def refresh_request_input_hints_only(self) -> None:
         if not self.app._has_live_screen():
             return
         try:
-            request_tabs = self.app._query_current("#request-tabs", TabbedContent)
+            headers_pane = self.app._query_current("#request-headers-pane", RequestHeadersPane)
         except NoMatches:
             return
-        self._refresh_request_input_hints(request_tabs)
+        headers_pane.refresh_hint_from_state()
 
     def refresh_home_response_panel(self) -> None:
         if not self.app._has_live_screen():

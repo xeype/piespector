@@ -27,8 +27,6 @@ from piespector.domain.modes import (
     MODE_HOME_BODY_RAW_TYPE_EDIT,
     MODE_HOME_BODY_SELECT,
     MODE_HOME_BODY_TYPE_EDIT,
-    MODE_HOME_HEADERS_EDIT,
-    MODE_HOME_HEADERS_SELECT,
     MODE_HOME_REQUEST_METHOD_EDIT,
     MODE_HOME_REQUEST_METHOD_SELECT,
     MODE_HOME_REQUEST_SELECT,
@@ -39,7 +37,6 @@ from piespector.domain.modes import (
     REQUEST_RESPONSE_SHORTCUT_MODES,
 )
 from piespector.domain.requests import RequestDefinition
-from piespector.request_builder import preview_auto_headers
 from piespector.screens.home import messages
 from piespector.screens.home.layout import (
     home_request_list_visible_rows,
@@ -51,6 +48,7 @@ from piespector.screens.home.selection import (
     request_panel_selected,
 )
 from piespector.screens.home.request.auth_pane import RequestAuthPane
+from piespector.screens.home.request.headers_pane import RequestHeadersPane
 from piespector.screens.home.request.request_body import (
     RequestBodyTable,
     body_context_label,
@@ -61,7 +59,6 @@ from piespector.screens.home.request.params_pane import RequestParamsPane
 from piespector.screens.home.request.request_editor import render_home_editor as render_home_editor_panel
 from piespector.screens.home.request.overview_pane import RequestOverviewPane
 from piespector.screens.home.request.request_options import render_request_options_editor
-from piespector.screens.home.request.header_editor import RequestHeadersTable, refresh_request_headers_table
 from piespector.screens.home.request.url_bar import render_top_url_bar
 from piespector.screens.home.response_panel import render_request_response
 from piespector.screens.home.sidebar import render_home_sidebar as render_home_sidebar_panel
@@ -261,11 +258,9 @@ def refresh_home_request_content(
     overview_pane = tabs.query_one("#request-overview-pane", RequestOverviewPane)
     auth_pane = tabs.query_one("#request-auth-pane", RequestAuthPane)
     params_pane = tabs.query_one("#request-params-pane", RequestParamsPane)
-    note = tabs.query_one("#request-content-note", Static)
+    headers_pane = tabs.query_one("#request-headers-pane", RequestHeadersPane)
     body_type_select = tabs.query_one("#body-type-select", Select)
     body_raw_type_select = tabs.query_one("#body-raw-type-select", Select)
-    headers_table = tabs.query_one("#request-headers-table", RequestHeadersTable)
-    headers_input = tabs.query_one("#request-headers-input", Input)
     body_table = tabs.query_one("#request-body-table", RequestBodyTable)
     body_input = tabs.query_one("#request-body-input", Input)
     body_preview = tabs.query_one("#request-body-preview", Static)
@@ -283,15 +278,10 @@ def refresh_home_request_content(
         empty = Text(messages.HOME_NO_ACTIVE_REQUEST)
         options_content.update(empty)
         body_preview.update(empty)
-        note.update("")
         body_type_select.display = False
         body_raw_type_select.display = False
         params_pane.refresh_from_state(state)
-        _sync_input_widget(headers_input, "", display=False)
-        headers_table.clear(columns=True)
-        headers_table.add_columns("Request")
-        headers_table.add_row("No active request.")
-        headers_table.cursor_type = "none"
+        headers_pane.refresh_from_state(state)
         body_table.clear(columns=True)
         body_table.add_columns("Request")
         body_table.add_row("No active request.")
@@ -305,10 +295,8 @@ def refresh_home_request_content(
     subtitle.update(messages.home_editor_subtitle(state))
     body_type_select.display = state.home_editor_tab == HOME_EDITOR_TAB_BODY
     body_raw_type_select.display = False
-    note.display = False
     body_table.display = False
     body_preview.display = False
-    _sync_input_widget(headers_input, "", display=False)
     _sync_input_widget(body_input, "", display=False)
 
     if state.home_editor_tab == HOME_EDITOR_TAB_REQUEST:
@@ -322,39 +310,7 @@ def refresh_home_request_content(
         return
 
     if state.home_editor_tab == HOME_EDITOR_TAB_HEADERS:
-        note.update(Text(messages.HOME_HEADERS_FOOTER))
-        note.display = True
-        refresh_request_headers_table(headers_table, active_request, state)
-        field_name, field_label = state.selected_header_field()
-        if state.headers_creating_new:
-            header_value = ""
-        elif active_request.header_items and state.selected_header_index < len(active_request.header_items):
-            item = active_request.header_items[state.selected_header_index]
-            header_value = item.key if field_name == "key" else item.value
-        else:
-            header_value = ""
-        _sync_input_widget(
-            headers_input,
-            header_value,
-            display=state.mode == MODE_HOME_HEADERS_EDIT,
-            placeholder=f"Header {field_label.lower()}",
-            focus_token=(
-                (
-                    "headers",
-                    active_request.request_id,
-                    state.headers_creating_new,
-                    state.selected_header_index,
-                    state.selected_header_field_index,
-                )
-                if state.mode == MODE_HOME_HEADERS_EDIT
-                else None
-            ),
-        )
-        headers_table_selected = panel_selected and state.mode == MODE_HOME_HEADERS_SELECT
-        if headers_table_selected and headers_table.can_focus and not headers_table.has_focus:
-            headers_table.focus()
-        elif not headers_table_selected:
-            _deactivate_table_widget(headers_table)
+        headers_pane.refresh_from_state(state)
         return
 
     if state.home_editor_tab == HOME_EDITOR_TAB_OPTIONS:
