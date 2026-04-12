@@ -23,7 +23,6 @@ from piespector.domain.editor import (
 )
 from piespector.domain.modes import (
     MODE_HOME_HEADERS_EDIT,
-    MODE_HOME_PARAMS_EDIT,
 )
 from piespector.screens.base import PiespectorScreen
 from piespector.screens.home.collections_sidebar import CollectionsSidebar
@@ -221,7 +220,6 @@ class ScreenRefreshCoordinator:
     def _refresh_request_input_hints(self, request_tabs: TabbedContent) -> None:
         env_keys = sorted(self.state.env_pairs)
         hint_configs = [
-            ("#request-params-input", "#params-input-hint", MODE_HOME_PARAMS_EDIT),
             ("#request-headers-input", "#headers-input-hint", MODE_HOME_HEADERS_EDIT),
         ]
         for input_id, hint_id, edit_mode in hint_configs:

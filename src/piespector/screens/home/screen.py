@@ -23,7 +23,6 @@ from piespector.domain.modes import (
     MODE_HOME_BODY_SELECT,
     MODE_HOME_BODY_TYPE_EDIT,
     MODE_HOME_HEADERS_EDIT,
-    MODE_HOME_PARAMS_EDIT,
 )
 from piespector.commands import filesystem_path_completions
 from piespector.placeholders import placeholder_match
@@ -32,10 +31,10 @@ from piespector.screens.home.collections_sidebar import CollectionsSidebar
 from piespector.screens.home.response_panel import ResponsePanel
 from piespector.screens.home.url_bar import UrlBar
 from piespector.screens.home.request.auth_pane import RequestAuthPane
+from piespector.screens.home.request.params_pane import RequestParamsPane
 from piespector.screens.base import PiespectorScreen
 from piespector.screens.home.request.overview_pane import RequestOverviewPane
 from piespector.screens.home.request.header_editor import RequestHeadersTable
-from piespector.screens.home.request.query_editor import RequestParamsTable
 from piespector.screens.home.request.request_body import RequestBodyTable
 from piespector.ui.body_editor_modal import BodyEditorModal
 from piespector.ui.input import PiespectorInput
@@ -57,17 +56,7 @@ class HomeScreen(PiespectorScreen):
                             with TabPane("Auth", id=HOME_EDITOR_TAB_AUTH):
                                 yield RequestAuthPane(id="request-auth-pane")
                             with TabPane("Params", id=HOME_EDITOR_TAB_PARAMS):
-                                yield RequestParamsTable(
-                                    id="request-params-table",
-                                    cursor_type="row",
-                                    zebra_stripes=True,
-                                )
-                                yield PiespectorInput(
-                                    "",
-                                    id="request-params-input",
-                                    compact=True,
-                                    select_on_focus=False,
-                                )
+                                yield RequestParamsPane(id="request-params-pane")
                             with TabPane("Headers", id=HOME_EDITOR_TAB_HEADERS):
                                 yield Static("", id="request-content-note")
                                 yield RequestHeadersTable(
@@ -112,7 +101,6 @@ class HomeScreen(PiespectorScreen):
                                 yield Static("", id="request-options-content")
                         yield Static("", classes="panel-subtitle", id="request-subtitle")
                     yield ResponsePanel(id="response-panel")
-        yield Static("", id="params-input-hint", classes="hidden")
         yield Static("", id="headers-input-hint", classes="hidden")
 
     def on_mount(self) -> None:
@@ -124,7 +112,6 @@ class HomeScreen(PiespectorScreen):
             "request-body-table",
             "request-body-input",
             "request-body-preview",
-            "request-params-input",
             "request-headers-input",
         ):
             self.query_one(f"#{widget_id}").display = False
@@ -193,12 +180,6 @@ class HomeScreen(PiespectorScreen):
         if app is None or cursor_row < 0:
             return False
 
-        if table.id == "request-params-table":
-            if app.state.selected_param_index == cursor_row:
-                return False
-            app.state.selected_param_index = cursor_row
-            return True
-
         if table.id == "request-headers-table":
             if app.state.selected_header_index == cursor_row:
                 return False
@@ -237,14 +218,7 @@ class HomeScreen(PiespectorScreen):
 
         self._sync_request_table_row(event.control, event.cursor_row)
 
-        if event.control.id == "request-params-table":
-            request = app.state.get_active_request()
-            params = request.query_items if request is not None else []
-            if event.cursor_row >= len(params):
-                app.state.enter_home_params_edit_mode(creating=True)
-            else:
-                app.state.enter_home_params_edit_mode()
-        elif event.control.id == "request-headers-table":
+        if event.control.id == "request-headers-table":
             request = app.state.get_active_request()
             if request is None:
                 return
@@ -363,11 +337,6 @@ class HomeScreen(PiespectorScreen):
             return
 
         if (
-            event.input.id == "request-params-input"
-            and app.state.mode == MODE_HOME_PARAMS_EDIT
-        ):
-            app.state.save_selected_param_field(event.value)
-        elif (
             event.input.id == "request-headers-input"
             and app.state.mode == MODE_HOME_HEADERS_EDIT
         ):
@@ -390,12 +359,7 @@ class HomeScreen(PiespectorScreen):
             return
         text = event.value
         cursor = event.input.cursor_position
-        if event.input.id == "request-params-input" and app.state.mode == MODE_HOME_PARAMS_EDIT:
-            if cursor >= 2 and text[cursor - 2 : cursor] == "{{" and text[cursor : cursor + 2] != "}}":
-                event.input.value = text[:cursor] + "}}" + text[cursor:]
-                event.input.cursor_position = cursor
-            app.call_after_refresh(app._refresh_request_input_hints_only)
-        elif event.input.id == "request-headers-input" and app.state.mode == MODE_HOME_HEADERS_EDIT:
+        if event.input.id == "request-headers-input" and app.state.mode == MODE_HOME_HEADERS_EDIT:
             if cursor >= 2 and text[cursor - 2 : cursor] == "{{" and text[cursor : cursor + 2] != "}}":
                 event.input.value = text[:cursor] + "}}" + text[cursor:]
                 event.input.cursor_position = cursor
@@ -415,12 +379,15 @@ class HomeScreen(PiespectorScreen):
             if auth_pane.handle_input_key(event):
                 return
 
+        params_pane = self.query_one("#request-params-pane", RequestParamsPane)
+        if params_pane.handle_input_key(event):
+            return
+
         focused = app.focused
         if not isinstance(focused, Input):
             return
         if focused.id not in {
             "request-overview-input",
-            "request-params-input",
             "request-headers-input",
             "request-body-input",
         }:
@@ -446,7 +413,6 @@ class HomeScreen(PiespectorScreen):
                 return
 
             input_mode_map = {
-                "request-params-input": MODE_HOME_PARAMS_EDIT,
                 "request-headers-input": MODE_HOME_HEADERS_EDIT,
             }
             if focused.id in input_mode_map and app.state.mode == input_mode_map[focused.id]:

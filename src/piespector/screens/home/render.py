@@ -29,8 +29,6 @@ from piespector.domain.modes import (
     MODE_HOME_BODY_TYPE_EDIT,
     MODE_HOME_HEADERS_EDIT,
     MODE_HOME_HEADERS_SELECT,
-    MODE_HOME_PARAMS_EDIT,
-    MODE_HOME_PARAMS_SELECT,
     MODE_HOME_REQUEST_METHOD_EDIT,
     MODE_HOME_REQUEST_METHOD_SELECT,
     MODE_HOME_REQUEST_SELECT,
@@ -59,16 +57,17 @@ from piespector.screens.home.request.request_body import (
     refresh_request_body_table,
     render_request_body_preview,
 )
+from piespector.screens.home.request.params_pane import RequestParamsPane
 from piespector.screens.home.request.request_editor import render_home_editor as render_home_editor_panel
 from piespector.screens.home.request.overview_pane import RequestOverviewPane
 from piespector.screens.home.request.request_options import render_request_options_editor
 from piespector.screens.home.request.header_editor import RequestHeadersTable, refresh_request_headers_table
-from piespector.screens.home.request.query_editor import RequestParamsTable, refresh_request_params_table
 from piespector.screens.home.request.url_bar import render_top_url_bar
 from piespector.screens.home.response_panel import render_request_response
 from piespector.screens.home.sidebar import render_home_sidebar as render_home_sidebar_panel
 from piespector.state import PiespectorState
 from piespector.ui.selection import FOCUS_FRAME_CLASS, effective_mode, set_selected
+from piespector.widget.select import option_list, sync
 
 def request_response_shortcuts_enabled(mode: str) -> bool:
     return mode in REQUEST_RESPONSE_SHORTCUT_MODES
@@ -261,11 +260,10 @@ def refresh_home_request_content(
 
     overview_pane = tabs.query_one("#request-overview-pane", RequestOverviewPane)
     auth_pane = tabs.query_one("#request-auth-pane", RequestAuthPane)
+    params_pane = tabs.query_one("#request-params-pane", RequestParamsPane)
     note = tabs.query_one("#request-content-note", Static)
     body_type_select = tabs.query_one("#body-type-select", Select)
     body_raw_type_select = tabs.query_one("#body-raw-type-select", Select)
-    params_table = tabs.query_one("#request-params-table", RequestParamsTable)
-    params_input = tabs.query_one("#request-params-input", Input)
     headers_table = tabs.query_one("#request-headers-table", RequestHeadersTable)
     headers_input = tabs.query_one("#request-headers-input", Input)
     body_table = tabs.query_one("#request-body-table", RequestBodyTable)
@@ -288,11 +286,7 @@ def refresh_home_request_content(
         note.update("")
         body_type_select.display = False
         body_raw_type_select.display = False
-        _sync_input_widget(params_input, "", display=False)
-        params_table.clear(columns=True)
-        params_table.add_columns("Request")
-        params_table.add_row("No active request.")
-        params_table.cursor_type = "none"
+        params_pane.refresh_from_state(state)
         _sync_input_widget(headers_input, "", display=False)
         headers_table.clear(columns=True)
         headers_table.add_columns("Request")
@@ -314,7 +308,6 @@ def refresh_home_request_content(
     note.display = False
     body_table.display = False
     body_preview.display = False
-    _sync_input_widget(params_input, "", display=False)
     _sync_input_widget(headers_input, "", display=False)
     _sync_input_widget(body_input, "", display=False)
 
@@ -325,37 +318,7 @@ def refresh_home_request_content(
         return
 
     if state.home_editor_tab == HOME_EDITOR_TAB_PARAMS:
-        refresh_request_params_table(params_table, active_request, state)
-        field_name, field_label = state.selected_param_field()
-        if state.params_creating_new:
-            param_value = ""
-        elif active_request.query_items and state.selected_param_index < len(active_request.query_items):
-            item = active_request.query_items[state.selected_param_index]
-            param_value = item.key if field_name == "key" else item.value
-        else:
-            param_value = ""
-        _sync_input_widget(
-            params_input,
-            param_value,
-            display=state.mode == MODE_HOME_PARAMS_EDIT,
-            placeholder=f"Param {field_label.lower()}",
-            focus_token=(
-                (
-                    "params",
-                    active_request.request_id,
-                    state.params_creating_new,
-                    state.selected_param_index,
-                    state.selected_param_field_index,
-                )
-                if state.mode == MODE_HOME_PARAMS_EDIT
-                else None
-            ),
-        )
-        params_table_selected = panel_selected and state.mode == MODE_HOME_PARAMS_SELECT
-        if params_table_selected and params_table.can_focus and not params_table.has_focus:
-            params_table.focus()
-        elif not params_table_selected:
-            _deactivate_table_widget(params_table)
+        params_pane.refresh_from_state(state)
         return
 
     if state.home_editor_tab == HOME_EDITOR_TAB_HEADERS:

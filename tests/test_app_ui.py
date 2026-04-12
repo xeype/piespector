@@ -18,6 +18,7 @@ from piespector.domain.editor import (
 from piespector.screens.home.collections_sidebar import CollectionsSidebar
 from piespector.screens.home.request.auth_pane import RequestAuthPane
 from piespector.screens.home.request.overview_pane import RequestOverviewPane
+from piespector.screens.home.request.params_pane import RequestParamsPane
 from piespector.screens.home.response_panel import ResponsePanel
 from piespector.screens.home.url_bar import UrlBar
 from piespector.ui.rendering_helpers import (
@@ -1405,6 +1406,69 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(app.state.selected_param_index, 0)
             self.assertEqual(table.cursor_row, 0)
 
+    async def test_request_params_row_selected_enters_inline_input_mode(self) -> None:
+        app = PiespectorApp()
+        app._persist_requests = lambda: None
+        app._load_request_workspace = lambda: None
+        request = RequestDefinition(
+            request_id="r1",
+            name="List",
+            query_items=[RequestKeyValue(key="page", value="1")],
+        )
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+        app.state.home_editor_tab = "params"
+        app.state.mode = "HOME_PARAMS_SELECT"
+        app.state.selected_param_index = 0
+
+        async with app.run_test(size=(140, 40)) as pilot:
+            app._refresh_screen()
+            await pilot.pause()
+
+            table = app.screen.query_one("#request-params-table", DataTable)
+            self.assertTrue(table.display)
+            table.action_select_cursor()
+            await pilot.pause()
+
+            params_pane = app.screen.query_one("#request-params-pane", RequestParamsPane)
+            inline_input = params_pane.query_one("#request-params-input", Input)
+            self.assertEqual(app.state.mode, "HOME_PARAMS_EDIT")
+            self.assertTrue(inline_input.display)
+            self.assertEqual(inline_input.value, "page")
+
+    async def test_request_params_input_submission_persists_param_value(self) -> None:
+        app = PiespectorApp()
+        app._persist_requests = lambda: None
+        app._load_request_workspace = lambda: None
+        request = RequestDefinition(
+            request_id="r1",
+            name="List",
+            query_items=[RequestKeyValue(key="page", value="1")],
+        )
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+        app.state.home_editor_tab = "params"
+        app.state.selected_param_index = 0
+        app.state.selected_param_field_index = 1
+        app.state.enter_home_params_edit_mode()
+
+        async with app.run_test(size=(140, 40)) as pilot:
+            app._refresh_screen()
+            await pilot.pause()
+
+            params_pane = app.screen.query_one("#request-params-pane", RequestParamsPane)
+            inline_input = params_pane.query_one("#request-params-input", Input)
+            self.assertTrue(inline_input.display)
+            self.assertEqual(inline_input.value, "1")
+
+            inline_input.value = "2"
+            await inline_input.action_submit()
+            await pilot.pause()
+
+            self.assertEqual(request.query_items[0].value, "2")
+            self.assertEqual(app.state.mode, "HOME_PARAMS_SELECT")
+            self.assertEqual(app.state.message, "Updated value.")
+
     async def test_request_headers_row_selected_enters_inline_input_mode(self) -> None:
         app = PiespectorApp()
         app._persist_requests = lambda: None
@@ -1693,12 +1757,10 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
 
             home_screen = app.get_screen("home")
             url_bar = home_screen.query_one("#url-bar-container", UrlBar)
+            params_pane = home_screen.query_one("#request-params-pane", RequestParamsPane)
             self.assertIsInstance(url_bar.query_one("#url-input-hint", Static), Static)
-            for hint_id in (
-                "#params-input-hint",
-                "#headers-input-hint",
-                "#auth-field-input-hint",
-            ):
+            self.assertIsInstance(params_pane.query_one("#params-input-hint", Static), Static)
+            for hint_id in ("#headers-input-hint", "#auth-field-input-hint"):
                 self.assertIsInstance(home_screen.query_one(hint_id, Static), Static)
 
             app.action_show_env()
