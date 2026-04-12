@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+from rich.text import Text
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.reactive import reactive
@@ -7,10 +10,18 @@ from textual.style import Style
 from textual.widgets import DataTable, Input, Static, Tree
 from textual.widgets._data_table import RowDoesNotExist, RowKey
 
-from piespector.domain.modes import MODE_ENV_EDIT, MODE_ENV_SELECT
+from piespector.domain.modes import MODE_ENV_EDIT, MODE_ENV_SELECT, MODE_NORMAL
 from piespector.screens.base import PiespectorScreen
 from piespector.ui.input import PiespectorInput
-from piespector.widget.tree import PiespectorTree
+from piespector.ui.selection import FOCUS_FRAME_CLASS, selected_element_style
+from piespector.widget.tree import (
+    PiespectorTree,
+    move_cursor as tree_move_cursor,
+    rebuild as rebuild_tree,
+)
+
+if TYPE_CHECKING:
+    from piespector.state import PiespectorState
 
 
 class EnvVariablesTable(DataTable):
@@ -48,6 +59,13 @@ class EnvScreen(PiespectorScreen):
     env_scroll_offset = reactive(0)
     env_creating_new = reactive(False)
 
+    @property
+    def _state(self) -> PiespectorState | None:
+        if not self.is_mounted:
+            return None
+        app = self.app
+        return None if app is None else app.state
+
     def compose_workspace(self) -> ComposeResult:
         with Horizontal(id="env-screen"):
             with Vertical(id="env-sidebar-container"):
@@ -75,6 +93,180 @@ class EnvScreen(PiespectorScreen):
         self.disable_focus("env-table")
         self.query_one("#env-field-input").display = False
         self.query_one("#env-sidebar-container").border_title = "Environments"
+        self.refresh_from_state()
+
+    def refresh_from_state(self) -> None:
+        if not self.is_mounted:
+            return
+        state = self._state
+        if state is None:
+            return
+        state.ensure_env_workspace()
+        self._refresh_sidebar_tree(state)
+        self._sync_sidebar_cursor(state)
+        self._refresh_table(state)
+        self._sync_input(state)
+        self._sync_focus(state)
+
+    def watch_selected_env_index(self) -> None:
+        if not self.is_mounted:
+            return
+        state = self._state
+        if state is None:
+            return
+        self._sync_table_cursor()
+        self._sync_input(state)
+
+    def watch_selected_env_field_index(self) -> None:
+        if not self.is_mounted:
+            return
+        state = self._state
+        if state is None:
+            return
+        self._refresh_table(state)
+        self._sync_input(state)
+
+    def watch_env_creating_new(self) -> None:
+        if not self.is_mounted:
+            return
+        state = self._state
+        if state is None:
+            return
+        self._sync_input(state)
+
+    def _refresh_sidebar_tree(self, state: PiespectorState) -> None:
+        tree = self.query_one("#env-sidebar-tree", PiespectorTree)
+        env_names = state.env_names
+        rebuild_tree(
+            tree,
+            tuple(env_names),
+            lambda t: [t.root.add_leaf(name, data=index) for index, name in enumerate(env_names)],
+        )
+
+    def _sync_sidebar_cursor(self, state: PiespectorState) -> None:
+        env_names = state.env_names
+        if not env_names:
+            return
+        try:
+            selected_index = env_names.index(state.selected_env_name)
+        except ValueError:
+            selected_index = 0
+        tree_move_cursor(self.query_one("#env-sidebar-tree", PiespectorTree), selected_index)
+
+    def _refresh_table(self, state: PiespectorState) -> None:
+        table = self.query_one("#env-table", EnvVariablesTable)
+        items = state.get_env_items()
+        state.clamp_selected_env_index()
+
+        header_selected = state.mode in {MODE_ENV_SELECT, MODE_ENV_EDIT}
+        field_index = self.selected_env_field_index
+
+        data_signature = tuple(
+            (item.key, item.value, item.sensitive, item.description) for item in items
+        )
+        header_signature = (header_selected, field_index)
+        full_signature = (data_signature, header_signature)
+
+        if getattr(table, "_piespector_signature", None) != full_signature:
+            table._piespector_signature = full_signature
+
+            table.clear(columns=True)
+            table.add_columns(
+                "#",
+                Text(
+                    "Variable",
+                    style=selected_element_style(state, selected=header_selected and field_index == 0),
+                ),
+                Text(
+                    "Value",
+                    style=selected_element_style(state, selected=header_selected and field_index == 1),
+                ),
+                Text(
+                    "Description",
+                    style=selected_element_style(state, selected=header_selected and field_index == 2),
+                ),
+                Text(
+                    "Sensitive",
+                    style=selected_element_style(state, selected=header_selected and field_index == 3),
+                ),
+            )
+
+            for index, item in enumerate(items):
+                value_display = "••••••" if item.sensitive else (item.value or "-")
+                table.add_row(
+                    str(index + 1),
+                    Text(item.key),
+                    Text(value_display),
+                    Text(item.description or ""),
+                    Text("[x]" if item.sensitive else "[ ]"),
+                )
+
+            table.set_add_row_key(table.add_row("+", Text("Add variable"), "", "", ""))
+
+        self._sync_table_cursor()
+
+    def _sync_table_cursor(self) -> None:
+        table = self.query_one("#env-table", EnvVariablesTable)
+        table.cursor_type = "row"
+        if table.row_count <= 0:
+            return
+        row_index = max(0, min(self.selected_env_index, table.row_count - 1))
+        table.move_cursor(row=row_index, column=0, animate=False)
+
+    def _sync_input(self, state: PiespectorState) -> None:
+        env_input = self.query_one("#env-field-input", Input)
+        if state.mode != MODE_ENV_EDIT:
+            env_input.display = False
+            if env_input.has_focus:
+                env_input.blur()
+            env_input._piespector_focus_token = None
+            return
+
+        item = state.get_selected_env_item()
+        field_name, field_label = state.selected_env_field()
+        if self.env_creating_new:
+            initial_value = ""
+        elif item is None:
+            initial_value = ""
+        elif field_name == "key":
+            initial_value = item.key
+        elif field_name == "value":
+            initial_value = item.value
+        elif field_name == "description":
+            initial_value = item.description
+        else:
+            initial_value = ""
+
+        focus_token = (
+            "env-field",
+            state.selected_env_name,
+            self.selected_env_index,
+            self.selected_env_field_index,
+            self.env_creating_new,
+        )
+        env_input.display = True
+        env_input.placeholder = f"Env {field_label.lower()}"
+        if getattr(env_input, "_piespector_focus_token", None) == focus_token:
+            return
+        env_input._piespector_focus_token = focus_token
+        env_input.value = initial_value
+        env_input.cursor_position = len(initial_value)
+        env_input.focus()
+
+    def _sync_focus(self, state: PiespectorState) -> None:
+        tree = self.query_one("#env-sidebar-tree", PiespectorTree)
+        if state.mode == MODE_NORMAL and not tree.has_focus:
+            tree.focus()
+        elif state.mode != MODE_NORMAL and tree.has_focus:
+            tree.blur()
+        self.query_one("#env-sidebar-container").set_class(
+            state.mode == MODE_NORMAL,
+            FOCUS_FRAME_CLASS,
+        )
+        self.query_one("#env-main").set_class(
+            state.mode in {MODE_ENV_SELECT, MODE_ENV_EDIT},
+            FOCUS_FRAME_CLASS,
+        )
 
     def on_tree_node_highlighted(self, event: Tree.NodeHighlighted) -> None:
         app = self.app

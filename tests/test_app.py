@@ -182,6 +182,14 @@ class AppCommandModeTests(unittest.TestCase):
         self.assertEqual(app._env_screen.selected_env_index, 3)
         self.assertEqual(app._history_screen.selected_history_response_tab, "headers")
 
+    def test_refresh_env_screen_delegates_to_env_screen(self) -> None:
+        app = PiespectorApp()
+
+        with patch.object(app._env_screen, "refresh_from_state") as refresh_from_state:
+            app.screen_refresh.refresh_env_screen()
+
+        refresh_from_state.assert_called_once_with()
+
     def test_execute_command_uses_current_mode_context_then_returns_to_normal(self) -> None:
         app = PiespectorApp()
         app.state.mode = MODE_HOME_SECTION_SELECT

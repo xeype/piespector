@@ -31,7 +31,6 @@ from piespector.domain.modes import (
 )
 from piespector.placeholders import placeholder_match
 from piespector.screens.base import PiespectorScreen
-from piespector.screens.env import render as env_render
 from piespector.screens.history import render as history_render
 from piespector.screens.home.layout import home_top_bar_height
 from piespector.screens.home.render import (
@@ -350,18 +349,7 @@ class ScreenRefreshCoordinator:
         self.app._refresh_command_line()
 
     def refresh_env_screen(self) -> None:
-        try:
-            env_input = self.app._query_current("#env-field-input", Input)
-        except NoMatches:
-            env_input = None
-        env_render.refresh_env_widgets(
-            self.state,
-            self.app._query_current("#env-sidebar-tree", PiespectorTree),
-            self.app._query_current("#env-table", DataTable),
-            env_input,
-            self.app._query_current("#env-sidebar-container"),
-            self.app._query_current("#env-main"),
-        )
+        self.app._env_screen.refresh_from_state()
 
     def refresh_history_screen(self) -> None:
         try:

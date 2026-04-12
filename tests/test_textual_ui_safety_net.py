@@ -351,6 +351,35 @@ class TextualUiSafetyNetTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(env_input.value, "")
             self.assertEqual(env_input.placeholder, "Env variable")
 
+    async def test_env_field_selection_updates_edit_input_value(self) -> None:
+        app = build_test_app()
+        app.state.current_tab = "env"
+        app.state.env_names = ["Default"]
+        app.state.env_sets = {
+            "Default": [EnvVariable(key="API_KEY", value="secret", description="token")]
+        }
+        app.state.selected_env_name = "Default"
+        app.state.ensure_env_workspace()
+
+        async with app.run_test(size=(140, 40)) as pilot:
+            app._refresh_screen()
+            await pilot.pause()
+
+            await pilot.press("e")
+            await pilot.pause()
+
+            await pilot.press("l")
+            await pilot.pause()
+
+            table = app.screen.query_one("#env-table")
+            table.action_select_cursor()
+            await pilot.pause()
+
+            env_input = app.screen.query_one("#env-field-input", Input)
+            self.assertEqual(app.state.mode, "ENV_EDIT")
+            self.assertEqual(env_input.value, "secret")
+            self.assertEqual(env_input.placeholder, "Env value")
+
     async def test_history_selection_updates_detail_view(self) -> None:
         app = build_test_app()
         app.state.current_tab = "history"
