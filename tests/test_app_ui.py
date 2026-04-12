@@ -16,6 +16,7 @@ from piespector.domain.editor import (
     TOP_BAR_URL_JUMP_KEY,
 )
 from piespector.screens.home.collections_sidebar import CollectionsSidebar
+from piespector.screens.home.url_bar import UrlBar
 from piespector.ui.rendering_helpers import (
     detect_text_syntax_language,
     request_body_syntax_language,
@@ -1354,7 +1355,7 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
                 url_line.region.y + url_line.region.height
             )
 
-            self.assertEqual(gap_above_method_row, 0)
+            self.assertEqual(gap_above_method_row, 0 if open_request_tabs.display else 1)
             self.assertEqual(gap_below_method_row, 1)
             self.assertEqual(open_request_tabs.region.x, method_select.region.x)
             self.assertEqual(open_request_tabs.region.x, sidebar_container.region.x + 1)
@@ -1660,8 +1661,9 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
             await pilot.pause()
 
             home_screen = app.get_screen("home")
+            url_bar = home_screen.query_one("#url-bar-container", UrlBar)
+            self.assertIsInstance(url_bar.query_one("#url-input-hint", Static), Static)
             for hint_id in (
-                "#url-input-hint",
                 "#params-input-hint",
                 "#headers-input-hint",
                 "#auth-field-input-hint",

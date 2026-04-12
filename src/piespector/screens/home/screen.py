@@ -20,7 +20,6 @@ from piespector.domain.editor import (
     RESPONSE_TAB_BODY,
     RESPONSE_TAB_HEADERS,
 )
-from piespector.domain.http import HTTP_METHODS
 from piespector.domain.modes import (
     MODE_HOME_AUTH_EDIT,
     MODE_HOME_AUTH_LOCATION_EDIT,
@@ -32,13 +31,12 @@ from piespector.domain.modes import (
     MODE_HOME_HEADERS_EDIT,
     MODE_HOME_PARAMS_EDIT,
     MODE_HOME_REQUEST_EDIT,
-    MODE_HOME_REQUEST_METHOD_EDIT,
-    MODE_HOME_URL_EDIT,
 )
 from piespector.commands import filesystem_path_completions
 from piespector.placeholders import placeholder_match
 from piespector.screens.home import messages
 from piespector.screens.home.collections_sidebar import CollectionsSidebar
+from piespector.screens.home.url_bar import UrlBar
 from piespector.screens.base import PiespectorScreen
 from piespector.screens.home.request.header_editor import RequestHeadersTable
 from piespector.screens.home.request.query_editor import RequestParamsTable
@@ -57,24 +55,7 @@ class HomeScreen(PiespectorScreen):
 
     def compose_workspace(self) -> ComposeResult:
         with Vertical(id="home-screen"):
-            with Vertical(id="url-bar-container"):
-                yield Tabs(id="open-request-tabs")
-                yield Static("", classes="panel-subtitle", id="url-bar-subtitle")
-                with Horizontal(id="url-line"):
-                    yield PiespectorSelect(
-                        option_list(*((method, method) for method in HTTP_METHODS)),
-                        id="method-select",
-                        allow_blank=False,
-                        value="GET",
-                        compact=True,
-                    )
-                    yield Static("", id="url-display")
-                    yield PiespectorInput(
-                        "",
-                        id="url-input",
-                        compact=True,
-                        select_on_focus=False,
-                    )
+            yield UrlBar(id="url-bar-container")
             with Horizontal(id="home-workspace"):
                 yield CollectionsSidebar(id="sidebar-container")
                 with Vertical(id="home-main"):
@@ -182,7 +163,6 @@ class HomeScreen(PiespectorScreen):
                             yield Static("", id="response-body-content")
                             yield Static("", id="response-headers-content")
                         yield Static("", classes="panel-subtitle", id="response-subtitle")
-        yield Static("", id="url-input-hint", classes="hidden")
         yield Static("", id="params-input-hint", classes="hidden")
         yield Static("", id="headers-input-hint", classes="hidden")
         yield Static("", id="auth-field-input-hint", classes="hidden")
@@ -190,7 +170,6 @@ class HomeScreen(PiespectorScreen):
     def on_mount(self) -> None:
         super().on_mount()
         self._tab_activation_ready = False
-        self.disable_focus("open-request-tabs")
         for widget_id in (
             "request-content-note",
             "auth-option-label",
@@ -200,8 +179,6 @@ class HomeScreen(PiespectorScreen):
             "request-body-table",
             "request-body-input",
             "request-body-preview",
-            "url-bar-subtitle",
-            "url-input",
             "request-overview-input",
             "request-params-input",
             "request-headers-input",
@@ -352,13 +329,33 @@ class HomeScreen(PiespectorScreen):
 
         app._refresh_screen()
 
-    @on(SelectionChanged, "#method-select")
-    def _on_method_selected(self, event: SelectionChanged) -> None:
-        if self.app.state.mode != MODE_HOME_REQUEST_METHOD_EDIT:
+    @on(UrlBar.OpenRequestActivated)
+    def _on_open_request_activated(self, event: UrlBar.OpenRequestActivated) -> None:
+        app = self.app
+        if app is None or app.state.active_request_id == event.request_id:
             return
-        self.app.state.save_home_method_selection(event.value)
-        self.app.set_focus(None)
-        self.app._refresh_screen()
+        app.state.active_request_id = event.request_id
+        app.state.response_scroll_offset = 0
+        app.state.sync_selected_request_to_active()
+        app._refresh_screen()
+
+    @on(UrlBar.MethodChanged)
+    def _on_method_changed(self, event: UrlBar.MethodChanged) -> None:
+        app = self.app
+        if app is None:
+            return
+        app.state.save_home_method_selection(event.method)
+        app.set_focus(None)
+        app._refresh_screen()
+
+    @on(UrlBar.UrlSaved)
+    def _on_url_saved(self, event: UrlBar.UrlSaved) -> None:
+        app = self.app
+        if app is None:
+            return
+        app.state.save_home_url_edit(event.value)
+        app.set_focus(None)
+        app._refresh_screen()
 
     @on(SelectionChanged, "#auth-type-select")
     def _on_auth_type_selected(self, event: SelectionChanged) -> None:
@@ -391,13 +388,6 @@ class HomeScreen(PiespectorScreen):
         self.app.state.save_home_body_raw_type_selection(event.value)
         self.app.set_focus(None)
         self.app._refresh_screen()
-
-    @on(events.Click, "#url-display")
-    def _on_url_display_clicked(self, event: events.Click) -> None:
-        if self.app.state.mode == MODE_HOME_URL_EDIT:
-            return
-        self.app.action_copy_active_request_url()
-        event.stop()
 
     def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
         app = self.app
@@ -442,9 +432,7 @@ class HomeScreen(PiespectorScreen):
         if app is None:
             return
 
-        if event.input.id == "url-input" and app.state.mode == MODE_HOME_URL_EDIT:
-            app.state.save_home_url_edit(event.value)
-        elif (
+        if (
             event.input.id == "request-overview-input"
             and app.state.mode == MODE_HOME_REQUEST_EDIT
         ):
@@ -482,13 +470,7 @@ class HomeScreen(PiespectorScreen):
             return
         text = event.value
         cursor = event.input.cursor_position
-        if event.input.id == "url-input" and app.state.mode == MODE_HOME_URL_EDIT:
-            # Auto-pair {{ → {{}}
-            if cursor >= 2 and text[cursor - 2 : cursor] == "{{" and text[cursor : cursor + 2] != "}}":
-                event.input.value = text[:cursor] + "}}" + text[cursor:]
-                event.input.cursor_position = cursor
-            app.call_after_refresh(app._refresh_home_url_bar_panel)
-        elif event.input.id == "request-params-input" and app.state.mode == MODE_HOME_PARAMS_EDIT:
+        if event.input.id == "request-params-input" and app.state.mode == MODE_HOME_PARAMS_EDIT:
             if cursor >= 2 and text[cursor - 2 : cursor] == "{{" and text[cursor : cursor + 2] != "}}":
                 event.input.value = text[:cursor] + "}}" + text[cursor:]
                 event.input.cursor_position = cursor
@@ -513,7 +495,6 @@ class HomeScreen(PiespectorScreen):
         if not isinstance(focused, Input):
             return
         if focused.id not in {
-            "url-input",
             "request-overview-input",
             "request-params-input",
             "request-headers-input",
@@ -538,35 +519,6 @@ class HomeScreen(PiespectorScreen):
                     completed = matches[app._edit_path_completion_index]
                     focused.value = completed
                     focused.cursor_position = len(completed)
-                event.stop()
-                return
-
-            if focused.id == "url-input" and app.state.mode == MODE_HOME_URL_EDIT:
-                env_keys = sorted(app.state.env_pairs)
-                match = placeholder_match(focused.value, focused.cursor_position, env_keys)
-                if match is not None:
-                    anchor = app._url_env_completion_anchor
-                    stored = app._url_env_completion_matches
-                    # Detect cycling: prefix is one of the completions from stored anchor
-                    if anchor and match.prefix in stored:
-                        matches = stored
-                        new_idx = (app._url_env_completion_index + 1) % len(matches)
-                    else:
-                        anchor = match.prefix
-                        matches = [k for k in env_keys if k.startswith(anchor)]
-                        new_idx = 0
-                    if matches:
-                        app._url_env_completion_anchor = anchor
-                        app._url_env_completion_matches = matches
-                        app._url_env_completion_index = new_idx
-                        suggestion = matches[new_idx]
-                        before = focused.value[: match.start]
-                        after = focused.value[match.end :]
-                        completed = f"{before}{{{{{suggestion}}}}}{after}"
-                        new_cursor = len(before) + 2 + len(suggestion)
-                        focused.value = completed
-                        focused.cursor_position = new_cursor
-                        app.call_after_refresh(app._refresh_home_url_bar_panel)
                 event.stop()
                 return
 

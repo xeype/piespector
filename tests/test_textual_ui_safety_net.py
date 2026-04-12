@@ -309,6 +309,28 @@ class TextualUiSafetyNetTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn(second.request_id, app.state.open_request_ids)
             self.assertEqual(tabs.active, f"open-req-{second.request_id}")
 
+    async def test_open_request_tabs_sync_active_request_selection(self) -> None:
+        app = build_test_app()
+        first = RequestDefinition(request_id="r1", name="Health")
+        second = RequestDefinition(request_id="r2", name="Ready")
+        app.state.requests = [first, second]
+        app.state.open_request_ids = [first.request_id, second.request_id]
+        app.state.active_request_id = first.request_id
+        app.state.ensure_request_workspace()
+        app.state._set_selected_sidebar_by_request_id(first.request_id)
+
+        async with app.run_test(size=(140, 40)) as pilot:
+            app._refresh_screen()
+            await pilot.pause()
+
+            tabs = app.screen.query_one("#open-request-tabs", Tabs)
+            tabs.action_next_tab()
+            await pilot.pause()
+
+            self.assertEqual(app.state.active_request_id, second.request_id)
+            self.assertEqual(app.state.get_selected_request().request_id, second.request_id)
+            self.assertEqual(tabs.active, f"open-req-{second.request_id}")
+
     async def test_env_table_row_selection_enters_edit_and_create_flows(self) -> None:
         app = build_test_app()
         app.state.current_tab = "env"

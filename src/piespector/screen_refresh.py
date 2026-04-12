@@ -8,7 +8,6 @@ from textual.widgets import (
     ContentSwitcher,
     DataTable,
     Input,
-    Select,
     Static,
     TabbedContent,
     Tabs,
@@ -27,18 +26,12 @@ from piespector.domain.modes import (
     MODE_HOME_AUTH_EDIT,
     MODE_HOME_HEADERS_EDIT,
     MODE_HOME_PARAMS_EDIT,
-    MODE_HOME_URL_EDIT,
 )
-from piespector.placeholders import placeholder_match
 from piespector.screens.base import PiespectorScreen
 from piespector.screens.home.collections_sidebar import CollectionsSidebar
 from piespector.screens.home.layout import home_top_bar_height
-from piespector.screens.home.render import (
-    refresh_home_request_content,
-    refresh_home_response,
-    refresh_home_url_bar,
-    sync_home_focus_highlights,
-)
+from piespector.screens.home.render import refresh_home_request_content, refresh_home_response, sync_home_focus_highlights
+from piespector.screens.home.url_bar import UrlBar
 from piespector.ui.command_line_content import build_command_line_text
 from piespector.ui.footer import PiespectorFooter
 from piespector.ui.status_content import status_bar_content
@@ -176,8 +169,6 @@ class ScreenRefreshCoordinator:
         sidebar_container = self.app._query_current("#sidebar-container")
         request_panel = self.app._query_current("#request-panel")
         response_panel = self.app._query_current("#response-panel")
-        method_select = self.app._query_current("#method-select", Select)
-        url_bar_subtitle = self.app._query_current("#url-bar-subtitle", Static)
         sidebar_container.styles.border_title_align = "right"
         request_panel.styles.border_title_align = "right"
         response_panel.styles.border_title_align = "right"
@@ -185,15 +176,12 @@ class ScreenRefreshCoordinator:
         request_panel.border_title = "Request"
         response_panel.border_title = "Response"
         url_bar_container.styles.height = home_top_bar_height()
-        url_bar_subtitle.update("")
-        url_bar_subtitle.display = False
         sync_home_focus_highlights(
             self.state,
             url_bar_container,
             sidebar_container,
             request_panel,
             response_panel,
-            method_select,
         )
 
     def has_live_screen(self) -> bool:
@@ -211,28 +199,8 @@ class ScreenRefreshCoordinator:
         if not self.app._has_live_screen():
             self.app._refresh_screen()
             return
-        method_select = self.app._query_current("#method-select", Select)
-        url_display = self.app._query_current("#url-display", Static)
-        url_input = self.app._query_current("#url-input", Input)
-        open_tabs = self.app._query_current("#open-request-tabs", Tabs)
-        url_hint = self.app._query_current("#url-input-hint", Static)
-        refresh_home_url_bar(self.state, method_select, url_display, url_input, open_tabs)
-        self._refresh_url_input_hint(url_input, url_hint)
-
-    def _refresh_url_input_hint(self, url_input: Input, url_hint: Static) -> None:
-        if self.state.mode == MODE_HOME_URL_EDIT and url_input.display:
-            match = placeholder_match(
-                url_input.value,
-                url_input.cursor_position,
-                sorted(self.state.env_pairs),
-            )
-            if match is not None and match.suggestion != match.prefix:
-                cursor_offset = url_input.cursor_screen_offset
-                url_hint.update(match.suggestion)
-                url_hint.offset = (cursor_offset.x, cursor_offset.y + 1)
-                url_hint.remove_class("hidden")
-                return
-        url_hint.add_class("hidden")
+        url_bar = self.app._query_current("#url-bar-container", UrlBar)
+        url_bar.refresh_from_state(self.state)
 
     def refresh_home_request_panel(self) -> None:
         if not self.app._has_live_screen():

@@ -8,7 +8,7 @@ from rich.style import Style
 from rich.text import Text
 
 from textual.css.query import NoMatches
-from textual.widgets import ContentSwitcher, DataTable, Input, Select, Static, Tab, TabbedContent, Tabs
+from textual.widgets import ContentSwitcher, DataTable, Input, Select, Static, TabbedContent, Tabs
 
 from piespector.domain.editor import (
     AUTH_TYPE_OPTIONS,
@@ -26,7 +26,6 @@ from piespector.domain.editor import (
     RESPONSE_TAB_HEADERS,
     RESPONSE_TABS,
 )
-from piespector.domain.http import HTTP_METHODS
 from piespector.domain.modes import (
     MODE_HOME_BODY_EDIT,
     MODE_HOME_BODY_RAW_TYPE_EDIT,
@@ -64,7 +63,6 @@ from piespector.screens.home.selection import (
     home_selection,
     request_panel_selected,
 )
-from piespector.screens.home.request.method_selection import method_color
 from piespector.screens.home.request.request_auth import (
     auth_option_select_context,
     render_auth_secret,
@@ -84,11 +82,7 @@ from piespector.screens.home.request.request_metadata import (
 from piespector.screens.home.request.request_options import render_request_options_editor
 from piespector.screens.home.request.header_editor import RequestHeadersTable, refresh_request_headers_table
 from piespector.screens.home.request.query_editor import RequestParamsTable, refresh_request_params_table
-from piespector.screens.home.request.url_bar import (
-    preview_request_url_template,
-    render_request_url_display,
-    render_top_url_bar,
-)
+from piespector.screens.home.request.url_bar import render_top_url_bar
 from piespector.widget.select import option_list, sync
 from piespector.screens.home.response_panel import (
     render_request_response,
@@ -219,7 +213,6 @@ def sync_home_focus_highlights(
     sidebar_container,
     request_panel,
     response_panel,
-    method_select=None,
 ) -> None:
     selection = home_selection(state)
     highlighted_panels = home_highlighted_panels(state)
@@ -237,126 +230,6 @@ def sync_home_focus_highlights(
 
     request_panel.set_class(selection.request_tab_select, "piespector-tab-select")
     response_panel.set_class(selection.panel == "response", "piespector-tab-select")
-
-    if method_select is not None:
-        set_selected(method_select, selection.method_selected)
-
-
-# ================================================================
-#  URL bar refresh
-# ================================================================
-
-def refresh_home_url_bar(
-    state: PiespectorState,
-    method_select: Select,
-    url_display: Static,
-    url_input: Input,
-    open_tabs: Tabs,
-) -> None:
-    active_request = state.get_active_request()
-    open_requests = state.get_open_requests()
-
-    open_tabs_signature = _open_request_tabs_signature(state)
-    if getattr(open_tabs, "_piespector_signature", None) != open_tabs_signature:
-        _refresh_open_request_tabs(state, open_tabs)
-        open_tabs._piespector_signature = open_tabs_signature
-    else:
-        _sync_active_tab(state, open_tabs)
-    open_tabs.display = bool(open_requests)
-
-    if active_request is None:
-        method_select.display = False
-        method_select.can_focus = False
-        _sync_input_widget(url_input, "", display=False)
-        url_display.display = True
-        url_display.update(Text("No opened request."))
-        url_display._piespector_signature = ("no-opened-request",)
-        return
-
-    method_select.can_focus = state.mode == MODE_HOME_REQUEST_METHOD_EDIT
-    mode = effective_mode(state)
-    method_selected = mode in {MODE_HOME_REQUEST_METHOD_SELECT, MODE_HOME_REQUEST_METHOD_EDIT}
-
-    method_options = option_list(
-        *((method, Text(method, style=method_color(method))) for method in HTTP_METHODS)
-    )
-
-    sync(
-        method_select,
-        method_options,
-        active_request.method.upper(),
-        auto_open_token=(
-            ("method-select", active_request.request_id, state.mode)
-            if state.mode == MODE_HOME_REQUEST_METHOD_EDIT
-            else None
-        ),
-    )
-    method_select.display = True
-    if not method_selected:
-        try:
-            label_widget = method_select.query_one("SelectCurrent Static#label", Static)
-            label_widget.styles.color = method_color(active_request.method.upper())
-        except NoMatches:
-            pass
-    if mode == MODE_HOME_URL_EDIT:
-        url_display.display = False
-        _sync_input_widget(
-            url_input,
-            active_request.url or "",
-            display=True,
-            placeholder="Request URL",
-            focus_token=("url", active_request.request_id, state.mode),
-        )
-        return
-
-    _sync_input_widget(url_input, "", display=False)
-    url_display.display = True
-    url_display_signature = _url_line_signature(state, active_request)
-    if getattr(url_display, "_piespector_signature", None) == url_display_signature:
-        return
-
-    url_display.update(render_request_url_display(active_request))
-    url_display._piespector_signature = url_display_signature
-
-
-def _open_request_tabs_signature(state: PiespectorState) -> tuple[tuple[str, str, str, str], ...]:
-    spinner_frames = ("|", "/", "-", "\\")
-    spinner_frame = spinner_frames[state.pending_request_spinner_tick % len(spinner_frames)]
-    return tuple(
-        (
-            request.request_id,
-            request.method,
-            request.name,
-            spinner_frame if request.request_id == state.pending_request_id else "",
-        )
-        for request in state.get_open_requests()
-    )
-
-
-def _url_line_signature(
-    state: PiespectorState,
-    active_request: RequestDefinition | None,
-) -> tuple[object, ...]:
-    if active_request is None:
-        return ("no-opened-request",)
-
-    mode = effective_mode(state)
-    url_preview = preview_request_url_template(active_request)
-
-    if mode in {MODE_HOME_REQUEST_METHOD_EDIT, MODE_HOME_REQUEST_METHOD_SELECT}:
-        return (
-            "method-select",
-            active_request.request_id,
-            active_request.method,
-            url_preview,
-        )
-
-    return (
-        "url-preview",
-        active_request.request_id,
-        active_request.method,
-        url_preview,
-    )
 
 
 def _sync_input_widget(
@@ -398,79 +271,6 @@ def _deactivate_table_widget(table: DataTable) -> None:
         app.set_focus(None)
     else:
         table.blur()
-
-
-def _refresh_open_request_tabs(state: PiespectorState, tabs: Tabs) -> None:
-    try:
-        tabs_list = tabs.query_one("#tabs-list")
-    except NoMatches:
-        return
-
-    open_requests = state.get_open_requests()
-    existing_tabs = {
-        tab.id: tab
-        for tab in tabs.query("#tabs-list > Tab")
-        if tab.id is not None
-    }
-    desired_ids = {
-        f"open-req-{request.request_id}"
-        for request in open_requests
-    }
-
-    for tab_id, tab in existing_tabs.items():
-        if tab_id not in desired_ids:
-            tab.remove()
-
-    for req in open_requests:
-        in_progress = req.request_id == state.pending_request_id
-        spinner_frames = ("|", "/", "-", "\\")
-        spinner = (
-            f"{spinner_frames[state.pending_request_spinner_tick % len(spinner_frames)]} "
-            if in_progress
-            else ""
-        )
-        tab_id = f"open-req-{req.request_id}"
-        label_signature = (req.method, req.name, spinner)
-        existing = existing_tabs.get(tab_id)
-        if existing is not None:
-            if getattr(existing, "_piespector_label_sig", None) != label_signature:
-                label = Text()
-                if spinner:
-                    label.append(spinner)
-                label.append(req.method, style=method_color(req.method))
-                label.append(f" {req.name}")
-                existing.update(label)
-                existing._piespector_label_sig = label_signature
-        else:
-            label = Text()
-            if spinner:
-                label.append(spinner)
-            label.append(req.method, style=method_color(req.method))
-            label.append(f" {req.name}")
-            new_tab = Tab(label, id=tab_id)
-            new_tab._piespector_label_sig = label_signature
-            tabs_list.mount(new_tab)
-
-    if state.active_request_id:
-        active_tab_id = f"open-req-{state.active_request_id}"
-        if tabs.query(f"#tabs-list > #{active_tab_id}"):
-            tabs.active = active_tab_id
-        return
-
-    _clear_open_request_tabs_selection(tabs)
-
-
-def _sync_active_tab(state: PiespectorState, tabs: Tabs) -> None:
-    if state.active_request_id:
-        active_tab_id = f"open-req-{state.active_request_id}"
-        if tabs.active != active_tab_id and tabs.query(f"#tabs-list > #{active_tab_id}"):
-            tabs.active = active_tab_id
-    elif tabs.active:
-        _clear_open_request_tabs_selection(tabs)
-
-
-def _clear_open_request_tabs_selection(tabs: Tabs) -> None:
-    tabs.active = ""
 
 
 # ================================================================
