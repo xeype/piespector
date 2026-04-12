@@ -1859,8 +1859,10 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
             app._open_response_viewer(origin_mode="HOME_RESPONSE_SELECT")
             await pilot.pause()
 
-            editor = app.screen.query_one("#response-modal-editor", TextArea)
+            editor = app.screen.query_one("#body-editor", TextArea)
             self.assertTrue(app.screen.is_modal)
+            self.assertIsInstance(app.screen, BodyEditorModal)
+            self.assertTrue(app.screen.read_only)
             self.assertIn('"ok"', editor.text)
 
             await pilot.press("escape")
@@ -1957,8 +1959,10 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
             app._open_history_response_viewer(origin_mode="HISTORY_RESPONSE_SELECT")
             await pilot.pause()
 
-            editor = app.screen.query_one("#response-modal-editor", TextArea)
+            editor = app.screen.query_one("#body-editor", TextArea)
             self.assertTrue(app.screen.is_modal)
+            self.assertIsInstance(app.screen, BodyEditorModal)
+            self.assertTrue(app.screen.read_only)
             self.assertIn('"ok"', editor.text)
 
     async def test_raw_body_select_e_preloads_existing_body_text(self) -> None:

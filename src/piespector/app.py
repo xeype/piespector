@@ -68,12 +68,11 @@ from piespector.ui.command_palette import (
     PiespectorSearchProvider,
     PiespectorThemeProvider,
 )
-from piespector.ui.body_editor_modal import body_text_editor_is_open
+from piespector.ui.body_editor_modal import BodyEditorModal, body_text_editor_is_open
 from piespector.ui.confirm_modal import ConfirmModal
 from piespector.ui.help_panel import PiespectorHelpPanel
 from piespector.ui.jump_overlay import JumpOverlay
 from piespector.ui.jumper import JumpTarget, Jumper
-from piespector.ui.overlays import ResponseModal, ResponseModalContent
 from piespector.ui.rendering_helpers import (
     detect_text_syntax_language,
     format_response_body,
@@ -717,19 +716,18 @@ class PiespectorApp(App[None]):
         status = response.status_code if response is not None else "-"
         elapsed = f"{response.elapsed_ms or 0:.1f} ms" if response is not None else "-"
         self.push_screen(
-            ResponseModal(
-                ResponseModalContent(
-                    title=f"Response Viewer  [{request_name}]",
-                    footer=(
-                        f"Status {status}   Time {elapsed}   "
-                        f"{self.response_copy_hint} copies selection/all   Esc closes"
-                    ),
-                    body=body_text or request.last_response.body_text or "",
-                    language=text_area_syntax_language(
-                        detect_text_syntax_language(body_text)
-                    ),
-                )
-            )
+            BodyEditorModal.viewer(
+                title=f"Response Viewer  [{request_name}]",
+                footer=(
+                    f"Status {status}   Time {elapsed}   "
+                    f"{self.response_copy_hint} copies selection/all   Esc closes"
+                ),
+                body=body_text or request.last_response.body_text or "",
+                language=text_area_syntax_language(
+                    detect_text_syntax_language(body_text)
+                ),
+            ),
+            self._handle_response_viewer_closed,
         )
 
     def _open_history_response_viewer(self, origin_mode: str | None = None) -> None:
@@ -767,25 +765,16 @@ class PiespectorApp(App[None]):
             or "History"
         )
         self.push_screen(
-            ResponseModal(
-                ResponseModalContent(
-                    title=f"History Viewer  [{entry_name}]",
-                    footer=(
-                        f"{self.response_copy_hint} copies selection/all   Esc closes"
-                    ),
-                    body=content,
-                    language=language,
-                )
-            )
+            BodyEditorModal.viewer(
+                title=f"History Viewer  [{entry_name}]",
+                footer=f"{self.response_copy_hint} copies selection/all   Esc closes",
+                body=content,
+                language=language,
+            ),
+            self._handle_response_viewer_closed,
         )
 
-    def _close_response_viewer(self) -> None:
-        if (
-            self.screen_stack
-            and self.screen.is_modal
-            and isinstance(self.screen, ResponseModal)
-        ):
-            self.pop_screen()
+    def _handle_response_viewer_closed(self, _result: None) -> None:
         self.set_focus(None)
         self._refresh_screen()
         self.call_after_refresh(self._clear_home_jump_focus)

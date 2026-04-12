@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from textual import events
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -25,18 +27,31 @@ from piespector.ui.text_area_languages import (
 )
 
 
-def body_text_editor_is_open(subject) -> bool:
+@dataclass(frozen=True)
+class BodyEditorModalContent:
+    title: str
+    footer: str
+    body: str
+    language: str | None
+    read_only: bool = False
+    copy_subject: str = "body"
+
+
+def _active_body_editor_modal(subject) -> BodyEditorModal | None:
     app = subject if hasattr(subject, "screen_stack") else getattr(subject, "_app", None)
     if app is None:
         app = getattr(subject, "app", None)
     if app is None or not getattr(app, "screen_stack", None):
-        return False
+        return None
     screen = getattr(app, "screen", None)
-    return bool(
-        screen is not None
-        and getattr(screen, "is_modal", False)
-        and isinstance(screen, BodyEditorModal)
-    )
+    if screen is None or not getattr(screen, "is_modal", False):
+        return None
+    return screen if isinstance(screen, BodyEditorModal) else None
+
+
+def body_text_editor_is_open(subject) -> bool:
+    modal = _active_body_editor_modal(subject)
+    return bool(modal is not None and not modal.read_only)
 
 
 def body_editor_header_text(request: RequestDefinition | None) -> str:
@@ -73,7 +88,7 @@ class BodyTextEditor(TextArea):
 
     def action_save_body(self) -> None:
         modal = self._modal()
-        if modal is not None:
+        if modal is not None and not modal.read_only:
             modal.close_body_text_editor(save=True)
 
     def action_cancel_body(self) -> None:
@@ -85,13 +100,14 @@ class BodyTextEditor(TextArea):
         app = self.app
         if app is None:
             return
+        modal = self._modal()
         content = self.selected_text or self.text
         copied = app._copy_text(content)
         if copied:
             app.state.message = (
                 "Copied selection."
                 if self.selected_text
-                else "Copied full body."
+                else f"Copied full {(modal.copy_subject if modal is not None else 'body')}."
             )
         else:
             app.state.message = "Copy failed."
@@ -102,7 +118,7 @@ class BodyTextEditor(TextArea):
     def on_key(self, event: events.Key) -> None:
         app = self.app
         modal = self._modal()
-        if event.key == KEY_SAVE:
+        if event.key == KEY_SAVE and modal is not None and not modal.read_only:
             self.action_save_body()
             event.prevent_default()
             event.stop()
@@ -117,7 +133,7 @@ class BodyTextEditor(TextArea):
             event.prevent_default()
             event.stop()
             return
-        if modal is None:
+        if modal is None or modal.read_only:
             return
         if event.key == KEY_TAB and modal.autocomplete_body_editor_placeholder():
             event.prevent_default()
@@ -173,12 +189,52 @@ class BodyEditorModal(ModalScreen[None]):
         Binding(KEY_ESCAPE, "cancel_body", "Cancel", show=False),
     ]
 
-    def __init__(self, request: RequestDefinition) -> None:
+    def __init__(self, request: RequestDefinition | BodyEditorModalContent) -> None:
         super().__init__()
-        self._title = body_editor_header_text(request)
-        self._footer = body_editor_footer_text(request)
-        self._body = request.body_text
-        self._language = text_area_syntax_language(request_body_syntax_language(request))
+        if isinstance(request, BodyEditorModalContent):
+            content = request
+        else:
+            content = BodyEditorModalContent(
+                title=body_editor_header_text(request),
+                footer=body_editor_footer_text(request),
+                body=request.body_text,
+                language=text_area_syntax_language(request_body_syntax_language(request)),
+            )
+        self._title = content.title
+        self._footer = content.footer
+        self._body = content.body
+        self._language = content.language
+        self._read_only = content.read_only
+        self._copy_subject = content.copy_subject
+
+    @classmethod
+    def viewer(
+        cls,
+        *,
+        title: str,
+        footer: str,
+        body: str,
+        language: str | None,
+        copy_subject: str = "response",
+    ) -> BodyEditorModal:
+        return cls(
+            BodyEditorModalContent(
+                title=title,
+                footer=footer,
+                body=body,
+                language=language,
+                read_only=True,
+                copy_subject=copy_subject,
+            )
+        )
+
+    @property
+    def read_only(self) -> bool:
+        return self._read_only
+
+    @property
+    def copy_subject(self) -> str:
+        return self._copy_subject
 
     def compose(self) -> ComposeResult:
         with Vertical(id="body-editor-modal"):
@@ -186,11 +242,12 @@ class BodyEditorModal(ModalScreen[None]):
             yield BodyTextEditor(
                 self._body,
                 id="body-editor",
-                language="json",
+                language=None,
                 theme="css",
                 soft_wrap=False,
                 show_line_numbers=True,
                 tab_behavior="indent",
+                read_only=self._read_only,
             )
             yield Static("", id="body-editor-hint", classes="hidden")
             yield Static(self._footer, id="body-editor-footer")
@@ -203,7 +260,7 @@ class BodyEditorModal(ModalScreen[None]):
         editor.move_cursor((0, 0))
         editor.focus()
         app = self.app
-        if app is not None:
+        if app is not None and not self._read_only:
             app.call_after_refresh(self.refresh_hint)
 
     def action_cancel_body(self) -> None:
@@ -237,6 +294,8 @@ class BodyEditorModal(ModalScreen[None]):
         return (row, index - current)
 
     def autocomplete_body_editor_placeholder(self) -> bool:
+        if self._read_only:
+            return False
         app = self.app
         if app is None:
             return False
@@ -256,6 +315,8 @@ class BodyEditorModal(ModalScreen[None]):
         return True
 
     def auto_pair_body_editor_placeholder(self) -> bool:
+        if self._read_only:
+            return False
         editor = self.query_one("#body-editor", TextArea)
         updated = auto_pair_placeholder(
             editor.text,
@@ -274,6 +335,8 @@ class BodyEditorModal(ModalScreen[None]):
             self.refresh_hint()
 
     def refresh_hint(self) -> None:
+        if self._read_only:
+            return
         app = self.app
         if app is None:
             return
@@ -299,6 +362,9 @@ class BodyEditorModal(ModalScreen[None]):
     def close_body_text_editor(self, save: bool) -> None:
         app = self.app
         if app is None:
+            return
+        if self._read_only:
+            self.dismiss(None)
             return
         editor = self.query_one("#body-editor", TextArea)
         if save:

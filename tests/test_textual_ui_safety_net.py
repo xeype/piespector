@@ -98,8 +98,10 @@ class TextualUiSafetyNetTests(unittest.IsolatedAsyncioTestCase):
             await pilot.press("enter")
             await pilot.pause()
 
-            editor = app.screen.query_one("#response-modal-editor")
+            editor = app.screen.query_one("#body-editor")
             self.assertTrue(app.screen.is_modal)
+            self.assertIsInstance(app.screen, BodyEditorModal)
+            self.assertTrue(app.screen.read_only)
             self.assertIn('"ok"', editor.text)
 
             await pilot.press("escape")

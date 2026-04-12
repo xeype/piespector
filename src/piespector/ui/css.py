@@ -567,17 +567,6 @@ TextArea {
     height: 1;
 }
 
-#response-modal {
-    width: 92%;
-    height: 92%;
-    max-width: 160;
-    margin: 1 2;
-}
-
-#response-modal-editor {
-    height: 1fr;
-}
-
 .hidden {
     display: none;
 }
