@@ -17,6 +17,7 @@ from piespector.domain.editor import (
 )
 from piespector.screens.home.collections_sidebar import CollectionsSidebar
 from piespector.screens.home.request.auth_pane import RequestAuthPane
+from piespector.screens.home.request.body_pane import RequestBodyPane
 from piespector.screens.home.request.headers_pane import RequestHeadersPane
 from piespector.screens.home.request.overview_pane import RequestOverviewPane
 from piespector.screens.home.request.params_pane import RequestParamsPane
@@ -2940,6 +2941,58 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
 
             self.assertEqual(request.auth_api_key_location, "query")
             self.assertEqual(app.state.mode, "HOME_AUTH_SELECT")
+
+    async def test_body_tab_is_composed_as_request_body_pane(self) -> None:
+        app = PiespectorApp()
+        app._load_request_workspace = lambda: None
+        request = RequestDefinition(request_id="r1", name="Upload", body_type="form-data")
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+        app.state.home_editor_tab = "body"
+
+        async with app.run_test(size=(140, 40)) as pilot:
+            app._refresh_screen()
+            await pilot.pause()
+
+            body_pane = app.screen.query_one("#request-body-pane", RequestBodyPane)
+
+            self.assertIsInstance(body_pane.query_one("#body-type-select", Select), Select)
+            self.assertIsInstance(body_pane.query_one("#request-body-table", DataTable), DataTable)
+            self.assertIsInstance(body_pane.query_one("#request-body-input", Input), Input)
+            self.assertIsInstance(body_pane.query_one("#request-body-preview", Static), Static)
+
+    async def test_body_input_submission_is_handled_by_body_pane(self) -> None:
+        app = PiespectorApp()
+        app._persist_requests = lambda: None
+        app._load_request_workspace = lambda: None
+        request = RequestDefinition(
+            request_id="r1",
+            name="Upload",
+            body_type="form-data",
+            body_form_items=[RequestKeyValue(key="file", value="@payload.bin")],
+        )
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+        app.state.home_editor_tab = "body"
+        app.state.enter_home_body_select_mode()
+        app.state.selected_body_index = 1
+        app.state.enter_home_body_edit_mode()
+
+        async with app.run_test(size=(140, 40)) as pilot:
+            app._refresh_screen()
+            await pilot.pause()
+
+            body_pane = app.screen.query_one("#request-body-pane", RequestBodyPane)
+            body_input = body_pane.query_one("#request-body-input", Input)
+            self.assertTrue(body_input.display)
+            self.assertEqual(body_input.value, "file")
+            body_input.value = "payload"
+
+            await pilot.press("enter")
+            await pilot.pause()
+
+            self.assertEqual(request.body_form_items[0].key, "payload")
+            self.assertEqual(app.state.mode, "HOME_BODY_SELECT")
 
     async def test_body_type_select_change_persists_request_body_type(self) -> None:
         app = PiespectorApp()

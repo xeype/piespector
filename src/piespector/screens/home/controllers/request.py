@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from textual import events
+from textual.app import ScreenStackError
+from textual.css.query import NoMatches
 
 from piespector.domain.editor import (
-    BODY_TEXT_EDITOR_TYPES,
     HOME_EDITOR_TAB_AUTH,
     HOME_EDITOR_TAB_BODY,
     HOME_EDITOR_TAB_HEADERS,
@@ -32,6 +33,7 @@ from piespector.interactions.keys import (
     DOWN_KEYS,
 )
 from piespector.screens.home.controllers.base import HomeControllerBase, HomeModeHandler
+from piespector.screens.home.request.body_pane import RequestBodyPane
 
 
 class HomeRequestController(HomeControllerBase):
@@ -58,25 +60,20 @@ class HomeRequestController(HomeControllerBase):
                 self.state.enter_home_auth_edit_mode()
             return False
         if self.state.home_editor_tab == HOME_EDITOR_TAB_BODY:
-            if self.state.selected_body_index == 0:
-                self.state.enter_home_body_type_edit_mode(origin_mode=MODE_HOME_BODY_SELECT)
-                return False
-            request = self.state.get_active_request()
-            if request is not None and request.body_type == "raw" and self.state.selected_body_index == 1:
-                self.state.enter_home_body_raw_type_edit_mode(
-                    origin_mode=MODE_HOME_BODY_SELECT
-                )
-                return False
-            if request is not None and request.body_type in BODY_TEXT_EDITOR_TYPES:
-                self.app._home_screen.open_body_text_editor(origin_mode=MODE_HOME_BODY_SELECT)
-                return True
-            self.state.enter_home_body_edit_mode(origin_mode=MODE_HOME_BODY_SELECT)
-            return False
+            return self._body_pane().start_current_edit(origin_mode=MODE_HOME_BODY_SELECT)
         if self.state.home_editor_tab == HOME_EDITOR_TAB_OPTIONS:
             self.state.toggle_active_options_field()
             return False
         self.state.enter_home_request_edit_mode()
         return False
+
+    def _body_pane(self) -> RequestBodyPane:
+        try:
+            return self.app._query_current("#request-body-pane", RequestBodyPane)
+        except (NoMatches, ScreenStackError):
+            body_pane = RequestBodyPane()
+            body_pane._piespector_app = self.app
+            return body_pane
 
     def handle_home_request_select_key(self, event: events.Key) -> None:
         if event.key == KEY_ESCAPE:

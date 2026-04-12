@@ -3,39 +3,27 @@ from __future__ import annotations
 from textual import events, on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
-from textual.widgets import DataTable, Input, Static, TabbedContent, TabPane
+from textual.widgets import Input, Static, TabbedContent, TabPane
 
 from piespector.domain.editor import (
-    BODY_KEY_VALUE_TYPES,
-    BODY_TYPE_OPTIONS,
     HOME_EDITOR_TAB_AUTH,
     HOME_EDITOR_TAB_BODY,
     HOME_EDITOR_TAB_HEADERS,
     HOME_EDITOR_TAB_OPTIONS,
     HOME_EDITOR_TAB_PARAMS,
     HOME_EDITOR_TAB_REQUEST,
-    RAW_SUBTYPE_OPTIONS,
 )
-from piespector.domain.modes import (
-    MODE_HOME_AUTH_EDIT,
-    MODE_HOME_BODY_EDIT,
-    MODE_HOME_BODY_RAW_TYPE_EDIT,
-    MODE_HOME_BODY_SELECT,
-    MODE_HOME_BODY_TYPE_EDIT,
-)
-from piespector.commands import filesystem_path_completions
+from piespector.domain.modes import MODE_HOME_AUTH_EDIT
 from piespector.screens.home.collections_sidebar import CollectionsSidebar
 from piespector.screens.home.response_panel import ResponsePanel
 from piespector.screens.home.url_bar import UrlBar
 from piespector.screens.home.request.auth_pane import RequestAuthPane
+from piespector.screens.home.request.body_pane import RequestBodyPane
 from piespector.screens.home.request.headers_pane import RequestHeadersPane
 from piespector.screens.home.request.params_pane import RequestParamsPane
 from piespector.screens.base import PiespectorScreen
 from piespector.screens.home.request.overview_pane import RequestOverviewPane
-from piespector.screens.home.request.request_body import RequestBodyTable
 from piespector.ui.body_editor_modal import BodyEditorModal
-from piespector.ui.input import PiespectorInput
-from piespector.widget.select import PiespectorSelect, SelectionChanged, option_list
 
 
 class HomeScreen(PiespectorScreen):
@@ -57,32 +45,7 @@ class HomeScreen(PiespectorScreen):
                             with TabPane("Headers", id=HOME_EDITOR_TAB_HEADERS):
                                 yield RequestHeadersPane(id="request-headers-pane")
                             with TabPane("Body", id=HOME_EDITOR_TAB_BODY):
-                                yield PiespectorSelect(
-                                    option_list(*BODY_TYPE_OPTIONS),
-                                    id="body-type-select",
-                                    allow_blank=False,
-                                    value=BODY_TYPE_OPTIONS[0][0],
-                                    compact=True,
-                                )
-                                yield PiespectorSelect(
-                                    option_list(*RAW_SUBTYPE_OPTIONS),
-                                    id="body-raw-type-select",
-                                    allow_blank=False,
-                                    value=RAW_SUBTYPE_OPTIONS[1][0],
-                                    compact=True,
-                                )
-                                yield RequestBodyTable(
-                                    id="request-body-table",
-                                    cursor_type="row",
-                                    zebra_stripes=True,
-                                )
-                                yield PiespectorInput(
-                                    "",
-                                    id="request-body-input",
-                                    compact=True,
-                                    select_on_focus=False,
-                                )
-                                yield Static("", id="request-body-preview")
+                                yield RequestBodyPane(id="request-body-pane")
                             with TabPane("Options", id=HOME_EDITOR_TAB_OPTIONS):
                                 yield Static("", id="request-options-content")
                         yield Static("", classes="panel-subtitle", id="request-subtitle")
@@ -91,13 +54,6 @@ class HomeScreen(PiespectorScreen):
     def on_mount(self) -> None:
         super().on_mount()
         self._tab_activation_ready = False
-        for widget_id in (
-            "body-raw-type-select",
-            "request-body-table",
-            "request-body-input",
-            "request-body-preview",
-        ):
-            self.query_one(f"#{widget_id}").display = False
         request_tabs = self.query_one("#request-tabs", TabbedContent)
         request_tabs.active = self.app.state.home_editor_tab
         self._tab_activation_ready = True
@@ -158,59 +114,6 @@ class HomeScreen(PiespectorScreen):
         app.state.set_selected_sidebar_node_expanded(event.expanded)
         app._refresh_screen()
 
-    def _sync_request_table_row(self, table: DataTable, cursor_row: int) -> bool:
-        app = self.app
-        if app is None or cursor_row < 0:
-            return False
-
-        if table.id == "request-headers-table":
-            if app.state.selected_header_index == cursor_row:
-                return False
-            app.state.selected_header_index = cursor_row
-            return True
-
-        if table.id == "request-body-table":
-            request = app.state.get_active_request()
-            if request is None or request.body_type not in BODY_KEY_VALUE_TYPES:
-                return False
-            selected_index = cursor_row + 1
-            if app.state.selected_body_index == selected_index:
-                return False
-            app.state.selected_body_index = selected_index
-            return True
-
-        return False
-
-    def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
-        app = self.app
-        if (
-            app is not None
-            and event.control.id == "request-body-table"
-            and (
-                app.state.mode != MODE_HOME_BODY_SELECT
-                or app.state.selected_body_index <= 0
-            )
-        ):
-            return
-        self._sync_request_table_row(event.control, event.cursor_row)
-
-    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
-        app = self.app
-        if app is None:
-            return
-
-        self._sync_request_table_row(event.control, event.cursor_row)
-
-        if event.control.id == "request-body-table":
-            request = app.state.get_active_request()
-            if request is None or request.body_type not in BODY_KEY_VALUE_TYPES:
-                return
-            app.state.enter_home_body_edit_mode(origin_mode=MODE_HOME_BODY_SELECT)
-        else:
-            return
-
-        app._refresh_screen()
-
     @on(UrlBar.OpenRequestActivated)
     def _on_open_request_activated(self, event: UrlBar.OpenRequestActivated) -> None:
         app = self.app
@@ -238,22 +141,6 @@ class HomeScreen(PiespectorScreen):
         app.state.save_home_url_edit(event.value)
         app.set_focus(None)
         app._refresh_screen()
-
-    @on(SelectionChanged, "#body-type-select")
-    def _on_body_type_selected(self, event: SelectionChanged) -> None:
-        if self.app.state.mode != MODE_HOME_BODY_TYPE_EDIT:
-            return
-        self.app.state.save_home_body_type_selection(event.value)
-        self.app.set_focus(None)
-        self.app._refresh_screen()
-
-    @on(SelectionChanged, "#body-raw-type-select")
-    def _on_body_raw_type_selected(self, event: SelectionChanged) -> None:
-        if self.app.state.mode != MODE_HOME_BODY_RAW_TYPE_EDIT:
-            return
-        self.app.state.save_home_body_raw_type_selection(event.value)
-        self.app.set_focus(None)
-        self.app._refresh_screen()
 
     @on(RequestOverviewPane.FieldSaved)
     def _on_request_overview_field_saved(
@@ -301,23 +188,6 @@ class HomeScreen(PiespectorScreen):
 
         app._open_response_viewer(origin_mode=event.origin_mode)
 
-    def on_input_submitted(self, event: Input.Submitted) -> None:
-        app = self.app
-        if app is None:
-            return
-
-        if (
-            event.input.id == "request-body-input"
-            and app.state.mode == MODE_HOME_BODY_EDIT
-        ):
-            app.state.save_body_selection(event.value)
-        else:
-            return
-
-        app.set_focus(None)
-        app._refresh_screen()
-        event.stop()
-
     def on_key(self, event: events.Key) -> None:
         app = self.app
         if app is None:
@@ -340,32 +210,16 @@ class HomeScreen(PiespectorScreen):
         if headers_pane.handle_input_key(event):
             return
 
+        body_pane = self.query_one("#request-body-pane", RequestBodyPane)
+        if body_pane.handle_input_key(event):
+            return
+
         focused = app.focused
         if not isinstance(focused, Input):
             return
-        if focused.id not in {
-            "request-overview-input",
-            "request-body-input",
-        }:
+        if focused.id != "request-overview-input":
             return
 
         if event.key == "tab":
-            if focused.id == "request-body-input" and app.state.mode == MODE_HOME_BODY_EDIT:
-                current = focused.value
-                anchor = app._edit_path_completion_anchor or current
-                matches = filesystem_path_completions(anchor)
-                if matches:
-                    if app._edit_path_completion_anchor != anchor:
-                        app._edit_path_completion_anchor = anchor
-                        app._edit_path_completion_index = 0
-                    else:
-                        app._edit_path_completion_index = (
-                            app._edit_path_completion_index + 1
-                        ) % len(matches)
-                    completed = matches[app._edit_path_completion_index]
-                    focused.value = completed
-                    focused.cursor_position = len(completed)
-                event.stop()
-                return
             event.stop()
             return
