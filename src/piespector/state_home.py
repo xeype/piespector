@@ -28,7 +28,6 @@ from piespector.domain.modes import (
     MODE_HOME_BODY_EDIT,
     MODE_HOME_BODY_RAW_TYPE_EDIT,
     MODE_HOME_BODY_SELECT,
-    MODE_HOME_BODY_TEXTAREA,
     MODE_HOME_BODY_TYPE_EDIT,
     MODE_HOME_HEADERS_EDIT,
     MODE_HOME_HEADERS_SELECT,
@@ -973,15 +972,17 @@ class HomeStateMixin:
         self.mode = MODE_HOME_BODY_RAW_TYPE_EDIT
         self.message = ""
 
-    def enter_home_body_text_editor_mode(self, origin_mode: str | None = None) -> None:
+    def prepare_home_body_text_editor(self, origin_mode: str | None = None) -> bool:
         request = self.get_active_request()
         if request is None:
             self.mode = MODE_NORMAL
             self.message = "No requests to edit."
-            return
+            return False
         self.home_body_content_return_mode = origin_mode or self.mode
-        self.mode = MODE_HOME_BODY_TEXTAREA
+        if origin_mode is not None:
+            self.mode = origin_mode
         self.message = ""
+        return True
 
     def enter_home_response_select_mode(self, origin_mode: str | None = None) -> bool:
         request = self.get_active_request()
@@ -1009,11 +1010,6 @@ class HomeStateMixin:
             return
         self.home_body_content_return_mode = origin_mode or self.mode
         self.clamp_selected_body_index()
-        if request.body_type in BODY_TEXT_EDITOR_TYPES:
-            self.enter_home_body_text_editor_mode(
-                origin_mode=self.home_body_content_return_mode
-            )
-            return
         if request.body_type == "binary":
             self.mode = MODE_HOME_BODY_EDIT
             self.message = ""
@@ -1050,7 +1046,7 @@ class HomeStateMixin:
         self.mode = MODE_HOME_BODY_TYPE_EDIT
         self.message = ""
 
-    def leave_home_body_text_editor_mode(self) -> None:
+    def cancel_home_body_text_edit(self) -> None:
         self._restore_home_body_parent_mode()
 
     def save_raw_body_text(self, value: str) -> str | None:

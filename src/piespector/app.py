@@ -15,7 +15,6 @@ from textual.widgets import (
     Static,
     TabbedContent,
     Tabs,
-    TextArea,
     Tree,
 )
 
@@ -67,6 +66,7 @@ from piespector.ui.command_palette import (
     PiespectorSearchProvider,
     PiespectorThemeProvider,
 )
+from piespector.ui.body_editor_modal import body_text_editor_is_open
 from piespector.ui.confirm_modal import ConfirmModal
 from piespector.ui.help_panel import PiespectorHelpPanel
 from piespector.ui.jump_overlay import JumpOverlay
@@ -229,18 +229,18 @@ class PiespectorApp(App[None]):
     def on_key(self, event: events.Key) -> None:
         self.event_router.handle_key(event)
 
-    def _autocomplete_body_editor_placeholder(self) -> bool:
-        return self.overlay_controller.autocomplete_body_editor_placeholder()
-
-    def _postprocess_body_editor_brace(self) -> None:
-        self.overlay_controller.postprocess_body_editor_brace()
-
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
+        body_editor_open = body_text_editor_is_open(self)
+
+        if action in {"command_palette", "search_workspace"} and body_editor_open:
+            return False
         if action in {"command_palette", "search_workspace"} and self.state.mode in COMMAND_BLOCKED_MODES:
             return False
 
         if action == "enter_jump_mode":
             if self.state.current_tab != TAB_HOME:
+                return False
+            if body_editor_open:
                 return False
             if self.state.mode in COMMAND_BLOCKED_MODES and self.state.mode != MODE_HOME_URL_EDIT:
                 return False
@@ -698,28 +698,6 @@ class PiespectorApp(App[None]):
             return None
 
         return None
-
-    def _register_text_area_languages(self) -> None:
-        self.overlay_controller.register_text_area_languages()
-
-    def _set_text_area_language(
-        self,
-        editor: TextArea,
-        language: str | None,
-    ) -> None:
-        self.overlay_controller.set_text_area_language(editor, language)
-
-    def _body_editor_header_text(self) -> str:
-        return self.overlay_controller.body_editor_header_text()
-
-    def _body_editor_footer_text(self) -> str:
-        return self.overlay_controller.body_editor_footer_text()
-
-    def _open_body_text_editor(self, origin_mode: str | None = None) -> None:
-        self.overlay_controller.open_body_text_editor(origin_mode=origin_mode)
-
-    def _close_body_text_editor(self, save: bool) -> None:
-        self.overlay_controller.close_body_text_editor(save)
 
     def _open_response_viewer(self, origin_mode: str | None = None) -> None:
         self.overlay_controller.open_response_viewer(origin_mode=origin_mode)

@@ -14,6 +14,7 @@ from piespector.state import (
     RequestDefinition,
     ResponseSummary,
 )
+from piespector.ui.body_editor_modal import BodyEditorModal
 from textual.command import CommandInput, CommandPalette
 from textual.widgets import Input, Static, Tabs
 
@@ -99,6 +100,33 @@ class TextualUiSafetyNetTests(unittest.IsolatedAsyncioTestCase):
 
             editor = app.screen.query_one("#response-modal-editor")
             self.assertTrue(app.screen.is_modal)
+            self.assertIn('"ok"', editor.text)
+
+            await pilot.press("escape")
+            await pilot.pause()
+
+            self.assertFalse(app.screen.is_modal)
+            self.assertEqual(app.state.current_tab, "home")
+
+    async def test_body_editor_opens_as_modal_screen_and_closes(self) -> None:
+        app = build_test_app()
+        request = RequestDefinition(
+            request_id="r1",
+            name="Upload",
+            body_type="raw",
+            raw_subtype="json",
+            body_text='{"ok":true}',
+        )
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+
+        async with app.run_test(size=(140, 40)) as pilot:
+            app.get_screen("home").open_body_text_editor(origin_mode="HOME_BODY_SELECT")
+            await pilot.pause()
+
+            editor = app.screen.query_one("#body-editor")
+            self.assertTrue(app.screen.is_modal)
+            self.assertIsInstance(app.screen, BodyEditorModal)
             self.assertIn('"ok"', editor.text)
 
             await pilot.press("escape")

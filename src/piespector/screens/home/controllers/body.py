@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from textual import events
 
-from piespector.domain.editor import BODY_KEY_VALUE_TYPES
+from piespector.domain.editor import BODY_KEY_VALUE_TYPES, BODY_TEXT_EDITOR_TYPES
 from piespector.domain.modes import (
     MODE_HOME_BODY_EDIT,
     MODE_HOME_BODY_RAW_TYPE_EDIT,
@@ -128,6 +128,12 @@ class HomeBodyController(HomeControllerBase):
                         origin_mode=MODE_HOME_BODY_SELECT
                     )
                     self.app._refresh_screen()
+                    event.stop()
+                    return
+                if request is not None and request.body_type in BODY_TEXT_EDITOR_TYPES:
+                    self.app._home_screen.open_body_text_editor(
+                        origin_mode=MODE_HOME_BODY_SELECT
+                    )
                     event.stop()
                     return
                 self.state.enter_home_body_edit_mode(origin_mode=MODE_HOME_BODY_SELECT)

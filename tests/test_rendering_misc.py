@@ -685,6 +685,7 @@ class RenderingMiscTests(unittest.TestCase):
 class UiAndScrollbarTests(unittest.TestCase):
     def test_ui_constants_include_core_selectors_and_binding(self) -> None:
         self.assertIn("#response-modal", APP_CSS)
+        self.assertIn("#body-editor-modal", APP_CSS)
         self.assertNotIn("#response-viewer", APP_CSS)
         self.assertIn("#command-line", APP_CSS)
         self.assertNotIn("#sidebar-tree:focus", APP_CSS)

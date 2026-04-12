@@ -6,8 +6,8 @@ from textual.css.query import NoMatches
 from textual.screen import Screen
 from textual.widgets import Static
 
-from piespector.ui.overlays import build_overlay_widgets
 from piespector.ui.footer import PiespectorFooter
+from piespector.ui.overlays import build_input_hint_widgets
 
 
 class PiespectorScreen(Screen[None]):
@@ -15,7 +15,7 @@ class PiespectorScreen(Screen[None]):
         with Vertical():
             with Vertical(id="workspace"):
                 yield from self.compose_workspace()
-                for widget in build_overlay_widgets():
+                for widget in build_input_hint_widgets():
                     yield widget
             with Horizontal(id="command-line"):
                 yield Static("", id="command-line-content")
@@ -25,9 +25,7 @@ class PiespectorScreen(Screen[None]):
         raise NotImplementedError
 
     def on_mount(self) -> None:
-        app = self.app
-        if app is not None:
-            app.overlay_controller.register_text_area_languages(self)
+        pass
 
     def disable_focus(self, *widget_ids: str) -> None:
         for widget_id in widget_ids:

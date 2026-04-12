@@ -3,6 +3,7 @@ from __future__ import annotations
 from textual import events
 
 from piespector.domain.editor import (
+    BODY_TEXT_EDITOR_TYPES,
     HOME_EDITOR_TAB_AUTH,
     HOME_EDITOR_TAB_BODY,
     HOME_EDITOR_TAB_HEADERS,
@@ -43,31 +44,39 @@ class HomeRequestController(HomeControllerBase):
             MODE_HOME_URL_EDIT: self.handle_home_url_edit_key,
         }
 
-    def _start_current_home_edit(self) -> None:
+    def _start_current_home_edit(self) -> bool:
         if self.state.home_editor_tab == HOME_EDITOR_TAB_PARAMS:
             self.state.enter_home_params_edit_mode()
-        elif self.state.home_editor_tab == HOME_EDITOR_TAB_HEADERS:
+            return False
+        if self.state.home_editor_tab == HOME_EDITOR_TAB_HEADERS:
             self.state.enter_home_headers_edit_mode()
-        elif self.state.home_editor_tab == HOME_EDITOR_TAB_AUTH:
+            return False
+        if self.state.home_editor_tab == HOME_EDITOR_TAB_AUTH:
             if self.state.selected_auth_index == 0:
                 self.state.enter_home_auth_type_edit_mode(origin_mode=MODE_HOME_AUTH_SELECT)
             else:
                 self.state.enter_home_auth_edit_mode()
-        elif self.state.home_editor_tab == HOME_EDITOR_TAB_BODY:
+            return False
+        if self.state.home_editor_tab == HOME_EDITOR_TAB_BODY:
             if self.state.selected_body_index == 0:
                 self.state.enter_home_body_type_edit_mode(origin_mode=MODE_HOME_BODY_SELECT)
-            else:
-                request = self.state.get_active_request()
-                if request is not None and request.body_type == "raw":
-                    self.state.enter_home_body_raw_type_edit_mode(
-                        origin_mode=MODE_HOME_BODY_SELECT
-                    )
-                    return
-                self.state.enter_home_body_edit_mode(origin_mode=MODE_HOME_BODY_SELECT)
-        elif self.state.home_editor_tab == HOME_EDITOR_TAB_OPTIONS:
+                return False
+            request = self.state.get_active_request()
+            if request is not None and request.body_type == "raw" and self.state.selected_body_index == 1:
+                self.state.enter_home_body_raw_type_edit_mode(
+                    origin_mode=MODE_HOME_BODY_SELECT
+                )
+                return False
+            if request is not None and request.body_type in BODY_TEXT_EDITOR_TYPES:
+                self.app._home_screen.open_body_text_editor(origin_mode=MODE_HOME_BODY_SELECT)
+                return True
+            self.state.enter_home_body_edit_mode(origin_mode=MODE_HOME_BODY_SELECT)
+            return False
+        if self.state.home_editor_tab == HOME_EDITOR_TAB_OPTIONS:
             self.state.toggle_active_options_field()
-        else:
-            self.state.enter_home_request_edit_mode()
+            return False
+        self.state.enter_home_request_edit_mode()
+        return False
 
     def handle_home_request_select_key(self, event: events.Key) -> None:
         if event.key == KEY_ESCAPE:
@@ -112,7 +121,9 @@ class HomeRequestController(HomeControllerBase):
             return
 
         if event.key in OPEN_KEYS:
-            self._start_current_home_edit()
+            if self._start_current_home_edit():
+                event.stop()
+                return
             self.app._refresh_screen()
             event.stop()
             return

@@ -10,7 +10,6 @@ from piespector.domain.modes import (
     MODE_HOME_AUTH_TYPE_EDIT,
     MODE_HOME_BODY_RAW_TYPE_EDIT,
     MODE_HOME_BODY_SELECT,
-    MODE_HOME_BODY_TEXTAREA,
     MODE_HOME_BODY_TYPE_EDIT,
     MODE_HOME_HEADERS_SELECT,
     MODE_HOME_PARAMS_SELECT,
@@ -24,6 +23,7 @@ from piespector.domain.modes import (
 )
 from piespector.interactions.keys import KEY_COMMAND_PALETTE, KEY_WORKSPACE_SEARCH
 from piespector.state import PiespectorState
+from piespector.ui.body_editor_modal import body_text_editor_is_open
 
 HintItem = tuple[str, str]
 
@@ -100,7 +100,6 @@ MODE_HINTS: dict[str, tuple[HintItem, ...]] = {
         ("ctrl+u/d", "response"),
         ("esc", "back"),
     ),
-    MODE_HOME_BODY_TEXTAREA: (("ctrl+s", "save"), ("esc", "cancel")),
     MODE_HOME_REQUEST_METHOD_SELECT: (
         ("e", "open"),
         ("s", "send"),
@@ -184,6 +183,9 @@ TAB_HINTS: dict[str, tuple[HintItem, ...]] = {
 def status_hint_items(state: PiespectorState) -> list[HintItem]:
     if state.mode == MODE_JUMP:
         return []
+
+    if body_text_editor_is_open(state):
+        return [("ctrl+s", "save"), ("esc", "cancel")]
 
     if state.mode == MODE_HOME_BODY_SELECT:
         hints: list[HintItem] = [

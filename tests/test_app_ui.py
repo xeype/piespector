@@ -24,8 +24,16 @@ from piespector.domain.workspace import CollectionDefinition, FolderDefinition
 from piespector.ui.command_palette import PiespectorCommandProvider, PiespectorSearchProvider
 from piespector.ui.rendering_helpers import preview_syntax_language
 from piespector.ui.command_line_content import build_command_line_text
+from piespector.ui.body_editor_modal import (
+    BodyEditorModal,
+    body_editor_footer_text,
+    body_editor_header_text,
+)
 from piespector.ui.help_panel import PiespectorHelpPanel
 from piespector.ui.selection import selected_element_style
+from piespector.ui.status_content import status_bar_content
+from piespector.ui.status_hints import status_hint_items
+from piespector.ui.text_area_languages import set_text_area_language
 from piespector.state import HistoryEntry, RequestDefinition, RequestKeyValue, ResponseSummary
 from textual.css.query import NoMatches
 from textual.color import Color
@@ -682,10 +690,39 @@ class AppUiTests(unittest.TestCase):
         app.state.selected_body_index = 2
         event = FakeKeyEvent("e")
 
-        with patch.object(app, "_refresh_screen"):
+        with (
+            patch.object(app, "_refresh_screen") as refresh_screen,
+            patch.object(app._home_screen, "open_body_text_editor") as open_body_text_editor,
+        ):
             app.home_controller.body.handle_home_body_select_key(event)
 
-        self.assertEqual(app.state.mode, "HOME_BODY_TEXTAREA")
+        open_body_text_editor.assert_called_once_with(origin_mode="HOME_BODY_SELECT")
+        refresh_screen.assert_not_called()
+        self.assertEqual(app.state.mode, "HOME_BODY_SELECT")
+        self.assertTrue(event.stopped)
+
+    def test_request_select_e_on_body_tab_body_row_opens_body_editor(self) -> None:
+        app = PiespectorApp()
+        request = RequestDefinition(
+            body_type="raw",
+            raw_subtype="javascript",
+        )
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+        app.state.home_editor_tab = "body"
+        app.state.mode = "HOME_REQUEST_SELECT"
+        app.state.selected_body_index = 2
+        event = FakeKeyEvent("e")
+
+        with (
+            patch.object(app, "_refresh_screen") as refresh_screen,
+            patch.object(app._home_screen, "open_body_text_editor") as open_body_text_editor,
+        ):
+            app.home_controller.request.handle_home_request_select_key(event)
+
+        open_body_text_editor.assert_called_once_with(origin_mode="HOME_BODY_SELECT")
+        refresh_screen.assert_not_called()
+        self.assertEqual(app.state.mode, "HOME_REQUEST_SELECT")
         self.assertTrue(event.stopped)
 
     def test_auth_option_field_close_returns_to_auth_rows(self) -> None:
@@ -710,26 +747,20 @@ class AppUiTests(unittest.TestCase):
         self.assertEqual(app.state.selected_auth_index, 4)
 
     def test_binary_body_editor_copy_is_path_oriented(self) -> None:
-        app = PiespectorApp()
         request = RequestDefinition(name="Upload", body_type="binary")
-        app.state.requests = [request]
-        app.state.active_request_id = request.request_id
 
-        self.assertEqual(app._body_editor_header_text(), "Binary File Path  [Upload]")
+        self.assertEqual(body_editor_header_text(request), "Binary File Path  [Upload]")
         self.assertEqual(
-            app._body_editor_footer_text(),
+            body_editor_footer_text(request),
             "Enter or paste a file path. Ctrl+S saves, Esc cancels.",
         )
 
     def test_graphql_body_editor_copy_is_graphql_oriented(self) -> None:
-        app = PiespectorApp()
         request = RequestDefinition(name="Graph", body_type="graphql")
-        app.state.requests = [request]
-        app.state.active_request_id = request.request_id
 
-        self.assertEqual(app._body_editor_header_text(), "GraphQL Editor  [Graph]")
+        self.assertEqual(body_editor_header_text(request), "GraphQL Editor  [Graph]")
         self.assertEqual(
-            app._body_editor_footer_text(),
+            body_editor_footer_text(request),
             "Edit the GraphQL document. Ctrl+S saves, Esc cancels.",
         )
 
@@ -866,10 +897,9 @@ class AppUiTests(unittest.TestCase):
         self.assertEqual(preview_syntax_language("javascript"), "javascript")
 
     def test_text_area_language_falls_back_to_plain_text_for_unknown_language(self) -> None:
-        app = PiespectorApp()
         editor = FakeTextArea()
 
-        app._set_text_area_language(editor, "unknown-language")
+        set_text_area_language(editor, "unknown-language")
 
         self.assertIsNone(editor.language)
 
@@ -1914,8 +1944,120 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
             await pilot.pause()
 
             editor = app.screen.query_one("#body-editor", TextArea)
-            self.assertEqual(app.state.mode, "HOME_BODY_TEXTAREA")
+            self.assertTrue(app.screen.is_modal)
+            self.assertIsInstance(app.screen, BodyEditorModal)
+            self.assertEqual(app.state.mode, "HOME_BODY_SELECT")
             self.assertEqual(editor.text, "console.log('hi')")
+            with self.assertRaises(NoMatches):
+                app.get_screen("home").query_one("#body-editor", TextArea)
+
+    async def test_body_text_editor_modal_uses_modal_status_and_blocks_shortcuts(self) -> None:
+        app = PiespectorApp()
+        app._persist_requests = lambda: None
+        app._load_request_workspace = lambda: None
+        request = RequestDefinition(
+            request_id="r1",
+            name="Script",
+            body_type="raw",
+            raw_subtype="javascript",
+            body_text="console.log('hi')",
+        )
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+        app.state.home_editor_tab = "body"
+        app.state.mode = "HOME_BODY_SELECT"
+        app.state.selected_body_index = 2
+
+        async with app.run_test(size=(140, 40)) as pilot:
+            app._refresh_screen()
+            await pilot.pause()
+
+            await pilot.press("e")
+            await pilot.pause()
+
+            status = status_bar_content(app.state)
+
+            self.assertTrue(app.screen.is_modal)
+            self.assertEqual(app.state.mode, "HOME_BODY_SELECT")
+            self.assertEqual(build_command_line_text(app.state).plain, "Raw body editor")
+            self.assertEqual(status.mode_label, "EDIT")
+            self.assertIn(("ctrl+s", "save"), status_hint_items(app.state))
+            self.assertIn(("esc", "cancel"), status_hint_items(app.state))
+            self.assertFalse(app.check_action("command_palette", ()))
+            self.assertFalse(app.check_action("search_workspace", ()))
+            self.assertFalse(app.check_action("enter_jump_mode", ()))
+
+    async def test_body_text_editor_modal_preserves_graphql_language(self) -> None:
+        app = PiespectorApp()
+        app._persist_requests = lambda: None
+        app._load_request_workspace = lambda: None
+        request = RequestDefinition(
+            request_id="r1",
+            name="Graph",
+            body_type="graphql",
+            body_text="query Health { health }",
+        )
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+
+        async with app.run_test(size=(140, 40)) as pilot:
+            app.get_screen("home").open_body_text_editor(origin_mode="HOME_BODY_SELECT")
+            await pilot.pause()
+
+            editor = app.screen.query_one("#body-editor", TextArea)
+
+            self.assertTrue(app.screen.is_modal)
+            self.assertEqual(editor.language, "piespector-graphql")
+
+    async def test_body_text_editor_focuses_editor_on_mount(self) -> None:
+        app = PiespectorApp()
+        app._persist_requests = lambda: None
+        app._load_request_workspace = lambda: None
+        request = RequestDefinition(
+            request_id="r1",
+            name="Upload",
+            body_type="raw",
+            raw_subtype="json",
+            body_text='{"ok":true}',
+        )
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+
+        async with app.run_test(size=(140, 40)) as pilot:
+            app.get_screen("home").open_body_text_editor(origin_mode="HOME_BODY_SELECT")
+            await pilot.pause()
+
+            editor = app.screen.query_one("#body-editor", TextArea)
+
+            self.assertTrue(editor.has_focus)
+
+    async def test_body_text_editor_tab_completes_placeholders_in_modal(self) -> None:
+        app = PiespectorApp()
+        app._persist_requests = lambda: None
+        app._load_request_workspace = lambda: None
+        request = RequestDefinition(
+            request_id="r1",
+            name="Script",
+            body_type="raw",
+            raw_subtype="json",
+        )
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+        app.state.env_pairs = {"BASE_URL": "https://example.com"}
+
+        async with app.run_test(size=(140, 40)) as pilot:
+            app.get_screen("home").open_body_text_editor(origin_mode="HOME_BODY_SELECT")
+            await pilot.pause()
+
+            editor = app.screen.query_one("#body-editor", TextArea)
+            editor.load_text("{{BA}}")
+            editor.move_cursor((0, 4))
+
+            await pilot.press("tab")
+            await pilot.pause()
+
+            self.assertEqual(editor.text, "{{BASE_URL}}")
+            self.assertEqual(editor.cursor_location, (0, 10))
 
     async def test_body_text_editor_escape_restores_home_screen_visibility(self) -> None:
         app = PiespectorApp()
@@ -1935,22 +2077,46 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
         async with app.run_test(size=(140, 40)) as pilot:
             await pilot.pause()
 
-            app._open_body_text_editor(origin_mode="HOME_BODY_SELECT")
+            app.get_screen("home").open_body_text_editor(origin_mode="HOME_BODY_SELECT")
             await pilot.pause()
 
-            home_screen = app.screen.query_one("#home-screen")
-            editor = app.screen.query_one("#body-editor", TextArea)
-            self.assertTrue(home_screen.has_class("hidden"))
-            self.assertFalse(editor.has_class("hidden"))
+            self.assertTrue(app.screen.is_modal)
+            self.assertIsNotNone(app.screen.query_one("#body-editor", TextArea))
 
             await pilot.press("escape")
             await pilot.pause()
 
             method_select = app.screen.query_one("#method-select", Select)
             self.assertEqual(app.state.mode, "HOME_BODY_SELECT")
-            self.assertFalse(home_screen.has_class("hidden"))
-            self.assertTrue(editor.has_class("hidden"))
+            self.assertFalse(app.screen.is_modal)
             self.assertFalse(method_select.has_focus_within)
+
+    async def test_body_text_editor_escape_leaves_body_text_unchanged(self) -> None:
+        app = PiespectorApp()
+        app._persist_requests = lambda: None
+        app._load_request_workspace = lambda: None
+        request = RequestDefinition(
+            request_id="r1",
+            name="Upload",
+            body_type="raw",
+            raw_subtype="text",
+            body_text="initial body",
+        )
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+
+        async with app.run_test(size=(140, 40)) as pilot:
+            app.get_screen("home").open_body_text_editor(origin_mode="HOME_BODY_SELECT")
+            await pilot.pause()
+
+            editor = app.screen.query_one("#body-editor", TextArea)
+            editor.load_text("changed body")
+
+            await pilot.press("escape")
+            await pilot.pause()
+
+            self.assertEqual(request.body_text, "initial body")
+            self.assertFalse(app.screen.is_modal)
 
     async def test_body_text_editor_ctrl_s_restores_home_screen_visibility(self) -> None:
         app = PiespectorApp()
@@ -1970,10 +2136,9 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
         async with app.run_test(size=(140, 40)) as pilot:
             await pilot.pause()
 
-            app._open_body_text_editor(origin_mode="HOME_BODY_SELECT")
+            app.get_screen("home").open_body_text_editor(origin_mode="HOME_BODY_SELECT")
             await pilot.pause()
 
-            home_screen = app.screen.query_one("#home-screen")
             editor = app.screen.query_one("#body-editor", TextArea)
             editor.load_text("updated body")
 
@@ -1982,8 +2147,7 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
 
             self.assertEqual(request.body_text, "updated body")
             self.assertEqual(app.state.mode, "HOME_BODY_SELECT")
-            self.assertFalse(home_screen.has_class("hidden"))
-            self.assertTrue(editor.has_class("hidden"))
+            self.assertFalse(app.screen.is_modal)
 
     async def test_form_body_tab_uses_datatable_with_add_row(self) -> None:
         app = PiespectorApp()
@@ -2145,7 +2309,7 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
             width = max(body_preview.size.width or body_preview.region.width, 40)
             before = render_plain(getattr(body_preview, "_Static__content"), width=width)
 
-            app._open_body_text_editor(origin_mode="HOME_BODY_SELECT")
+            app.get_screen("home").open_body_text_editor(origin_mode="HOME_BODY_SELECT")
             await pilot.pause()
             await pilot.press("escape")
             await pilot.pause()

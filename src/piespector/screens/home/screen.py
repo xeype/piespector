@@ -43,6 +43,7 @@ from piespector.screens.base import PiespectorScreen
 from piespector.screens.home.request.header_editor import RequestHeadersTable
 from piespector.screens.home.request.query_editor import RequestParamsTable
 from piespector.screens.home.request.request_body import RequestBodyTable
+from piespector.ui.body_editor_modal import BodyEditorModal
 from piespector.ui.input import PiespectorInput
 from piespector.widget.select import PiespectorSelect, SelectionChanged, option_list
 from piespector.widget.tree import PiespectorTree
@@ -220,6 +221,32 @@ class HomeScreen(PiespectorScreen):
         self.query_one("#sidebar-container").border_title = "Collections"
         self.query_one("#request-panel").border_title = "Request"
         self.query_one("#response-panel").border_title = "Response"
+
+    def open_body_text_editor(self, origin_mode: str | None = None) -> None:
+        app = self.app
+        if app is None:
+            return
+        if not app.state.prepare_home_body_text_editor(origin_mode=origin_mode):
+            app._refresh_screen()
+            return
+        app._refresh_screen()
+        if app.screen.is_modal and isinstance(app.screen, BodyEditorModal):
+            return
+        request = app.state.get_active_request()
+        if request is None:
+            return
+        app.push_screen(
+            BodyEditorModal(request),
+            self._handle_body_text_editor_closed,
+        )
+
+    def _handle_body_text_editor_closed(self, _result: None) -> None:
+        app = self.app
+        if app is None:
+            return
+        app.set_focus(None)
+        app._refresh_screen()
+        app.call_after_refresh(app._clear_home_jump_focus)
 
     def _sync_sidebar_selection(self, node: Tree.NodeHighlighted | Tree.NodeSelected | Tree.NodeExpanded | Tree.NodeCollapsed) -> bool:
         app = self.app
@@ -588,4 +615,3 @@ class HomeScreen(PiespectorScreen):
                         app.call_after_refresh(app._refresh_request_input_hints_only)
             event.stop()
             return
-

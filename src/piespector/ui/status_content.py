@@ -14,7 +14,6 @@ from piespector.domain.modes import (
     MODE_HOME_BODY_EDIT,
     MODE_HOME_BODY_RAW_TYPE_EDIT,
     MODE_HOME_BODY_SELECT,
-    MODE_HOME_BODY_TEXTAREA,
     MODE_HOME_BODY_TYPE_EDIT,
     MODE_HOME_HEADERS_EDIT,
     MODE_HOME_HEADERS_SELECT,
@@ -34,6 +33,7 @@ from piespector.domain.modes import (
 from piespector.screens.home.request.request_body import body_context_label
 from piespector.screens.home.request.request_metadata import request_label
 from piespector.state import PiespectorState
+from piespector.ui.body_editor_modal import body_text_editor_is_open
 from piespector.ui.status_hints import HintItem, status_hint_items
 
 STATUS_ENV_BADGE_LABEL = "env"
@@ -90,6 +90,9 @@ def mode_and_context(state: PiespectorState) -> tuple[str, str]:
             return (STATUS_DISPLAY_SELECT, f"History / {history_label} / {STATUS_CONTEXT_RESPONSE}")
         return (MODE_NORMAL, f"History / {history_label}")
 
+    if body_text_editor_is_open(state):
+        return (STATUS_DISPLAY_EDIT, body_context_label(state))
+
     request = state.get_active_request()
     current_request_label = request_label(request)
 
@@ -122,7 +125,6 @@ def mode_and_context(state: PiespectorState) -> tuple[str, str]:
         MODE_HOME_BODY_EDIT,
         MODE_HOME_BODY_TYPE_EDIT,
         MODE_HOME_BODY_RAW_TYPE_EDIT,
-        MODE_HOME_BODY_TEXTAREA,
     }:
         return (STATUS_DISPLAY_EDIT, body_context_label(state))
     if state.mode == MODE_HOME_BODY_SELECT:

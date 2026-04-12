@@ -80,7 +80,6 @@ class ScreenRefreshCoordinator:
             "_refresh_home_sidebar_panel": self.refresh_home_sidebar_panel,
             "_refresh_home_url_bar_panel": self.refresh_home_url_bar_panel,
             "_refresh_jump_state": self.refresh_jump_state,
-            "_refresh_overlay_editors": self.refresh_overlay_editors,
             "_refresh_screen": self.refresh,
             "_refresh_status_line": self.refresh_status_line,
             "_refresh_viewport": self.refresh_viewport,
@@ -144,7 +143,6 @@ class ScreenRefreshCoordinator:
         if not self.app._screen_widgets_ready():
             self.app.call_after_refresh(self.app._refresh_screen)
             return
-        self.app.overlay_controller.refresh()
         self.app._refresh_viewport()
         self.app._refresh_status_line()
         self.app._refresh_command_line()
@@ -347,7 +345,6 @@ class ScreenRefreshCoordinator:
         if not self.app._has_live_screen():
             self.app._refresh_screen()
             return
-        self.app.overlay_controller.refresh()
         self.app._refresh_viewport()
         self.app._refresh_status_line()
         self.app._refresh_command_line()
@@ -382,9 +379,6 @@ class ScreenRefreshCoordinator:
             request_visible_rows=visible_rows,
             response_visible_rows=visible_rows,
         )
-
-    def refresh_overlay_editors(self) -> None:
-        self.app.overlay_controller.refresh()
 
     def refresh_status_line(self) -> None:
         footer = self.app._query_current("#status-line", PiespectorFooter)

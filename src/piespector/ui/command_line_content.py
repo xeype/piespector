@@ -22,7 +22,6 @@ from piespector.domain.modes import (
     MODE_HOME_AUTH_TYPE_EDIT,
     MODE_HOME_BODY_EDIT,
     MODE_HOME_BODY_RAW_TYPE_EDIT,
-    MODE_HOME_BODY_TEXTAREA,
     MODE_HOME_BODY_TYPE_EDIT,
     MODE_HOME_REQUEST_METHOD_SELECT,
     MODE_HOME_HEADERS_EDIT,
@@ -33,6 +32,7 @@ from piespector.domain.modes import (
     MODE_JUMP,
 )
 from piespector.state import PiespectorState
+from piespector.ui.body_editor_modal import body_text_editor_is_open
 
 @dataclass(frozen=True)
 class CommandLineContent:
@@ -60,6 +60,11 @@ def command_line_content(state: PiespectorState) -> CommandLineContent | None:
             ),
             tone="primary",
         )
+
+    if body_text_editor_is_open(state):
+        if state.message:
+            return CommandLineContent(state.message, tone="danger")
+        return CommandLineContent("Raw body editor")
 
     if state.mode == MODE_HOME_REQUEST_EDIT:
         _field_name, label = state.selected_request_field()
@@ -111,11 +116,6 @@ def command_line_content(state: PiespectorState) -> CommandLineContent | None:
 
     if state.mode == MODE_HOME_BODY_RAW_TYPE_EDIT:
         return CommandLineContent("Raw type: up/down choose, e or Enter confirm, Esc back")
-
-    if state.mode == MODE_HOME_BODY_TEXTAREA:
-        if state.message:
-            return CommandLineContent(state.message, tone="danger")
-        return CommandLineContent("Raw body editor")
 
     if state.mode == MODE_HOME_BODY_EDIT:
         request = state.get_active_request()
