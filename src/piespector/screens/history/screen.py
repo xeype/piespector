@@ -70,6 +70,16 @@ class HistoryScreen(PiespectorScreen):
         app = self._owner_app()
         return None if app is None else app.state
 
+    def on_key(self, event: events.Key) -> None:
+        state = self._state
+        if state is None:
+            return
+        if state.mode == MODE_NORMAL:
+            self.handle_view_key(event)
+            return
+        if state.mode == MODE_HISTORY_RESPONSE_SELECT:
+            self.handle_response_select_key(event)
+
     def compose_workspace(self) -> ComposeResult:
         with Horizontal(id="history-screen"):
             with Vertical(id="history-sidebar-container"):

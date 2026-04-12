@@ -319,7 +319,7 @@ class AppCommandModeTests(unittest.TestCase):
         event = FakeKeyEvent("j")
 
         with patch.object(app, "_refresh_viewport"):
-            app._history_screen.handle_response_select_key(event)
+            app._history_screen.on_key(event)
 
         self.assertEqual(app.state.selected_history_detail_block, "response")
         self.assertTrue(event.stopped)
@@ -334,14 +334,52 @@ class AppCommandModeTests(unittest.TestCase):
         right_event = FakeKeyEvent("l")
 
         with patch.object(app, "_refresh_viewport"):
-            app._history_screen.handle_response_select_key(left_event)
+            app._history_screen.on_key(left_event)
             left_tab = app.state.selected_history_response_tab
-            app._history_screen.handle_response_select_key(right_event)
+            app._history_screen.on_key(right_event)
 
         self.assertEqual(left_tab, "headers")
         self.assertEqual(app.state.selected_history_response_tab, "body")
         self.assertTrue(left_event.stopped)
         self.assertTrue(right_event.stopped)
+
+    def test_env_screen_on_key_e_enters_select_mode(self) -> None:
+        app = PiespectorApp()
+        app.state.current_tab = "env"
+        app.state.mode = MODE_NORMAL
+        event = FakeKeyEvent("e")
+
+        with patch.object(app, "_refresh_screen"):
+            app._env_screen.on_key(event)
+
+        self.assertEqual(app.state.mode, MODE_ENV_SELECT)
+        self.assertTrue(event.stopped)
+
+    def test_event_router_no_longer_routes_env_keys(self) -> None:
+        app = PiespectorApp()
+        app.state.current_tab = "env"
+        app.state.mode = MODE_NORMAL
+        event = FakeKeyEvent("e")
+
+        with patch.object(app, "_refresh_screen") as refresh_screen:
+            app.event_router.handle_key(event)
+
+        self.assertEqual(app.state.mode, MODE_NORMAL)
+        self.assertFalse(event.stopped)
+        refresh_screen.assert_not_called()
+
+    def test_event_router_no_longer_routes_history_keys(self) -> None:
+        app = PiespectorApp()
+        app.state.current_tab = "history"
+        app.state.mode = MODE_NORMAL
+        event = FakeKeyEvent("j")
+
+        with patch.object(app._history_screen, "handle_view_key") as handle_view_key:
+            app.event_router.handle_key(event)
+
+        handle_view_key.assert_not_called()
+        self.assertEqual(app.state.mode, MODE_NORMAL)
+        self.assertFalse(event.stopped)
 
     def test_auth_select_escape_returns_to_auth_type_tabs(self) -> None:
         app = PiespectorApp()

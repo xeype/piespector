@@ -2,15 +2,29 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from textual import events
 from rich.text import Text
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
+from textual.css.query import NoMatches
 from textual.reactive import reactive
 from textual.style import Style
 from textual.widgets import DataTable, Input, Static, Tree
 from textual.widgets._data_table import RowDoesNotExist, RowKey
 
 from piespector.domain.modes import MODE_ENV_EDIT, MODE_ENV_SELECT, MODE_NORMAL
+from piespector.interactions.keys import (
+    KEY_ADD,
+    KEY_DELETE_ROW,
+    KEY_ENTER,
+    KEY_ESCAPE,
+    KEY_SPACE,
+    DOWN_KEYS,
+    LEFT_KEYS,
+    OPEN_KEYS,
+    RIGHT_KEYS,
+    UP_KEYS,
+)
 from piespector.screens.base import PiespectorScreen
 from piespector.ui.input import PiespectorInput
 from piespector.ui.selection import FOCUS_FRAME_CLASS, selected_element_style
@@ -59,12 +73,166 @@ class EnvScreen(PiespectorScreen):
     env_scroll_offset = reactive(0)
     env_creating_new = reactive(False)
 
+    def _owner_app(self):
+        owner_app = getattr(self, "_piespector_app", None)
+        if owner_app is not None:
+            return owner_app
+        try:
+            return self.app
+        except Exception:
+            return None
+
     @property
     def _state(self) -> PiespectorState | None:
+        app = self._owner_app()
+        return None if app is None else app.state
+
+    def _env_sidebar_tree(self) -> PiespectorTree | None:
         if not self.is_mounted:
             return None
-        app = self.app
-        return None if app is None else app.state
+        try:
+            return self.query_one("#env-sidebar-tree", PiespectorTree)
+        except NoMatches:
+            return None
+
+    def _env_input(self) -> Input | None:
+        if not self.is_mounted:
+            return None
+        try:
+            return self.query_one("#env-field-input", Input)
+        except NoMatches:
+            return None
+
+    def on_key(self, event: events.Key) -> None:
+        state = self._state
+        if state is None:
+            return
+        if state.mode == MODE_NORMAL:
+            self.handle_view_key(event)
+            return
+        if state.mode == MODE_ENV_SELECT:
+            self.handle_select_key(event)
+            return
+        if state.mode == MODE_ENV_EDIT:
+            self.handle_edit_key(event)
+
+    def handle_view_key(self, event: events.Key) -> bool:
+        state = self._state
+        app = self._owner_app()
+        if state is None or app is None:
+            return False
+
+        if event.key in DOWN_KEYS:
+            tree = self._env_sidebar_tree()
+            if tree is not None:
+                tree.action_cursor_down()
+            else:
+                state.select_env_set(1)
+                app._refresh_screen()
+            event.stop()
+            return True
+
+        if event.key in UP_KEYS:
+            tree = self._env_sidebar_tree()
+            if tree is not None:
+                tree.action_cursor_up()
+            else:
+                state.select_env_set(-1)
+                app._refresh_screen()
+            event.stop()
+            return True
+
+        if event.key in OPEN_KEYS:
+            state.enter_env_select_mode()
+            app._refresh_screen()
+            event.stop()
+            return True
+
+        return False
+
+    def handle_select_key(self, event: events.Key) -> None:
+        state = self._state
+        app = self._owner_app()
+        if state is None or app is None:
+            return
+
+        if event.key == KEY_ESCAPE:
+            state.leave_env_interaction()
+            app._refresh_screen()
+            event.stop()
+            return
+
+        if event.key in LEFT_KEYS:
+            state.cycle_env_field(-1)
+            app._refresh_screen()
+            event.stop()
+            return
+
+        if event.key in RIGHT_KEYS:
+            state.cycle_env_field(1)
+            app._refresh_screen()
+            event.stop()
+            return
+
+        if event.key == KEY_SPACE:
+            state.toggle_selected_env_sensitive()
+            app._refresh_screen()
+            event.stop()
+            return
+
+        if event.key in OPEN_KEYS:
+            state.enter_env_edit_mode()
+            app._refresh_screen()
+            event.stop()
+            return
+
+        if event.key == KEY_ADD:
+            state.enter_env_create_mode()
+            app._refresh_screen()
+            event.stop()
+            return
+
+        if event.key == KEY_DELETE_ROW:
+            state.delete_selected_env_item()
+            app._refresh_screen()
+            event.stop()
+            return
+
+        if event.key in DOWN_KEYS:
+            state.select_env_row(1)
+            app._refresh_screen()
+            event.stop()
+            return
+
+        if event.key in UP_KEYS:
+            state.select_env_row(-1)
+            app._refresh_screen()
+            event.stop()
+
+    def handle_edit_key(self, event: events.Key) -> None:
+        state = self._state
+        app = self._owner_app()
+        if state is None or app is None:
+            return
+
+        env_input = self._env_input()
+        if env_input is not None and env_input.display:
+            if event.key == KEY_ESCAPE:
+                state.leave_env_edit_mode()
+                app._refresh_screen()
+                event.stop()
+            return
+
+        if event.key == KEY_ESCAPE:
+            state.leave_env_edit_mode()
+            app._refresh_screen()
+            event.stop()
+            return
+
+        if event.key == KEY_ENTER:
+            state.save_selected_env_field()
+            app._refresh_screen()
+            event.stop()
 
     def compose_workspace(self) -> ComposeResult:
         with Horizontal(id="env-screen"):

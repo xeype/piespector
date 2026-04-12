@@ -41,7 +41,6 @@ from piespector.interactions.controller import EventRouter, InteractionControlle
 from piespector.interactions.keys import response_copy_hint, response_copy_keys
 from piespector.persistence import PersistenceManager
 from piespector.request_executor import RequestExecutor
-from piespector.screens.env.controller import EnvController
 from piespector.screens.env.screen import EnvScreen
 from piespector.screens.history.screen import HistoryScreen
 from piespector.screens.home.controller import HomeController
@@ -111,7 +110,6 @@ class PiespectorApp(App[None]):
         self.state.attach_app(self)
         self.persistence_manager = PersistenceManager(self, enabled=persist_state)
         self.request_executor = RequestExecutor(self)
-        self.env_controller = EnvController(self)
         self.home_controller = HomeController(self)
         self.interaction_controller = InteractionController(self)
         self.event_router = EventRouter(self)

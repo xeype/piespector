@@ -8,16 +8,11 @@ from textual.app import ScreenStackError
 from piespector.domain.editor import (
     REQUEST_EDITOR_JUMP_KEY_TO_TAB,
     RESPONSE_JUMP_KEY_TO_TAB,
-    TAB_ENV,
-    TAB_HISTORY,
     TAB_LABELS,
     TAB_HOME,
     TOP_BAR_JUMP_KEY_TO_TARGET,
 )
 from piespector.domain.modes import (
-    MODE_ENV_EDIT,
-    MODE_ENV_SELECT,
-    MODE_HISTORY_RESPONSE_SELECT,
     MODE_HOME_SECTION_SELECT,
     MODE_JUMP,
     MODE_NORMAL,
@@ -150,29 +145,6 @@ class EventRouter:
             ):
                 return
             self.app.home_controller.dispatch_key(self.state.mode, event)
-            return
-
-        if self.state.current_tab == TAB_ENV:
-            if (
-                self.state.mode == MODE_NORMAL
-                and self.app.env_controller.handle_env_view_key(event)
-            ):
-                return
-            if self.state.mode == MODE_ENV_SELECT:
-                self.app.env_controller.handle_env_select_key(event)
-                return
-            if self.state.mode == MODE_ENV_EDIT:
-                self.app.env_controller.handle_env_edit_key(event)
-                return
-
-        if self.state.current_tab == TAB_HISTORY:
-            if (
-                self.state.mode == MODE_NORMAL
-                and self.app._history_screen.handle_view_key(event)
-            ):
-                return
-            if self.state.mode == MODE_HISTORY_RESPONSE_SELECT:
-                self.app._history_screen.handle_response_select_key(event)
 
     def _current_screen(self):
         try:
