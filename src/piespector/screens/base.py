@@ -7,7 +7,6 @@ from textual.screen import Screen
 from textual.widgets import Static
 
 from piespector.ui.footer import PiespectorFooter
-from piespector.ui.overlays import build_input_hint_widgets
 
 
 class PiespectorScreen(Screen[None]):
@@ -15,8 +14,6 @@ class PiespectorScreen(Screen[None]):
         with Vertical():
             with Vertical(id="workspace"):
                 yield from self.compose_workspace()
-                for widget in build_input_hint_widgets():
-                    yield widget
             with Horizontal(id="command-line"):
                 yield Static("", id="command-line-content")
             yield PiespectorFooter(id="status-line")

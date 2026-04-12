@@ -1649,6 +1649,48 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(NoMatches):
                 app.screen.query_one("#command-prompt")
 
+    async def test_input_hint_overlays_are_only_composed_on_home_screen(self) -> None:
+        app = PiespectorApp()
+        app._load_env_workspace = lambda: None
+        app._load_history = lambda: None
+        app._load_request_workspace = lambda: None
+
+        async with app.run_test(size=(140, 40)) as pilot:
+            await pilot.pause()
+
+            home_screen = app.get_screen("home")
+            for hint_id in (
+                "#url-input-hint",
+                "#params-input-hint",
+                "#headers-input-hint",
+                "#auth-field-input-hint",
+            ):
+                self.assertIsInstance(home_screen.query_one(hint_id, Static), Static)
+
+            app.action_show_env()
+            await pilot.pause()
+
+            for hint_id in (
+                "#url-input-hint",
+                "#params-input-hint",
+                "#headers-input-hint",
+                "#auth-field-input-hint",
+            ):
+                with self.assertRaises(NoMatches):
+                    app.screen.query_one(hint_id)
+
+            app.action_show_history()
+            await pilot.pause()
+
+            for hint_id in (
+                "#url-input-hint",
+                "#params-input-hint",
+                "#headers-input-hint",
+                "#auth-field-input-hint",
+            ):
+                with self.assertRaises(NoMatches):
+                    app.screen.query_one(hint_id)
+
     async def test_command_provider_does_not_shadow_exact_theme_system_command(self) -> None:
         app = PiespectorApp()
         app._load_request_workspace = lambda: None

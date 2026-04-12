@@ -186,6 +186,10 @@ class HomeScreen(PiespectorScreen):
                             yield Static("", id="response-body-content")
                             yield Static("", id="response-headers-content")
                         yield Static("", classes="panel-subtitle", id="response-subtitle")
+        yield Static("", id="url-input-hint", classes="hidden")
+        yield Static("", id="params-input-hint", classes="hidden")
+        yield Static("", id="headers-input-hint", classes="hidden")
+        yield Static("", id="auth-field-input-hint", classes="hidden")
 
     def on_mount(self) -> None:
         super().on_mount()

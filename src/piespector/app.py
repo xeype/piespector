@@ -20,8 +20,10 @@ from textual.widgets import (
 
 from piespector.commands import DeleteConfirmationRequest, run_command
 from piespector.domain.editor import (
+    HISTORY_DETAIL_BLOCK_REQUEST,
     HOME_SIDEBAR_JUMP_KEY,
     REQUEST_EDITOR_JUMP_BINDINGS,
+    RESPONSE_TAB_HEADERS,
     RESPONSE_JUMP_BINDINGS,
     TAB_ENV,
     TAB_HISTORY,
@@ -71,7 +73,12 @@ from piespector.ui.confirm_modal import ConfirmModal
 from piespector.ui.help_panel import PiespectorHelpPanel
 from piespector.ui.jump_overlay import JumpOverlay
 from piespector.ui.jumper import JumpTarget, Jumper
-from piespector.ui.overlays import OverlayController
+from piespector.ui.overlays import ResponseModal, ResponseModalContent
+from piespector.ui.rendering_helpers import (
+    detect_text_syntax_language,
+    format_response_body,
+    text_area_syntax_language,
+)
 
 
 class PiespectorApp(App[None]):
@@ -113,7 +120,6 @@ class PiespectorApp(App[None]):
         self.home_controller = HomeController(self)
         self.interaction_controller = InteractionController(self)
         self.event_router = EventRouter(self)
-        self.overlay_controller = OverlayController(self)
         self.screen_refresh = ScreenRefreshCoordinator(self)
         self.screen_refresh.install_bindings()
         self._home_screen = HomeScreen()
@@ -700,10 +706,86 @@ class PiespectorApp(App[None]):
         return None
 
     def _open_response_viewer(self, origin_mode: str | None = None) -> None:
-        self.overlay_controller.open_response_viewer(origin_mode=origin_mode)
+        request = self.state.get_active_request()
+        if request is None or request.last_response is None:
+            self.state.message = "No response to view."
+            self._refresh_screen()
+            return
+        body_text = format_response_body(request.last_response.body_text)
+        response = request.last_response
+        request_name = request.name if request.name else "Request"
+        status = response.status_code if response is not None else "-"
+        elapsed = f"{response.elapsed_ms or 0:.1f} ms" if response is not None else "-"
+        self.push_screen(
+            ResponseModal(
+                ResponseModalContent(
+                    title=f"Response Viewer  [{request_name}]",
+                    footer=(
+                        f"Status {status}   Time {elapsed}   "
+                        f"{self.response_copy_hint} copies selection/all   Esc closes"
+                    ),
+                    body=body_text or request.last_response.body_text or "",
+                    language=text_area_syntax_language(
+                        detect_text_syntax_language(body_text)
+                    ),
+                )
+            )
+        )
 
     def _open_history_response_viewer(self, origin_mode: str | None = None) -> None:
-        self.overlay_controller.open_history_response_viewer(origin_mode=origin_mode)
+        entry = self.state.get_selected_history_entry()
+        if entry is None:
+            self.state.message = "No history entry selected."
+            self._refresh_screen()
+            return
+        if self.state.selected_history_detail_block == HISTORY_DETAIL_BLOCK_REQUEST:
+            if self.state.selected_history_request_tab == RESPONSE_TAB_HEADERS:
+                language = None
+                content = "\n".join(
+                    f"{key}: {value}" for key, value in entry.request_headers
+                ) or "-"
+            else:
+                body_text = format_response_body(entry.request_body)
+                language = text_area_syntax_language(
+                    detect_text_syntax_language(body_text)
+                )
+                content = body_text or entry.request_body or ""
+        elif self.state.selected_history_response_tab == RESPONSE_TAB_HEADERS:
+            language = None
+            content = "\n".join(
+                f"{key}: {value}" for key, value in entry.response_headers
+            ) or "-"
+        else:
+            body_text = format_response_body(entry.response_body)
+            language = text_area_syntax_language(
+                detect_text_syntax_language(body_text)
+            )
+            content = body_text or entry.response_body or ""
+        entry_name = (
+            entry.source_request_name.strip()
+            or entry.source_request_path.strip()
+            or "History"
+        )
+        self.push_screen(
+            ResponseModal(
+                ResponseModalContent(
+                    title=f"History Viewer  [{entry_name}]",
+                    footer=(
+                        f"{self.response_copy_hint} copies selection/all   Esc closes"
+                    ),
+                    body=content,
+                    language=language,
+                )
+            )
+        )
 
     def _close_response_viewer(self) -> None:
-        self.overlay_controller.close_response_viewer()
+        if (
+            self.screen_stack
+            and self.screen.is_modal
+            and isinstance(self.screen, ResponseModal)
+        ):
+            self.pop_screen()
+        self.set_focus(None)
+        self._refresh_screen()
+        self.call_after_refresh(self._clear_home_jump_focus)
