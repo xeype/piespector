@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field, fields
 
 from piespector.domain.editor import (
-    HISTORY_DETAIL_BLOCK_RESPONSE,
     HOME_EDITOR_TAB_REQUEST,
     RESPONSE_TAB_BODY,
     TAB_HOME,
@@ -46,26 +45,6 @@ class HomeScreenState:
 
 
 @dataclass
-class EnvScreenState:
-    selected_env_index: int = 0
-    selected_env_field_index: int = 0
-    env_scroll_offset: int = 0
-    env_creating_new: bool = False
-
-
-@dataclass
-class HistoryScreenState:
-    selected_history_index: int = 0
-    history_scroll_offset: int = 0
-    selected_history_detail_block: str = HISTORY_DETAIL_BLOCK_RESPONSE
-    selected_history_request_tab: str = RESPONSE_TAB_BODY
-    selected_history_response_tab: str = RESPONSE_TAB_BODY
-    history_request_scroll_offset: int = 0
-    history_response_scroll_offset: int = 0
-    history_response_select_return_mode: str = MODE_NORMAL
-
-
-@dataclass
 class UISessionState:
     mode: str = MODE_NORMAL
     current_tab: str = TAB_HOME
@@ -85,8 +64,6 @@ class UISessionState:
     help_source_tab: str = TAB_HOME
     help_source_mode: str = MODE_NORMAL
     home: HomeScreenState = field(default_factory=HomeScreenState, repr=False)
-    env: EnvScreenState = field(default_factory=EnvScreenState, repr=False)
-    history: HistoryScreenState = field(default_factory=HistoryScreenState, repr=False)
 
     def __post_init__(self) -> None:
         if self.open_request_ids is None:
@@ -96,17 +73,8 @@ class UISessionState:
 
 
 HOME_SCREEN_FIELD_NAMES = tuple(field.name for field in fields(HomeScreenState))
-ENV_SCREEN_FIELD_NAMES = tuple(field.name for field in fields(EnvScreenState))
-HISTORY_SCREEN_FIELD_NAMES = tuple(field.name for field in fields(HistoryScreenState))
-INLINE_EDIT_FIELD_NAMES: tuple[str, ...] = ()
 SESSION_ROOT_FIELD_NAMES = tuple(
     session_field.name
     for session_field in fields(UISessionState)
-    if session_field.name not in {"home", "env", "history"}
-)
-SESSION_FIELD_NAMES = (
-    SESSION_ROOT_FIELD_NAMES
-    + HOME_SCREEN_FIELD_NAMES
-    + ENV_SCREEN_FIELD_NAMES
-    + HISTORY_SCREEN_FIELD_NAMES
+    if session_field.name not in {"home"}
 )

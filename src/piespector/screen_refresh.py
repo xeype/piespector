@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING
 from textual.app import ScreenStackError
 from textual.css.query import NoMatches
 from textual.widgets import (
-    DataTable,
     Static,
     TabbedContent,
 )
@@ -45,15 +44,12 @@ class ScreenRefreshCoordinator:
     def install_bindings(self) -> None:
         bindings = {
             "_current_base_screen": self.current_base_screen,
-            "_env_visible_rows": self.env_visible_rows,
             "_has_live_screen": self.has_live_screen,
             "_home_request_list_visible_rows": self.home_request_list_visible_rows,
             "_home_response_scroll_step": self.home_response_scroll_step,
             "_home_response_visible_rows": self.home_response_visible_rows,
             "_query_current": self.query_current,
             "_refresh_command_line": self.refresh_command_line,
-            "_refresh_env_screen": self.refresh_env_screen,
-            "_refresh_history_screen": self.refresh_history_screen,
             "_refresh_home_jump_cues": self.refresh_home_jump_cues,
             "_refresh_home_request_panel": self.refresh_home_request_panel,
             "_refresh_request_input_hints_only": self.refresh_request_input_hints_only,
@@ -142,11 +138,9 @@ class ScreenRefreshCoordinator:
             self.state.ensure_request_selection_visible(visible_rows)
             self.app._refresh_home_screen()
         elif self.state.current_tab == TAB_ENV:
-            visible_rows = self.app._env_visible_rows()
-            self.state.ensure_env_selection_visible(visible_rows)
-            self.app._refresh_env_screen()
+            self.app._env_screen.refresh_from_state()
         elif self.state.current_tab == TAB_HISTORY:
-            self.app._refresh_history_screen()
+            self.app._history_screen.refresh_from_state()
 
     def refresh_home_screen(self) -> None:
         self.app._refresh_home_sidebar_panel()
@@ -236,12 +230,6 @@ class ScreenRefreshCoordinator:
         self.app._refresh_status_line()
         self.app._refresh_command_line()
 
-    def refresh_env_screen(self) -> None:
-        self.app._env_screen.refresh_from_state()
-
-    def refresh_history_screen(self) -> None:
-        self.app._history_screen.refresh_from_state()
-
     def refresh_status_line(self) -> None:
         footer = self.app._query_current("#status-line", PiespectorFooter)
         footer.set_status_content(status_bar_content(self.state))
@@ -249,13 +237,6 @@ class ScreenRefreshCoordinator:
     def refresh_command_line(self) -> None:
         command_content = self.app._query_current("#command-line-content", Static)
         command_content.update(build_command_line_text(self.state))
-
-    def env_visible_rows(self) -> int:
-        try:
-            env_table = self.app._query_current("#env-table", DataTable)
-            return max(env_table.size.height - 2, 1)
-        except NoMatches:
-            return 20
 
     def home_request_list_visible_rows(self) -> int:
         try:

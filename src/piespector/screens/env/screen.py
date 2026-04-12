@@ -263,6 +263,13 @@ class EnvScreen(PiespectorScreen):
         self.query_one("#env-sidebar-container").border_title = "Environments"
         self.refresh_from_state()
 
+    def env_visible_rows(self) -> int:
+        try:
+            table = self.query_one("#env-table", DataTable)
+            return max(table.size.height - 2, 1)
+        except Exception:
+            return 20
+
     def refresh_from_state(self) -> None:
         if not self.is_mounted:
             return
@@ -270,6 +277,7 @@ class EnvScreen(PiespectorScreen):
         if state is None:
             return
         state.ensure_env_workspace()
+        state.ensure_env_selection_visible(self.env_visible_rows())
         self._refresh_sidebar_tree(state)
         self._sync_sidebar_cursor(state)
         self._refresh_table(state)

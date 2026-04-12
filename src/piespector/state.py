@@ -22,9 +22,9 @@ from piespector.state_env import EnvStateMixin
 from piespector.state_history import HistoryStateMixin
 from piespector.state_home import HomeStateMixin
 from piespector.state_workspace import WorkspaceStateMixin
+from piespector.domain.editor import HISTORY_DETAIL_BLOCK_RESPONSE, RESPONSE_TAB_BODY
+from piespector.domain.modes import MODE_NORMAL
 from piespector.ui.session_state import (
-    ENV_SCREEN_FIELD_NAMES,
-    HISTORY_SCREEN_FIELD_NAMES,
     HOME_SCREEN_FIELD_NAMES,
     SESSION_ROOT_FIELD_NAMES,
     UISessionState,
@@ -85,16 +85,6 @@ class PiespectorState(
             for name in list(kwargs)
             if name in HOME_SCREEN_FIELD_NAMES
         }
-        env_kwargs = {
-            name: kwargs.pop(name)
-            for name in list(kwargs)
-            if name in ENV_SCREEN_FIELD_NAMES
-        }
-        history_kwargs = {
-            name: kwargs.pop(name)
-            for name in list(kwargs)
-            if name in HISTORY_SCREEN_FIELD_NAMES
-        }
         self.collections = kwargs.pop("collections", [])
         self.folders = kwargs.pop("folders", [])
         self.collapsed_collection_ids = kwargs.pop("collapsed_collection_ids", set())
@@ -109,9 +99,7 @@ class PiespectorState(
             unexpected = ", ".join(sorted(kwargs))
             raise TypeError(f"Unexpected state argument(s): {unexpected}")
 
-        session_override_kwargs = (
-            session_root_kwargs | home_kwargs | env_kwargs | history_kwargs
-        )
+        session_override_kwargs = session_root_kwargs | home_kwargs
         if session is not None and session_override_kwargs:
             conflicting = ", ".join(sorted(session_override_kwargs))
             raise TypeError(
@@ -121,10 +109,6 @@ class PiespectorState(
         self.session = session or UISessionState(**session_root_kwargs)
         for field_name, value in home_kwargs.items():
             setattr(self.session.home, field_name, value)
-        for field_name, value in env_kwargs.items():
-            setattr(self.session.env, field_name, value)
-        for field_name, value in history_kwargs.items():
-            setattr(self.session.history, field_name, value)
         self._app = None
         self._mutation_subscribers: dict[str, list[Callable[..., None]]] = {}
 
@@ -179,15 +163,21 @@ def _session_group_field_property(group_name: str, field_name: str) -> property:
     return property(getter, setter)
 
 
-def _screen_state_field_property(group_name: str, field_name: str) -> property:
+def _screen_only_field_property(group_name: str, field_name: str, default) -> property:
+    """Property that reads/writes exclusively from/to the owning screen's reactive attr.
+
+    When the screen is not yet available (app not attached or screen not created),
+    reads return ``default`` and writes are no-ops.  This removes the session-state
+    mirror that previously duplicated env/history UI fields into ``session.env`` /
+    ``session.history``.
+    """
     def getter(self: PiespectorState):
         owner = self._screen_owner(group_name)
         if owner is not None and hasattr(owner, field_name):
             return getattr(owner, field_name)
-        return getattr(getattr(self.session, group_name), field_name)
+        return default
 
     def setter(self: PiespectorState, value) -> None:
-        setattr(getattr(self.session, group_name), field_name, value)
         owner = self._screen_owner(group_name)
         if owner is not None and hasattr(owner, field_name):
             setattr(owner, field_name, value)
@@ -203,16 +193,40 @@ for _home_field_name in HOME_SCREEN_FIELD_NAMES:
         _home_field_name,
         _session_group_field_property("home", _home_field_name),
     )
-for _env_field_name in ENV_SCREEN_FIELD_NAMES:
-    setattr(PiespectorState, _env_field_name, _screen_state_field_property("env", _env_field_name))
-for _history_field_name in HISTORY_SCREEN_FIELD_NAMES:
+
+# Env screen — UI state lives exclusively on EnvScreen reactive attrs.
+_ENV_SCREEN_DEFAULTS: dict[str, object] = {
+    "selected_env_index": 0,
+    "selected_env_field_index": 0,
+    "env_scroll_offset": 0,
+    "env_creating_new": False,
+}
+for _env_field_name, _env_default in _ENV_SCREEN_DEFAULTS.items():
+    setattr(
+        PiespectorState,
+        _env_field_name,
+        _screen_only_field_property("env", _env_field_name, _env_default),
+    )
+
+# History screen — UI state lives exclusively on HistoryScreen reactive attrs.
+_HISTORY_SCREEN_DEFAULTS: dict[str, object] = {
+    "selected_history_index": 0,
+    "history_scroll_offset": 0,
+    "selected_history_detail_block": HISTORY_DETAIL_BLOCK_RESPONSE,
+    "selected_history_request_tab": RESPONSE_TAB_BODY,
+    "selected_history_response_tab": RESPONSE_TAB_BODY,
+    "history_request_scroll_offset": 0,
+    "history_response_scroll_offset": 0,
+    "history_response_select_return_mode": MODE_NORMAL,
+}
+for _history_field_name, _history_default in _HISTORY_SCREEN_DEFAULTS.items():
     setattr(
         PiespectorState,
         _history_field_name,
-        _screen_state_field_property("history", _history_field_name),
+        _screen_only_field_property("history", _history_field_name, _history_default),
     )
 
 del _session_field_name
 del _home_field_name
-del _env_field_name
-del _history_field_name
+del _env_field_name, _env_default
+del _history_field_name, _history_default

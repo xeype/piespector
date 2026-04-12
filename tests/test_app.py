@@ -156,47 +156,54 @@ class AppCommandModeTests(unittest.TestCase):
                 )
             )
 
-    def test_session_moves_screen_local_fields_out_of_session_root(self) -> None:
-        state = PiespectorState(
-            home_editor_tab="auth",
-            selected_env_index=2,
-            selected_history_response_tab="headers",
-        )
+    def test_session_moves_home_screen_local_fields_out_of_session_root(self) -> None:
+        state = PiespectorState(home_editor_tab="auth")
 
         self.assertFalse(hasattr(state.session, "home_editor_tab"))
-        self.assertFalse(hasattr(state.session, "selected_env_index"))
-        self.assertFalse(hasattr(state.session, "selected_history_response_tab"))
         self.assertEqual(state.session.home.home_editor_tab, "auth")
-        self.assertEqual(state.session.env.selected_env_index, 2)
-        self.assertEqual(state.session.history.selected_history_response_tab, "headers")
 
-    def test_app_keeps_home_state_in_session_and_attaches_other_screen_state(self) -> None:
+    def test_env_and_history_ui_state_no_longer_mirrored_in_session(self) -> None:
+        # env and history sub-state dataclasses have been removed from UISessionState
         app = PiespectorApp()
 
-        app.state.home_editor_tab = "auth"
+        self.assertFalse(hasattr(app.state.session, "env"))
+        self.assertFalse(hasattr(app.state.session, "history"))
+
+    def test_env_screen_ui_state_written_directly_to_screen_reactive(self) -> None:
+        app = PiespectorApp()
+
         app.state.selected_env_index = 3
-        app.state.selected_history_response_tab = "headers"
+        app.state.env_creating_new = True
 
-        self.assertEqual(app.state.session.home.home_editor_tab, "auth")
-        self.assertFalse(hasattr(app._home_screen, "home_editor_tab"))
         self.assertEqual(app._env_screen.selected_env_index, 3)
+        self.assertTrue(app._env_screen.env_creating_new)
+
+    def test_history_screen_ui_state_written_directly_to_screen_reactive(self) -> None:
+        app = PiespectorApp()
+
+        app.state.selected_history_response_tab = "headers"
+        app.state.selected_history_index = 2
+
         self.assertEqual(app._history_screen.selected_history_response_tab, "headers")
+        self.assertEqual(app._history_screen.selected_history_index, 2)
 
-    def test_refresh_env_screen_delegates_to_env_screen(self) -> None:
+    def test_refresh_viewport_calls_env_screen_directly_when_on_env_tab(self) -> None:
         app = PiespectorApp()
+        app.state.current_tab = "env"
 
-        with patch.object(app._env_screen, "refresh_from_state") as refresh_from_state:
-            app.screen_refresh.refresh_env_screen()
+        with patch.object(app._env_screen, "refresh_from_state") as mock_refresh:
+            app.screen_refresh.refresh_viewport()
 
-        refresh_from_state.assert_called_once_with()
+        mock_refresh.assert_called_once_with()
 
-    def test_refresh_history_screen_delegates_to_history_screen(self) -> None:
+    def test_refresh_viewport_calls_history_screen_directly_when_on_history_tab(self) -> None:
         app = PiespectorApp()
+        app.state.current_tab = "history"
 
-        with patch.object(app._history_screen, "refresh_from_state") as refresh_from_state:
-            app.screen_refresh.refresh_history_screen()
+        with patch.object(app._history_screen, "refresh_from_state") as mock_refresh:
+            app.screen_refresh.refresh_viewport()
 
-        refresh_from_state.assert_called_once_with()
+        mock_refresh.assert_called_once_with()
 
     def test_execute_command_uses_current_mode_context_then_returns_to_normal(self) -> None:
         app = PiespectorApp()
