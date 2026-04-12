@@ -16,6 +16,7 @@ from piespector.domain.editor import (
     TOP_BAR_URL_JUMP_KEY,
 )
 from piespector.screens.home.collections_sidebar import CollectionsSidebar
+from piespector.screens.home.response_panel import ResponsePanel
 from piespector.screens.home.url_bar import UrlBar
 from piespector.ui.rendering_helpers import (
     detect_text_syntax_language,
@@ -2872,6 +2873,8 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
         async with app.run_test(size=(140, 40)) as pilot:
             await pilot.pause()
 
+            response_panel = app.screen.query_one("#response-panel")
+            self.assertIsInstance(response_panel, ResponsePanel)
             tabs = app.screen.query_one("#response-tabs", Tabs)
             tabs.active = "headers"
             await pilot.pause()
@@ -2888,6 +2891,10 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
             self.assertIsInstance(
                 app.screen.query_one("#sidebar-container"),
                 CollectionsSidebar,
+            )
+            self.assertIsInstance(
+                app.screen.query_one("#response-panel"),
+                ResponsePanel,
             )
             sidebar_tree = app.screen.query_one("#sidebar-tree")
             self.assertEqual(sidebar_tree.id, "sidebar-tree")

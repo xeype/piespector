@@ -3,7 +3,7 @@ from __future__ import annotations
 from textual import events, on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
-from textual.widgets import ContentSwitcher, DataTable, Input, Static, Tab, TabbedContent, TabPane, Tabs
+from textual.widgets import DataTable, Input, Static, TabbedContent, TabPane
 
 from piespector.domain.editor import (
     AUTH_API_KEY_LOCATION_OPTIONS,
@@ -17,8 +17,6 @@ from piespector.domain.editor import (
     HOME_EDITOR_TAB_PARAMS,
     HOME_EDITOR_TAB_REQUEST,
     RAW_SUBTYPE_OPTIONS,
-    RESPONSE_TAB_BODY,
-    RESPONSE_TAB_HEADERS,
 )
 from piespector.domain.modes import (
     MODE_HOME_AUTH_EDIT,
@@ -36,6 +34,7 @@ from piespector.commands import filesystem_path_completions
 from piespector.placeholders import placeholder_match
 from piespector.screens.home import messages
 from piespector.screens.home.collections_sidebar import CollectionsSidebar
+from piespector.screens.home.response_panel import ResponsePanel
 from piespector.screens.home.url_bar import UrlBar
 from piespector.screens.base import PiespectorScreen
 from piespector.screens.home.request.header_editor import RequestHeadersTable
@@ -47,12 +46,6 @@ from piespector.widget.select import PiespectorSelect, SelectionChanged, option_
 
 
 class HomeScreen(PiespectorScreen):
-    @staticmethod
-    def _response_content_id(tab_id: str) -> str:
-        if tab_id == RESPONSE_TAB_HEADERS:
-            return "response-headers-content"
-        return "response-body-content"
-
     def compose_workspace(self) -> ComposeResult:
         with Vertical(id="home-screen"):
             yield UrlBar(id="url-bar-container")
@@ -148,21 +141,7 @@ class HomeScreen(PiespectorScreen):
                             with TabPane("Options", id=HOME_EDITOR_TAB_OPTIONS):
                                 yield Static("", id="request-options-content")
                         yield Static("", classes="panel-subtitle", id="request-subtitle")
-                    with Vertical(id="response-panel"):
-                        yield Static("Response", classes="panel-title", id="response-title")
-                        yield Static("", id="response-note")
-                        with Horizontal(id="response-header-row"):
-                            yield Tabs(
-                                Tab("Body", id=RESPONSE_TAB_BODY),
-                                Tab("Headers", id=RESPONSE_TAB_HEADERS),
-                                id="response-tabs",
-                                active=RESPONSE_TAB_BODY,
-                            )
-                            yield Static("", id="response-summary")
-                        with ContentSwitcher(id="response-content", initial=RESPONSE_TAB_BODY):
-                            yield Static("", id="response-body-content")
-                            yield Static("", id="response-headers-content")
-                        yield Static("", classes="panel-subtitle", id="response-subtitle")
+                    yield ResponsePanel(id="response-panel")
         yield Static("", id="params-input-hint", classes="hidden")
         yield Static("", id="headers-input-hint", classes="hidden")
         yield Static("", id="auth-field-input-hint", classes="hidden")
@@ -182,19 +161,13 @@ class HomeScreen(PiespectorScreen):
             "request-overview-input",
             "request-params-input",
             "request-headers-input",
-            "response-note",
         ):
             self.query_one(f"#{widget_id}").display = False
         request_tabs = self.query_one("#request-tabs", TabbedContent)
-        response_tabs = self.query_one("#response-tabs", Tabs)
-        response_content = self.query_one("#response-content", ContentSwitcher)
         request_tabs.active = self.app.state.home_editor_tab
-        response_tabs.active = self.app.state.selected_home_response_tab
-        response_content.current = self._response_content_id(self.app.state.selected_home_response_tab)
         self._tab_activation_ready = True
         self.query_one("#sidebar-container").border_title = "Collections"
         self.query_one("#request-panel").border_title = "Request"
-        self.query_one("#response-panel").border_title = "Response"
 
     def open_body_text_editor(self, origin_mode: str | None = None) -> None:
         app = self.app
@@ -403,29 +376,24 @@ class HomeScreen(PiespectorScreen):
                 return
             app.state.set_home_editor_tab(tab_id)
             app._refresh_screen()
-            return
 
-        if event.control.id == "response-tabs":
-            if tab_id == app.state.selected_home_response_tab:
-                return
-            app.state.selected_home_response_tab = tab_id
-            app.state.response_scroll_offset = 0
-            app._refresh_screen()
-
-    def on_tabs_tab_activated(self, event: Tabs.TabActivated) -> None:
+    @on(ResponsePanel.TabChanged)
+    def _on_response_tab_changed(self, event: ResponsePanel.TabChanged) -> None:
         app = self.app
-        if app is None or not getattr(self, "_tab_activation_ready", False):
-            return
-        if event.control.id != "response-tabs":
+        if app is None or event.tab_id == app.state.selected_home_response_tab:
             return
 
-        tab_id = event.tab.id
-        if not tab_id or tab_id == app.state.selected_home_response_tab:
-            return
-
-        app.state.selected_home_response_tab = tab_id
+        app.state.selected_home_response_tab = event.tab_id
         app.state.response_scroll_offset = 0
         app._refresh_screen()
+
+    @on(ResponsePanel.ViewerRequested)
+    def _on_response_viewer_requested(self, event: ResponsePanel.ViewerRequested) -> None:
+        app = self.app
+        if app is None:
+            return
+
+        app._open_response_viewer(origin_mode=event.origin_mode)
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         app = self.app

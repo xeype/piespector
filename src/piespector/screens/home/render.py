@@ -8,7 +8,7 @@ from rich.style import Style
 from rich.text import Text
 
 from textual.css.query import NoMatches
-from textual.widgets import ContentSwitcher, DataTable, Input, Select, Static, TabbedContent, Tabs
+from textual.widgets import DataTable, Input, Select, Static, TabbedContent
 
 from piespector.domain.editor import (
     AUTH_TYPE_OPTIONS,
@@ -22,9 +22,6 @@ from piespector.domain.editor import (
     HOME_EDITOR_TAB_REQUEST,
     RAW_SUBTYPE_OPTIONS,
     REQUEST_EDITOR_TABS,
-    RESPONSE_TAB_BODY,
-    RESPONSE_TAB_HEADERS,
-    RESPONSE_TABS,
 )
 from piespector.domain.modes import (
     MODE_HOME_BODY_EDIT,
@@ -54,9 +51,7 @@ from piespector.request_builder import preview_auto_headers
 from piespector.screens.home import messages
 from piespector.screens.home.layout import (
     home_request_list_visible_rows,
-    home_response_visible_rows,
     home_top_bar_height,
-    response_scroll_step,
 )
 from piespector.screens.home.selection import (
     home_highlighted_panels,
@@ -84,24 +79,10 @@ from piespector.screens.home.request.header_editor import RequestHeadersTable, r
 from piespector.screens.home.request.query_editor import RequestParamsTable, refresh_request_params_table
 from piespector.screens.home.request.url_bar import render_top_url_bar
 from piespector.widget.select import option_list, sync
-from piespector.screens.home.response_panel import (
-    render_request_response,
-    render_response_summary,
-    render_response_tabs,
-)
+from piespector.screens.home.response_panel import render_request_response
 from piespector.screens.home.sidebar import render_home_sidebar as render_home_sidebar_panel
 from piespector.state import PiespectorState
-from piespector.ui.rendering_helpers import (
-    render_response_body,
-    render_response_headers,
-    response_body_lines,
-    response_header_row_count,
-)
 from piespector.ui.selection import FOCUS_FRAME_CLASS, effective_mode, set_selected
-
-home_editor_subtitle = messages.home_editor_subtitle
-response_caption = messages.response_caption
-
 
 def request_response_shortcuts_enabled(mode: str) -> bool:
     return mode in REQUEST_RESPONSE_SHORTCUT_MODES
@@ -622,105 +603,6 @@ def refresh_home_request_content(
     else:
         _sync_input_widget(body_input, "", display=False)
         body_preview.display = True
-
-
-# ================================================================
-#  Response panel refresh
-# ================================================================
-
-def refresh_home_response(
-    state: PiespectorState,
-    note: Static,
-    summary: Static,
-    tabs: Tabs,
-    content_switcher: ContentSwitcher,
-    panel,
-    title: Static,
-    subtitle: Static,
-    viewport_height: int | None,
-    viewport_width: int | None,
-) -> None:
-    def _response_content_id(tab_id: str) -> str:
-        if tab_id == RESPONSE_TAB_HEADERS:
-            return "response-headers-content"
-        return "response-body-content"
-
-    active_request = state.get_active_request()
-    mode = effective_mode(state)
-    panel_selected = home_selection(state).panel == "response"
-    del panel, title
-
-    # Update tabs
-    if tabs.query(f"#tabs-list > #{state.selected_home_response_tab}"):
-        tabs.active = state.selected_home_response_tab
-    content_id = _response_content_id(state.selected_home_response_tab)
-    if content_switcher.query(f"#{content_id}"):
-        content_switcher.current = content_id
-
-    body_content = content_switcher.query_one("#response-body-content", Static)
-    headers_content = content_switcher.query_one("#response-headers-content", Static)
-
-    shortcuts_enabled = request_response_shortcuts_enabled(state.mode)
-
-    # Handle pending request
-    if (
-        active_request is not None
-        and state.pending_request_id is not None
-        and active_request.request_id == state.pending_request_id
-    ):
-        note.display = False
-        note.update("")
-        summary.update(Text(messages.HOME_SENDING_REQUEST))
-        body_content.update("")
-        headers_content.update("")
-        subtitle.update(messages.HOME_REQUEST_IN_PROGRESS)
-        return
-
-    # Handle no response
-    if active_request is None or active_request.last_response is None:
-        note.display = False
-        note.update("")
-        summary.update("")
-        empty = Text(messages.HOME_NO_RESPONSE)
-        body_content.update(empty)
-        headers_content.update(empty)
-        subtitle.update("")
-        return
-
-    # Render response summary
-    response = active_request.last_response
-    note.display = False
-    note.update("")
-    summary.update(render_response_summary(response))
-
-    # Render response content
-    visible_rows = max(viewport_height, 1) if viewport_height is not None else home_response_visible_rows(None)
-    if state.selected_home_response_tab == RESPONSE_TAB_HEADERS:
-        lines = list(range(response_header_row_count(response.response_headers)))
-    else:
-        lines = response_body_lines(response.body_text, viewport_width)
-    state.clamp_response_scroll_offset(len(lines), visible_rows)
-    start = state.response_scroll_offset
-    end = min(start + visible_rows, len(lines))
-
-    if state.selected_home_response_tab == RESPONSE_TAB_HEADERS:
-        rendered = render_response_headers(response.response_headers, start, end)
-        headers_content.update(rendered)
-    else:
-        rendered = render_response_body(response.body_text, viewport_width, start, end)
-        body_content.update(rendered)
-
-    subtitle.update(messages.response_caption(
-        start,
-        end,
-        len(lines),
-        shortcuts_enabled,
-        state.selected_home_response_tab,
-        panel_selected,
-        "Rows" if state.selected_home_response_tab == RESPONSE_TAB_HEADERS else "Lines",
-        response.error,
-    ))
-
 
 # ================================================================
 #  Legacy rendering - kept for backward compatibility (tests, etc.)

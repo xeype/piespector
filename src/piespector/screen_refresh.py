@@ -5,14 +5,13 @@ from typing import TYPE_CHECKING
 from textual.app import ScreenStackError
 from textual.css.query import NoMatches
 from textual.widgets import (
-    ContentSwitcher,
     DataTable,
     Input,
     Static,
     TabbedContent,
-    Tabs,
 )
 
+from piespector.placeholders import placeholder_match
 from piespector.widget.tree import PiespectorTree
 
 from piespector.domain.editor import (
@@ -30,7 +29,8 @@ from piespector.domain.modes import (
 from piespector.screens.base import PiespectorScreen
 from piespector.screens.home.collections_sidebar import CollectionsSidebar
 from piespector.screens.home.layout import home_top_bar_height
-from piespector.screens.home.render import refresh_home_request_content, refresh_home_response, sync_home_focus_highlights
+from piespector.screens.home.render import refresh_home_request_content, sync_home_focus_highlights
+from piespector.screens.home.response_panel import ResponsePanel
 from piespector.screens.home.url_bar import UrlBar
 from piespector.ui.command_line_content import build_command_line_text
 from piespector.ui.footer import PiespectorFooter
@@ -259,34 +259,8 @@ class ScreenRefreshCoordinator:
         if not self.app._has_live_screen():
             self.app._refresh_viewport()
             return
-        response_note = self.app._query_current("#response-note", Static)
-        response_summary = self.app._query_current("#response-summary", Static)
-        response_panel = self.app._query_current("#response-panel")
-        response_title = self.app._query_current("#response-title", Static)
-        response_subtitle = self.app._query_current("#response-subtitle", Static)
-        response_tabs = self.app._query_current("#response-tabs", Tabs)
-        response_content = self.app._query_current("#response-content", ContentSwitcher)
-        response_body_content = self.app._query_current("#response-body-content", Static)
-        response_content_height = (
-            response_content.size.height or response_body_content.size.height or None
-        )
-        response_width = (
-            response_content.size.width
-            or response_body_content.size.width
-            or self.app._query_current("#home-main").size.width
-        )
-        refresh_home_response(
-            self.state,
-            response_note,
-            response_summary,
-            response_tabs,
-            response_content,
-            response_panel,
-            response_title,
-            response_subtitle,
-            response_content_height,
-            response_width,
-        )
+        response_panel = self.app._query_current("#response-panel", ResponsePanel)
+        response_panel.refresh_from_state(self.state)
 
     def refresh_jump_state(self) -> None:
         if not self.app._has_live_screen():
@@ -326,10 +300,14 @@ class ScreenRefreshCoordinator:
 
     def home_response_visible_rows(self) -> int:
         try:
-            response_content = self.app._query_current("#response-body-content", Static)
-            return max(response_content.size.height, 1)
+            response_panel = self.app._query_current("#response-panel", ResponsePanel)
+            return response_panel.visible_rows()
         except NoMatches:
             return 8
 
     def home_response_scroll_step(self) -> int:
-        return max(self.app._home_response_visible_rows() // 2, 1)
+        try:
+            response_panel = self.app._query_current("#response-panel", ResponsePanel)
+            return response_panel.scroll_step()
+        except NoMatches:
+            return max(self.app._home_response_visible_rows() // 2, 1)

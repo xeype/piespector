@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from textual import events
+from textual.css.query import NoMatches
 
 from piespector.domain.editor import RESPONSE_TAB_BODY
 from piespector.domain.modes import MODE_HOME_RESPONSE_SELECT, REQUEST_RESPONSE_SHORTCUT_MODES
@@ -17,6 +18,7 @@ from piespector.interactions.keys import (
 )
 from piespector.screens.home import messages
 from piespector.screens.home.controllers.base import HomeControllerBase, HomeModeHandler
+from piespector.screens.home.response_panel import ResponsePanel
 
 
 class HomeResponseController(HomeControllerBase):
@@ -85,5 +87,10 @@ class HomeResponseController(HomeControllerBase):
                 self.app._refresh_screen()
                 event.stop()
                 return
-            self.app._open_response_viewer(origin_mode=MODE_HOME_RESPONSE_SELECT)
+            try:
+                response_panel = self.app._query_current("#response-panel", ResponsePanel)
+            except NoMatches:
+                self.app._open_response_viewer(origin_mode=MODE_HOME_RESPONSE_SELECT)
+            else:
+                response_panel.request_viewer(origin_mode=MODE_HOME_RESPONSE_SELECT)
             event.stop()
