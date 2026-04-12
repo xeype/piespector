@@ -26,10 +26,10 @@ from piespector.screens.home.selection import (
 from piespector.screens.home.request.auth_pane import RequestAuthPane
 from piespector.screens.home.request.body_pane import RequestBodyPane
 from piespector.screens.home.request.headers_pane import RequestHeadersPane
+from piespector.screens.home.request.options_pane import RequestOptionsPane
 from piespector.screens.home.request.params_pane import RequestParamsPane
 from piespector.screens.home.request.request_editor import render_home_editor as render_home_editor_panel
 from piespector.screens.home.request.overview_pane import RequestOverviewPane
-from piespector.screens.home.request.request_options import render_request_options_editor
 from piespector.screens.home.request.url_bar import render_top_url_bar
 from piespector.screens.home.response_panel import render_request_response
 from piespector.screens.home.sidebar import render_home_sidebar as render_home_sidebar_panel
@@ -89,15 +89,14 @@ def refresh_home_request_content(
     params_pane = tabs.query_one("#request-params-pane", RequestParamsPane)
     headers_pane = tabs.query_one("#request-headers-pane", RequestHeadersPane)
     body_pane = tabs.query_one("#request-body-pane", RequestBodyPane)
-    options_content = tabs.query_one("#request-options-content", Static)
+    options_pane = tabs.query_one("#request-options-pane", RequestOptionsPane)
 
     overview_pane.refresh_from_state(state)
     auth_pane.refresh_from_state(state)
     body_pane.refresh_from_state(state)
 
     if active_request is None:
-        empty = Text(messages.HOME_NO_ACTIVE_REQUEST)
-        options_content.update(empty)
+        options_pane.refresh_from_state(state)
         params_pane.refresh_from_state(state)
         headers_pane.refresh_from_state(state)
         subtitle.update("")
@@ -120,7 +119,7 @@ def refresh_home_request_content(
         return
 
     if state.home_editor_tab == HOME_EDITOR_TAB_OPTIONS:
-        options_content.update(render_request_options_editor(active_request, state))
+        options_pane.refresh_from_state(state)
         return
 
 # ================================================================

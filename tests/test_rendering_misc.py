@@ -26,6 +26,7 @@ from piespector.screens.home.response_panel import (
     response_status_style,
 )
 from piespector.screens.home.request.request_auth import render_request_auth_editor
+from piespector.screens.home.request.request_options import render_request_options_editor
 from piespector.screens.home.request.url_bar import render_request_url_display, render_top_url_bar
 from piespector.screens.home.sidebar import render_home_sidebar
 from piespector.state import (
@@ -857,6 +858,41 @@ class UiAndScrollbarTests(unittest.TestCase):
             APP_CSS,
             r"Select > SelectOverlay > \.option-list--option,[\s\S]*?background: \$surface;",
         )
+
+
+class RequestOptionsRenderingTests(unittest.TestCase):
+    def test_render_request_options_editor_shows_both_fields(self) -> None:
+        state = PiespectorState(current_tab="home")
+        state.mode = "HOME_REQUEST_SELECT"
+        request = RequestDefinition(
+            request_id="r1",
+            name="Health",
+            verify_ssl=True,
+            follow_redirects=False,
+        )
+
+        rendered = render_plain(render_request_options_editor(request, state), width=200)
+
+        self.assertIn("Verify SSL", rendered)
+        self.assertIn("Follow", rendered)
+        self.assertIn("Redirects", rendered)
+        self.assertIn("[x] Enabled", rendered)
+        self.assertIn("[ ] Disabled", rendered)
+
+    def test_render_request_options_editor_shows_disabled_verify_ssl(self) -> None:
+        state = PiespectorState(current_tab="home")
+        state.mode = "HOME_REQUEST_SELECT"
+        request = RequestDefinition(
+            request_id="r1",
+            name="Health",
+            verify_ssl=False,
+            follow_redirects=True,
+        )
+
+        rendered = render_plain(render_request_options_editor(request, state), width=200)
+
+        self.assertIn("[ ] Disabled", rendered)
+        self.assertIn("[x] Enabled", rendered)
 
 
 if __name__ == "__main__":

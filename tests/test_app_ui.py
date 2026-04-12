@@ -9,6 +9,7 @@ from rich.console import Console
 from piespector.app import PiespectorApp
 from piespector.placeholders import PLACEHOLDER_HIGHLIGHT_COLOR
 from piespector.domain.editor import (
+    HOME_EDITOR_TAB_OPTIONS,
     HOME_SIDEBAR_JUMP_KEY,
     REQUEST_EDITOR_JUMP_BINDINGS,
     RESPONSE_JUMP_BINDINGS,
@@ -19,6 +20,7 @@ from piespector.screens.home.collections_sidebar import CollectionsSidebar
 from piespector.screens.home.request.auth_pane import RequestAuthPane
 from piespector.screens.home.request.body_pane import RequestBodyPane
 from piespector.screens.home.request.headers_pane import RequestHeadersPane
+from piespector.screens.home.request.options_pane import RequestOptionsPane
 from piespector.screens.home.request.overview_pane import RequestOverviewPane
 from piespector.screens.home.request.params_pane import RequestParamsPane
 from piespector.screens.home.response_panel import ResponsePanel
@@ -3469,6 +3471,93 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
 
             self.assertNotIn(folder.folder_id, app.state.collapsed_folder_ids)
             self.assertEqual(len(tree._tree_lines), visible_lines)
+
+
+class RequestOptionsPaneTests(unittest.IsolatedAsyncioTestCase):
+    async def test_options_pane_is_mounted_in_options_tab(self) -> None:
+        app = PiespectorApp()
+        app._persist_requests = lambda: None
+        app._load_request_workspace = lambda: None
+        app.state.home_editor_tab = HOME_EDITOR_TAB_OPTIONS
+
+        async with app.run_test(size=(140, 40)) as pilot:
+            app._refresh_screen()
+            await pilot.pause()
+
+            options_pane = app.screen.query_one("#request-options-pane", RequestOptionsPane)
+            self.assertIsNotNone(options_pane)
+            self.assertTrue(options_pane.is_mounted)
+
+    async def test_options_pane_contains_options_content_static(self) -> None:
+        app = PiespectorApp()
+        app._persist_requests = lambda: None
+        app._load_request_workspace = lambda: None
+        request = RequestDefinition(
+            request_id="r1",
+            name="Health",
+            verify_ssl=True,
+            follow_redirects=False,
+        )
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+        app.state.home_editor_tab = HOME_EDITOR_TAB_OPTIONS
+        app.state.mode = "HOME_REQUEST_SELECT"
+
+        async with app.run_test(size=(140, 40)) as pilot:
+            app._refresh_screen()
+            await pilot.pause()
+
+            options_pane = app.screen.query_one("#request-options-pane", RequestOptionsPane)
+            content = options_pane.query_one("#request-options-content", Static)
+            self.assertIsNotNone(content)
+
+    async def test_options_pane_space_toggles_verify_ssl(self) -> None:
+        app = PiespectorApp()
+        app._persist_requests = lambda: None
+        app._load_request_workspace = lambda: None
+        request = RequestDefinition(
+            request_id="r1",
+            name="Health",
+            verify_ssl=True,
+        )
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+        app.state.home_editor_tab = HOME_EDITOR_TAB_OPTIONS
+        app.state.mode = "HOME_REQUEST_SELECT"
+        app.state.selected_request_field_index = 0
+
+        async with app.run_test(size=(140, 40)) as pilot:
+            app._refresh_screen()
+            await pilot.pause()
+
+            await pilot.press("space")
+            await pilot.pause()
+
+            self.assertFalse(request.verify_ssl)
+
+    async def test_options_pane_space_toggles_follow_redirects(self) -> None:
+        app = PiespectorApp()
+        app._persist_requests = lambda: None
+        app._load_request_workspace = lambda: None
+        request = RequestDefinition(
+            request_id="r1",
+            name="Health",
+            follow_redirects=False,
+        )
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+        app.state.home_editor_tab = HOME_EDITOR_TAB_OPTIONS
+        app.state.mode = "HOME_REQUEST_SELECT"
+        app.state.selected_request_field_index = 1
+
+        async with app.run_test(size=(140, 40)) as pilot:
+            app._refresh_screen()
+            await pilot.pause()
+
+            await pilot.press("space")
+            await pilot.pause()
+
+            self.assertTrue(request.follow_redirects)
 
 
 if __name__ == "__main__":

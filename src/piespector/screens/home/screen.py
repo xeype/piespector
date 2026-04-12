@@ -20,6 +20,7 @@ from piespector.screens.home.url_bar import UrlBar
 from piespector.screens.home.request.auth_pane import RequestAuthPane
 from piespector.screens.home.request.body_pane import RequestBodyPane
 from piespector.screens.home.request.headers_pane import RequestHeadersPane
+from piespector.screens.home.request.options_pane import RequestOptionsPane
 from piespector.screens.home.request.params_pane import RequestParamsPane
 from piespector.screens.base import PiespectorScreen
 from piespector.screens.home.request.overview_pane import RequestOverviewPane
@@ -47,7 +48,7 @@ class HomeScreen(PiespectorScreen):
                             with TabPane("Body", id=HOME_EDITOR_TAB_BODY):
                                 yield RequestBodyPane(id="request-body-pane")
                             with TabPane("Options", id=HOME_EDITOR_TAB_OPTIONS):
-                                yield Static("", id="request-options-content")
+                                yield RequestOptionsPane(id="request-options-pane")
                         yield Static("", classes="panel-subtitle", id="request-subtitle")
                     yield ResponsePanel(id="response-panel")
 
