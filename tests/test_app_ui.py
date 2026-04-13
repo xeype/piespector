@@ -238,7 +238,7 @@ class AppUiTests(unittest.TestCase):
         app.state.active_request_id = request.request_id
         app.state.mode = "HOME_SECTION_SELECT"
 
-        app.interaction_controller._open_home_top_bar_jump_target("method")
+        app._home_screen.activate_jump_target("topbar:method")
 
         self.assertEqual(app.state.mode, "HOME_REQUEST_METHOD_SELECT")
         self.assertEqual(app.state.selected_top_bar_field, "method")
@@ -272,11 +272,11 @@ class AppUiTests(unittest.TestCase):
         app.state.active_request_id = request.request_id
         app.state.mode = "HOME_SECTION_SELECT"
 
-        app.interaction_controller._open_home_top_bar_jump_target("url")
+        app._home_screen.activate_jump_target("topbar:url")
 
         self.assertEqual(app.state.mode, "HOME_URL_EDIT")
 
-    def test_app_on_key_method_selector_e_and_escape_work(self) -> None:
+    def test_home_screen_on_key_method_selector_e_and_escape_work(self) -> None:
         app = PiespectorApp()
         request = RequestDefinition(
             name="Health",
@@ -288,18 +288,18 @@ class AppUiTests(unittest.TestCase):
         app.state.enter_home_method_select_mode(origin_mode="HOME_SECTION_SELECT")
 
         with patch.object(app, "_refresh_screen"):
-            app.on_key(FakeKeyEvent("e"))
+            app._home_screen.on_key(FakeKeyEvent("e"))
         self.assertEqual(app.state.mode, "HOME_REQUEST_METHOD_EDIT")
 
         with patch.object(app, "_refresh_screen"):
-            app.on_key(FakeKeyEvent("escape"))
+            app._home_screen.on_key(FakeKeyEvent("escape"))
         self.assertEqual(app.state.mode, "HOME_REQUEST_METHOD_SELECT")
 
         with patch.object(app, "_refresh_screen"):
-            app.on_key(FakeKeyEvent("escape"))
+            app._home_screen.on_key(FakeKeyEvent("escape"))
         self.assertEqual(app.state.mode, "HOME_SECTION_SELECT")
 
-    def test_app_on_key_url_edit_escape_leaves_mode(self) -> None:
+    def test_home_screen_on_key_url_edit_escape_leaves_mode(self) -> None:
         app = PiespectorApp()
         request = RequestDefinition(
             name="Health",
@@ -312,7 +312,7 @@ class AppUiTests(unittest.TestCase):
         app.state.enter_home_url_edit_mode()
 
         with patch.object(app, "_refresh_screen"):
-            app.on_key(FakeKeyEvent("escape"))
+            app._home_screen.on_key(FakeKeyEvent("escape"))
         self.assertEqual(app.state.mode, "HOME_SECTION_SELECT")
 
     def test_method_selector_does_not_block_jump_action(self) -> None:
@@ -1096,11 +1096,36 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(request_panel.has_class("piespector-tab-select"))
             self.assertFalse(table.has_focus)
 
+    async def test_sidebar_tree_e_pins_selected_request_when_tree_has_focus(self) -> None:
+        app = PiespectorApp()
+        app._load_request_workspace = lambda: None
+        request = RequestDefinition(
+            request_id="r1",
+            name="Health",
+        )
+        app.state.requests = [request]
+        app.state.ensure_request_workspace()
+        app.state._set_selected_sidebar_by_request_id(request.request_id)
+        app.state.active_request_id = request.request_id
+        app.state.open_request_ids = []
+
+        async with app.run_test(size=(140, 40)) as pilot:
+            await pilot.pause()
+
+            tree = app.screen.query_one("#sidebar-tree")
+            self.assertIs(app.focused, tree)
+
+            await pilot.press("e")
+            await pilot.pause()
+
+            self.assertEqual(app.state.active_request_id, request.request_id)
+            self.assertEqual(app.state.open_request_ids, [request.request_id])
+
     async def test_jump_mode_tab_still_opens_home_collections(self) -> None:
         app = PiespectorApp()
         app._load_request_workspace = lambda: None
-        app.state.current_tab = "env"
-        app.state.mode = "ENV_SELECT"
+        app.state.current_tab = "home"
+        app.state.mode = "HOME_SECTION_SELECT"
 
         async with app.run_test(size=(140, 40)) as pilot:
             await pilot.pause()
@@ -1615,6 +1640,29 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(app.state.mode, "NORMAL")
             self.assertEqual(request.url, "https://example.com/health")
             self.assertFalse(app.screen.query_one("#url-input", Input).display)
+
+    async def test_url_bar_skips_rerender_when_request_url_state_is_unchanged(self) -> None:
+        app = PiespectorApp()
+        app._persist_requests = lambda: None
+        app._load_request_workspace = lambda: None
+        request = RequestDefinition(
+            request_id="r1",
+            name="Health",
+            url="https://example.com/health",
+        )
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+
+        async with app.run_test(size=(140, 40)) as pilot:
+            app._refresh_screen()
+            await pilot.pause()
+
+            url_bar = app.screen.query_one("#url-bar-container", UrlBar)
+            with patch(
+                "piespector.screens.home.url_bar.render_request_url_display",
+                side_effect=AssertionError("url display should not rerender"),
+            ):
+                url_bar.refresh_from_state(app.state)
 
     async def test_ctrl_p_opens_command_palette(self) -> None:
         app = PiespectorApp()

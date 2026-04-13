@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from textual import events, on
-from textual.app import ComposeResult
+from textual.app import ComposeResult, ScreenStackError
+from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.css.query import NoMatches
 from textual.reactive import reactive
@@ -19,6 +20,8 @@ from piespector.domain.editor import (
     REQUEST_EDITOR_JUMP_BINDINGS,
     RESPONSE_TAB_BODY,
     RESPONSE_JUMP_BINDINGS,
+    TAB_HOME,
+    TAB_LABELS,
     TOP_BAR_METHOD_JUMP_KEY,
     TOP_BAR_URL_JUMP_KEY,
 )
@@ -26,7 +29,10 @@ from piespector.domain.modes import (
     MODE_HOME_AUTH_EDIT,
     MODE_HOME_AUTH_SELECT,
     MODE_HOME_BODY_SELECT,
+    MODE_HOME_BODY_EDIT,
     MODE_HOME_BODY_TYPE_EDIT,
+    MODE_HOME_HEADERS_EDIT,
+    MODE_HOME_PARAMS_EDIT,
     MODE_HOME_SECTION_SELECT,
     MODE_HOME_URL_EDIT,
     MODE_NORMAL,
@@ -49,9 +55,26 @@ from piespector.ui.confirm_modal import ConfirmModal
 from piespector.ui.jump_overlay import JumpOverlay
 from piespector.ui.jumper import JumpTarget, Jumper
 from piespector.ui.selection import FOCUS_FRAME_CLASS
+from piespector.interactions.keys import (
+    KEY_VIM_DOWN,
+    KEY_VIM_LEFT,
+    KEY_VIM_RIGHT,
+    KEY_VIM_UP,
+)
 
 
 class HomeScreen(PiespectorScreen):
+    BINDINGS = PiespectorScreen.BINDINGS + [
+        Binding(KEY_VIM_UP, "home_browse_up", "Browse Up", show=False),
+        Binding(KEY_VIM_DOWN, "home_browse_down", "Browse Down", show=False),
+        Binding("K", "home_previous_folder", "Previous Folder", show=False),
+        Binding("J", "home_next_folder", "Next Folder", show=False),
+        Binding("ctrl+k", "home_previous_collection", "Previous Collection", show=False),
+        Binding("ctrl+j", "home_next_collection", "Next Collection", show=False),
+        Binding(KEY_VIM_LEFT, "home_previous_open_request", "Previous Pinned Request", show=False),
+        Binding(KEY_VIM_RIGHT, "home_next_open_request", "Next Pinned Request", show=False),
+    ]
+
     params_creating_new: reactive[bool] = reactive(False)
     headers_creating_new: reactive[bool] = reactive(False)
     body_creating_new: reactive[bool] = reactive(False)
@@ -76,6 +99,21 @@ class HomeScreen(PiespectorScreen):
     home_body_select_return_mode: reactive[str] = reactive(MODE_HOME_SECTION_SELECT)
     home_response_select_return_mode: reactive[str] = reactive(MODE_NORMAL)
     home_editor_tab: reactive[str] = reactive(HOME_EDITOR_TAB_REQUEST)
+
+    def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
+        if action in {
+            "home_browse_up",
+            "home_browse_down",
+            "home_previous_folder",
+            "home_next_folder",
+            "home_previous_collection",
+            "home_next_collection",
+            "home_previous_open_request",
+            "home_next_open_request",
+        }:
+            state = self._state
+            return state is not None and state.mode == MODE_NORMAL
+        return super().check_action(action, parameters)
 
     def _handle_command_outcome(self, outcome: CommandOutcome) -> None:
         if outcome.confirmation_request is not None:
@@ -382,9 +420,126 @@ class HomeScreen(PiespectorScreen):
             return
         app.state.leave_jump_mode()
         if target is not None:
-            app.interaction_controller.activate_jump_target(target)
+            self.activate_jump_target(target)
         app._refresh_screen()
         app.call_after_refresh(self.clear_jump_focus)
+
+    def activate_jump_target(self, target: str) -> bool:
+        app = self._owner_app()
+        if app is None:
+            return False
+        if target == "collections":
+            self._open_collections_jump_target()
+            return True
+        if target.startswith("request:"):
+            self._open_request_jump_target(target.split(":", 1)[1])
+            return True
+        if target.startswith("response:"):
+            self._open_response_jump_target(target.split(":", 1)[1])
+            return True
+        if target.startswith("topbar:"):
+            self._open_top_bar_jump_target(target.split(":", 1)[1])
+            return True
+        return False
+
+    def _open_collections_jump_target(self) -> None:
+        app = self._owner_app()
+        assert app is not None
+        app.state.switch_tab(TAB_HOME, TAB_LABELS[TAB_HOME])
+        app.state.mode = MODE_NORMAL
+        app.state.message = ""
+
+    def _open_request_jump_target(self, tab_id: str) -> None:
+        app = self._owner_app()
+        assert app is not None
+        app.state.switch_tab(TAB_HOME, TAB_LABELS[TAB_HOME])
+        if app.state.get_active_request() is None and app.state.get_selected_request() is not None:
+            app.state.open_selected_request(pin=True)
+        app.state.set_home_editor_tab(tab_id)
+        app.state.enter_home_section_select_mode()
+
+    def _open_top_bar_jump_target(self, target: str) -> None:
+        app = self._owner_app()
+        assert app is not None
+        app.state.switch_tab(TAB_HOME, TAB_LABELS[TAB_HOME])
+        if app.state.get_active_request() is None and app.state.get_selected_request() is not None:
+            app.state.open_selected_request(pin=True)
+        if target == "method":
+            app.state.enter_home_method_select_mode(origin_mode=MODE_HOME_SECTION_SELECT)
+        elif target == "url":
+            app.state.enter_home_url_edit_mode()
+
+    def _open_response_jump_target(self, tab_id: str) -> None:
+        app = self._owner_app()
+        assert app is not None
+        app.state.switch_tab(TAB_HOME, TAB_LABELS[TAB_HOME])
+        if app.state.get_active_request() is None and app.state.get_selected_request() is not None:
+            app.state.open_selected_request(pin=True)
+        app.state.selected_home_response_tab = tab_id
+        app.state.enter_home_response_select_mode(origin_mode=MODE_HOME_SECTION_SELECT)
+
+    def action_home_browse_up(self) -> None:
+        self._browse_sidebar(-1)
+
+    def action_home_browse_down(self) -> None:
+        self._browse_sidebar(1)
+
+    def action_home_previous_folder(self) -> None:
+        self._jump_folder(-1)
+
+    def action_home_next_folder(self) -> None:
+        self._jump_folder(1)
+
+    def action_home_previous_collection(self) -> None:
+        self._jump_collection(-1)
+
+    def action_home_next_collection(self) -> None:
+        self._jump_collection(1)
+
+    def action_home_previous_open_request(self) -> None:
+        self._cycle_open_request(-1)
+
+    def action_home_next_open_request(self) -> None:
+        self._cycle_open_request(1)
+
+    def _browse_sidebar(self, step: int) -> None:
+        app = self._owner_app()
+        if app is None:
+            return
+        tree = self.sidebar_tree()
+        if tree is None:
+            app.state.select_request(step)
+            self.refresh_sidebar()
+            return
+        if not tree.has_focus:
+            tree.focus()
+        if step < 0:
+            tree.action_cursor_up()
+        elif step > 0:
+            tree.action_cursor_down()
+
+    def _cycle_open_request(self, step: int) -> None:
+        app = self._owner_app()
+        if app is None:
+            return
+        app.state.cycle_open_request(step)
+        app._refresh_viewport()
+
+    def _jump_folder(self, step: int) -> None:
+        app = self._owner_app()
+        if app is None:
+            return
+        if app.state.select_folder(step):
+            app._refresh_viewport()
+            self.sync_sidebar_cursor()
+
+    def _jump_collection(self, step: int) -> None:
+        app = self._owner_app()
+        if app is None:
+            return
+        if app.state.select_collection(step):
+            app._refresh_viewport()
+            self.sync_sidebar_cursor()
 
     def open_body_text_editor(self, origin_mode: str | None = None) -> None:
         app = self.app
@@ -566,37 +721,48 @@ class HomeScreen(PiespectorScreen):
         app._open_response_viewer(origin_mode=event.origin_mode)
 
     def on_key(self, event: events.Key) -> None:
-        app = self.app
+        app = self._owner_app()
         if app is None:
             return
+        mode = app.state.mode
 
-        if (
-            event.key == "tab"
-            and app.state.home_editor_tab == HOME_EDITOR_TAB_AUTH
-            and app.state.mode == MODE_HOME_AUTH_EDIT
-        ):
-            auth_pane = self.query_one("#request-auth-pane", RequestAuthPane)
-            if auth_pane.handle_input_key(event):
-                return
+        if self.is_mounted:
+            if (
+                event.key == "tab"
+                and app.state.home_editor_tab == HOME_EDITOR_TAB_AUTH
+                and mode == MODE_HOME_AUTH_EDIT
+            ):
+                auth_pane = self.query_one("#request-auth-pane", RequestAuthPane)
+                if auth_pane.handle_input_key(event):
+                    return
 
-        params_pane = self.query_one("#request-params-pane", RequestParamsPane)
-        if params_pane.handle_input_key(event):
-            return
+            if mode == MODE_HOME_PARAMS_EDIT:
+                params_pane = self.query_one("#request-params-pane", RequestParamsPane)
+                if params_pane.handle_input_key(event):
+                    return
 
-        headers_pane = self.query_one("#request-headers-pane", RequestHeadersPane)
-        if headers_pane.handle_input_key(event):
-            return
+            if mode == MODE_HOME_HEADERS_EDIT:
+                headers_pane = self.query_one("#request-headers-pane", RequestHeadersPane)
+                if headers_pane.handle_input_key(event):
+                    return
 
-        body_pane = self.query_one("#request-body-pane", RequestBodyPane)
-        if body_pane.handle_input_key(event):
-            return
+            if mode == MODE_HOME_BODY_EDIT:
+                body_pane = self.query_one("#request-body-pane", RequestBodyPane)
+                if body_pane.handle_input_key(event):
+                    return
 
-        focused = app.focused
-        if not isinstance(focused, Input):
-            return
-        if focused.id != "request-overview-input":
-            return
-
-        if event.key == "tab":
+        try:
+            focused = app.focused
+        except ScreenStackError:
+            focused = None
+        if isinstance(focused, Input) and focused.id == "request-overview-input" and event.key == "tab":
             event.stop()
             return
+
+        if app.home_controller.handle_request_response_shortcuts(event):
+            return
+
+        if mode == MODE_NORMAL and app.home_controller.handle_home_view_key(event):
+            return
+
+        app.home_controller.dispatch_key(mode, event)

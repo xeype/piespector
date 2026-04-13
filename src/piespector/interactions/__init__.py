@@ -1,2 +1,1 @@
-"""Interaction controllers and shared app-level input handling."""
-
+"""Shared interaction constants and helpers."""

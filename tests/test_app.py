@@ -33,8 +33,8 @@ from piespector.domain.modes import (
     MODE_HOME_RESPONSE_SELECT,
     MODE_HOME_SECTION_SELECT,
     MODE_HOME_URL_EDIT,
-    MODE_JUMP,
 )
+from piespector.screens.home.screen import HomeScreen
 from piespector.screens.home.controller import HomeController
 from piespector.domain.workspace import CollectionDefinition, FolderDefinition
 from piespector.placeholders import PLACEHOLDER_HIGHLIGHT_COLOR
@@ -229,14 +229,18 @@ class AppCommandModeTests(unittest.TestCase):
 
         mock_execute.assert_called_once_with("rename Staging")
 
-    def test_search_workspace_delegates_to_current_screen(self) -> None:
+    def test_history_screen_search_workspace_uses_screen_palette_config(self) -> None:
         app = PiespectorApp()
         app.state.current_tab = "history"
 
-        with patch.object(app._history_screen, "action_search_workspace") as mock_search:
-            app.action_search_workspace()
+        with patch.object(app, "open_palette") as open_palette:
+            app._history_screen.action_search_workspace()
 
-        mock_search.assert_called_once_with()
+        open_palette.assert_called_once_with(
+            providers=app._history_screen.search_palette_providers(),
+            placeholder=app._history_screen.search_palette_placeholder(),
+            palette_id=app._history_screen.search_palette_id(),
+        )
 
     def test_command_palette_suggestions_follow_current_tab_context(self) -> None:
         app = PiespectorApp()
@@ -382,32 +386,6 @@ class AppCommandModeTests(unittest.TestCase):
         self.assertEqual(app.state.mode, MODE_ENV_SELECT)
         self.assertTrue(event.stopped)
 
-    def test_event_router_no_longer_routes_env_keys(self) -> None:
-        app = PiespectorApp()
-        app.state.current_tab = "env"
-        app.state.mode = MODE_NORMAL
-        event = FakeKeyEvent("e")
-
-        with patch.object(app, "_refresh_screen") as refresh_screen:
-            app.event_router.handle_key(event)
-
-        self.assertEqual(app.state.mode, MODE_NORMAL)
-        self.assertFalse(event.stopped)
-        refresh_screen.assert_not_called()
-
-    def test_event_router_no_longer_routes_history_keys(self) -> None:
-        app = PiespectorApp()
-        app.state.current_tab = "history"
-        app.state.mode = MODE_NORMAL
-        event = FakeKeyEvent("j")
-
-        with patch.object(app._history_screen, "handle_view_key") as handle_view_key:
-            app.event_router.handle_key(event)
-
-        handle_view_key.assert_not_called()
-        self.assertEqual(app.state.mode, MODE_NORMAL)
-        self.assertFalse(event.stopped)
-
     def test_auth_select_escape_returns_to_auth_type_tabs(self) -> None:
         app = PiespectorApp()
         app.state.home_editor_tab = "auth"
@@ -425,95 +403,67 @@ class AppCommandModeTests(unittest.TestCase):
         self.assertEqual(app.state.auth_type_label(), "Bearer Token")
         self.assertTrue(event.stopped)
 
-    def test_jump_escape_restores_previous_mode(self) -> None:
+    def test_activate_jump_target_unknown_target_is_ignored(self) -> None:
         app = PiespectorApp()
-        app.state.current_tab = "env"
-        app.state.mode = MODE_ENV_SELECT
-        app.state.enter_jump_mode()
-        event = FakeKeyEvent("escape")
+        app.state.current_tab = TAB_HOME
+        app.state.mode = MODE_HOME_SECTION_SELECT
 
-        with patch.object(app, "_refresh_screen"):
-            app.interaction_controller.handle_jump_key(event)
+        handled = app._home_screen.activate_jump_target("unknown")
 
-        self.assertEqual(app.state.mode, MODE_ENV_SELECT)
-        self.assertEqual(app.state.current_tab, "env")
-        self.assertTrue(event.stopped)
+        self.assertFalse(handled)
+        self.assertEqual(app.state.mode, MODE_HOME_SECTION_SELECT)
 
-    def test_jump_unknown_key_stays_in_jump_mode(self) -> None:
-        app = PiespectorApp()
-        app.state.mode = MODE_ENV_SELECT
-        app.state.enter_jump_mode()
-        event = FakeKeyEvent("x", "x")
-
-        with patch.object(app, "_refresh_screen"):
-            app.interaction_controller.handle_jump_key(event)
-
-        self.assertEqual(app.state.mode, MODE_JUMP)
-        self.assertTrue(event.stopped)
-
-    def test_jump_to_request_lands_on_request_tab_select(self) -> None:
+    def test_activate_jump_target_request_lands_on_request_tab_select(self) -> None:
         app = PiespectorApp()
         request = RequestDefinition(name="Health")
         app.state.requests = [request]
         app.state.active_request_id = request.request_id
         app.state.current_tab = "env"
         app.state.mode = MODE_ENV_SELECT
-        app.state.enter_jump_mode()
-        event = FakeKeyEvent("q", "q")
 
-        with patch.object(app, "_refresh_screen"):
-            app.interaction_controller.handle_jump_key(event)
+        handled = app._home_screen.activate_jump_target("request:request")
 
+        self.assertTrue(handled)
         self.assertEqual(app.state.current_tab, TAB_HOME)
         self.assertEqual(app.state.mode, MODE_HOME_SECTION_SELECT)
         self.assertEqual(app.state.home_editor_tab, "request")
-        self.assertTrue(event.stopped)
 
-    def test_jump_tab_returns_to_home_collections_block(self) -> None:
+    def test_activate_jump_target_collections_returns_to_normal_mode(self) -> None:
         app = PiespectorApp()
         app.state.current_tab = "env"
         app.state.mode = MODE_ENV_SELECT
-        app.state.enter_jump_mode()
-        event = FakeKeyEvent("tab")
 
-        with patch.object(app, "_refresh_screen"):
-            app.interaction_controller.handle_jump_key(event)
+        handled = app._home_screen.activate_jump_target("collections")
 
+        self.assertTrue(handled)
         self.assertEqual(app.state.current_tab, TAB_HOME)
         self.assertEqual(app.state.mode, MODE_NORMAL)
-        self.assertTrue(event.stopped)
 
-    def test_jump_to_headers_lands_on_headers_tab_select(self) -> None:
+    def test_activate_jump_target_headers_lands_on_headers_tab_select(self) -> None:
         app = PiespectorApp()
         request = RequestDefinition(name="Health")
         app.state.requests = [request]
         app.state.active_request_id = request.request_id
-        app.state.enter_jump_mode()
-        event = FakeKeyEvent("r", "r")
 
-        with patch.object(app, "_refresh_screen"):
-            app.interaction_controller.handle_jump_key(event)
+        handled = app._home_screen.activate_jump_target("request:headers")
 
+        self.assertTrue(handled)
         self.assertEqual(app.state.current_tab, TAB_HOME)
         self.assertEqual(app.state.mode, MODE_HOME_SECTION_SELECT)
         self.assertEqual(app.state.home_editor_tab, "headers")
-        self.assertTrue(event.stopped)
 
-    def test_jump_to_response_headers_enters_response_select_mode(self) -> None:
+    def test_activate_jump_target_response_headers_enters_response_select_mode(self) -> None:
         app = PiespectorApp()
         request = RequestDefinition(name="Health")
         app.state.requests = [request]
         app.state.active_request_id = request.request_id
-        app.state.enter_jump_mode()
-        event = FakeKeyEvent("s", "s")
 
-        with patch.object(app, "_refresh_screen"):
-            app.interaction_controller.handle_jump_key(event)
+        handled = app._home_screen.activate_jump_target("response:headers")
 
+        self.assertTrue(handled)
         self.assertEqual(app.state.current_tab, TAB_HOME)
         self.assertEqual(app.state.mode, MODE_HOME_RESPONSE_SELECT)
         self.assertEqual(app.state.selected_home_response_tab, "headers")
-        self.assertTrue(event.stopped)
 
     def test_select_folder_traverses_nested_collection_folders_and_expands_ancestors(self) -> None:
         state = PiespectorState()
@@ -565,7 +515,7 @@ class AppCommandModeTests(unittest.TestCase):
         with patch.object(app, "_refresh_viewport"), patch.object(
             app._home_screen, "sync_sidebar_cursor"
         ):
-            app.action_home_next_collection()
+            app._home_screen.action_home_next_collection()
 
         selected = app.state.get_selected_sidebar_node()
         self.assertIsNotNone(selected)
@@ -616,7 +566,7 @@ class AppCommandModeTests(unittest.TestCase):
         app.state.active_request_id = requests[0].request_id
 
         with patch.object(app, "_refresh_viewport"):
-            app.action_home_next_open_request()
+            app._home_screen.action_home_next_open_request()
 
         self.assertEqual(app.state.active_request_id, requests[1].request_id)
 
@@ -643,7 +593,7 @@ class AppCommandModeTests(unittest.TestCase):
         self.assertNotIn("shift+space", binding_keys)
 
     def test_home_bindings_include_j_k_variants_for_keys_panel(self) -> None:
-        binding_by_key = {binding.key: binding for binding in PiespectorApp.BINDINGS}
+        binding_by_key = {binding.key: binding for binding in HomeScreen.BINDINGS}
 
         self.assertEqual(binding_by_key["j"].description, "Browse Down")
         self.assertEqual(binding_by_key["k"].description, "Browse Up")

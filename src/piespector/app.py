@@ -4,7 +4,6 @@ import platform
 import shutil
 import subprocess
 
-from textual import events
 from textual.app import App, ScreenStackError, SystemCommand
 from textual.command import CommandPalette
 from textual.css.query import NoMatches
@@ -23,7 +22,6 @@ from piespector.domain.modes import (
     MODE_NORMAL,
 )
 from piespector.request_builder import preview_request_url
-from piespector.interactions.controller import EventRouter, InteractionController
 from piespector.interactions.keys import response_copy_hint, response_copy_keys
 from piespector.persistence import PersistenceManager
 from piespector.request_executor import RequestExecutor
@@ -87,8 +85,6 @@ class PiespectorApp(App[None]):
         self.persistence_manager = PersistenceManager(self, enabled=persist_state)
         self.request_executor = RequestExecutor(self)
         self.home_controller = HomeController(self)
-        self.interaction_controller = InteractionController(self)
-        self.event_router = EventRouter(self)
         self._home_screen = HomeScreen()
         self._env_screen = EnvScreen()
         self._history_screen = HistoryScreen()
@@ -267,9 +263,6 @@ class PiespectorApp(App[None]):
         screen.refresh_status_line()
         screen.refresh_command_line()
 
-    def on_key(self, event: events.Key) -> None:
-        self.event_router.handle_key(event)
-
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
         body_editor_open = body_text_editor_is_open(self)
 
@@ -286,18 +279,6 @@ class PiespectorApp(App[None]):
             if self.state.mode in COMMAND_BLOCKED_MODES and self.state.mode != MODE_HOME_URL_EDIT:
                 return False
 
-        if action in {
-            "home_browse_up",
-            "home_browse_down",
-            "home_previous_folder",
-            "home_next_folder",
-            "home_previous_collection",
-            "home_next_collection",
-            "home_previous_open_request",
-            "home_next_open_request",
-        }:
-            return self.state.current_tab == TAB_HOME and self.state.mode == MODE_NORMAL
-
         if self.state.mode != MODE_NORMAL and action in {
             "show_home",
             "show_env",
@@ -312,6 +293,7 @@ class PiespectorApp(App[None]):
         self.state.enter_jump_mode()
         if self.state.current_tab == TAB_HOME and self._home_screen.open_jump_overlay():
             return
+        self.state.leave_jump_mode()
         self._refresh_screen()
 
     def open_palette(
@@ -343,10 +325,6 @@ class PiespectorApp(App[None]):
     def action_command_palette(self) -> None:
         self.open_command_palette()
 
-    def action_search_workspace(self) -> None:
-        screen = self._current_base_screen() or self._screen_for_tab(self.state.current_tab)
-        screen.action_search_workspace()
-
     def execute_command(self, raw_command: str) -> None:
         screen = self._current_base_screen() or self._screen_for_tab(self.state.current_tab)
         screen.execute_command(raw_command)
@@ -370,30 +348,6 @@ class PiespectorApp(App[None]):
     def action_next_tab(self) -> None:
         self.state.cycle_tab(1)
         self._refresh_screen()
-
-    def action_home_browse_up(self) -> None:
-        self.home_controller.navigation.browse_sidebar(-1)
-
-    def action_home_browse_down(self) -> None:
-        self.home_controller.navigation.browse_sidebar(1)
-
-    def action_home_previous_folder(self) -> None:
-        self.home_controller.navigation.jump_folder(-1)
-
-    def action_home_next_folder(self) -> None:
-        self.home_controller.navigation.jump_folder(1)
-
-    def action_home_previous_collection(self) -> None:
-        self.home_controller.navigation.jump_collection(-1)
-
-    def action_home_next_collection(self) -> None:
-        self.home_controller.navigation.jump_collection(1)
-
-    def action_home_previous_open_request(self) -> None:
-        self.home_controller.navigation.cycle_open_request(-1)
-
-    def action_home_next_open_request(self) -> None:
-        self.home_controller.navigation.cycle_open_request(1)
 
     def _create_new_request(self) -> None:
         self.state.create_request()

@@ -20,7 +20,6 @@ from piespector.domain.modes import (
 from piespector.placeholders import placeholder_match
 from piespector.screens.home.request.method_selection import method_color
 from piespector.screens.home.request.url_bar import (
-    preview_request_url_template,
     render_request_url_display,
 )
 from piespector.screens.home.selection import home_selection
@@ -78,6 +77,7 @@ class UrlBar(Vertical):
         self._url_env_completion_matches: list[str] = []
         self._url_env_completion_index = -1
         self._url_completion_request_id: str | None = None
+        self._hint_refresh_scheduled = False
 
     def _owner_app(self):
         owner_app = getattr(self, "_piespector_app", None)
@@ -233,7 +233,7 @@ class UrlBar(Vertical):
         self._reset_url_completion()
         self._sync_input_widget(url_input, "", display=False)
         url_display.display = True
-        url_display_signature = self._url_line_signature(state, active_request)
+        url_display_signature = self._url_line_state_signature(state, active_request)
         if getattr(url_display, "_piespector_signature", None) == url_display_signature:
             return
 
@@ -360,7 +360,7 @@ class UrlBar(Vertical):
             return []
         return [active_request]
 
-    def _url_line_signature(
+    def _url_line_state_signature(
         self,
         state: PiespectorState,
         active_request: RequestDefinition | None,
@@ -369,21 +369,34 @@ class UrlBar(Vertical):
             return ("no-opened-request",)
 
         mode = effective_mode(state)
-        url_preview = preview_request_url_template(active_request)
+        query_signature = tuple(
+            (item.key, item.value, item.enabled)
+            for item in active_request.query_items
+        )
+        auth_signature = (
+            active_request.auth_type,
+            active_request.auth_api_key_location,
+            active_request.auth_api_key_name,
+            active_request.auth_api_key_value,
+        )
 
         if mode in {MODE_HOME_REQUEST_METHOD_EDIT, MODE_HOME_REQUEST_METHOD_SELECT}:
             return (
                 "method-select",
                 active_request.request_id,
                 active_request.method,
-                url_preview,
+                active_request.url,
+                query_signature,
+                auth_signature,
             )
 
         return (
             "url-preview",
             active_request.request_id,
             active_request.method,
-            url_preview,
+            active_request.url,
+            query_signature,
+            auth_signature,
         )
 
     def _sync_input_widget(
@@ -402,6 +415,8 @@ class UrlBar(Vertical):
             if input_widget.has_focus:
                 input_widget.blur()
             input_widget._piespector_focus_token = None
+            if input_widget.value:
+                input_widget.value = ""
             return
 
         if focus_token is None:
@@ -423,6 +438,18 @@ class UrlBar(Vertical):
         self._url_env_completion_index = -1
         if not self.editing:
             self._url_completion_request_id = None
+
+    def _schedule_hint_refresh(self) -> None:
+        if self._hint_refresh_scheduled:
+            return
+
+        self._hint_refresh_scheduled = True
+
+        def refresh_hint() -> None:
+            self._hint_refresh_scheduled = False
+            self.refresh_hint_from_state()
+
+        self.call_after_refresh(refresh_hint)
 
     @on(SelectionChanged, "#method-select")
     def _on_method_selected(self, event: SelectionChanged) -> None:
@@ -450,7 +477,7 @@ class UrlBar(Vertical):
         if cursor >= 2 and text[cursor - 2 : cursor] == "{{" and text[cursor : cursor + 2] != "}}":
             event.input.value = text[:cursor] + "}}" + text[cursor:]
             event.input.cursor_position = cursor
-        self.call_after_refresh(self.refresh_hint_from_state)
+        self._schedule_hint_refresh()
         event.stop()
 
     @on(Tabs.TabActivated, "#open-request-tabs")
@@ -505,6 +532,6 @@ class UrlBar(Vertical):
                 new_cursor = len(before) + 2 + len(suggestion)
                 focused.value = completed
                 focused.cursor_position = new_cursor
-                self.call_after_refresh(self.refresh_hint_from_state)
+                self._schedule_hint_refresh()
 
         event.stop()

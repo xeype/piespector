@@ -13,6 +13,8 @@ from piespector.domain.editor import (
     RESPONSE_TABS,
 )
 from piespector.screens.help.render import render_help_viewport
+from piespector.screens.base import PiespectorScreen
+from piespector.screens.home.screen import HomeScreen
 from piespector.ui.command_line_content import build_command_line_text
 from piespector.screens.home.jump_titles import render_jump_hint_line, render_jump_panel_title
 from piespector.screens.home.messages import response_caption
@@ -298,7 +300,7 @@ class ScreenWidgetRenderingTests(unittest.IsolatedAsyncioTestCase):
         app._load_request_workspace = lambda: None
         return app
 
-    async def test_home_screen_url_display_keeps_placeholder_template_and_click_action(self) -> None:
+    async def test_home_screen_url_display_keeps_placeholder_template(self) -> None:
         app = self.make_app()
         request = RequestDefinition(
             request_id="r1",
@@ -316,17 +318,9 @@ class ScreenWidgetRenderingTests(unittest.IsolatedAsyncioTestCase):
 
             url_display = app.screen.query_one("#url-display", Static)
             rendered = render_static_content(url_display, width=140)
-            content = getattr(url_display, "_Static__content")
-            clickable_spans = [
-                span
-                for span in content.spans
-                if getattr(span.style, "meta", None)
-                and span.style.meta.get("@click") == "app.copy_active_request_url"
-            ]
 
             self.assertIn("{{BASE_URL}}/health", rendered)
             self.assertNotIn("https://example.com/health", rendered)
-            self.assertTrue(clickable_spans)
 
     async def test_home_response_panel_pretty_prints_json_body(self) -> None:
         app = self.make_app()
@@ -393,7 +387,8 @@ class ScreenWidgetRenderingTests(unittest.IsolatedAsyncioTestCase):
             rendered = render_static_content(auth_content, width=120)
 
             self.assertEqual(str(request_title.content), "Request")
-            self.assertIn("Bearer Token", rendered)
+            self.assertIn("Bearer", rendered)
+            self.assertIn("****oken", rendered)
 
     async def test_home_response_panel_without_response_uses_real_tabs_and_empty_message(self) -> None:
         app = self.make_app()
@@ -427,12 +422,14 @@ class UiAndScrollbarTests(unittest.TestCase):
         self.assertNotIn("#sidebar-tree:focus", APP_CSS)
         self.assertNotIn(".jump-overlay", APP_CSS)
         self.assertNotIn("#jump-sidebar-overlay", APP_CSS)
-        bindings = {(binding.key, binding.action) for binding in APP_BINDINGS}
-        self.assertIn(("ctrl+p", "command_palette"), bindings)
-        self.assertIn(("/", "search_workspace"), bindings)
-        self.assertIn(("ctrl+o", "enter_jump_mode"), bindings)
-        self.assertIn(("j", "home_browse_down"), bindings)
-        self.assertIn(("ctrl+j", "home_next_collection"), bindings)
+        app_bindings = {(binding.key, binding.action) for binding in APP_BINDINGS}
+        screen_bindings = {(binding.key, binding.action) for binding in PiespectorScreen.BINDINGS}
+        home_bindings = {(binding.key, binding.action) for binding in HomeScreen.BINDINGS}
+        self.assertIn(("ctrl+p", "command_palette"), app_bindings)
+        self.assertIn(("ctrl+o", "enter_jump_mode"), app_bindings)
+        self.assertIn(("/", "search_workspace"), screen_bindings)
+        self.assertIn(("j", "home_browse_down"), home_bindings)
+        self.assertIn(("ctrl+j", "home_next_collection"), home_bindings)
 
     def test_status_hints_use_shift_field_keys_for_params_and_headers(self) -> None:
         params_state = PiespectorState(current_tab="home", mode="HOME_PARAMS_SELECT")

@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 from textual.app import ComposeResult
+from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.css.query import NoMatches
 from textual.screen import Screen
 from textual.widgets import Static
 
 from piespector import commands as command_actions
-from piespector.domain.modes import MODE_NORMAL
+from piespector.domain.modes import COMMAND_BLOCKED_MODES, MODE_NORMAL
+from piespector.interactions.keys import KEY_WORKSPACE_SEARCH
 from piespector.search import activate_search_target
 from piespector.ui.command_line_content import build_command_line_text
 from piespector.ui.command_palette import (
@@ -20,6 +22,9 @@ from piespector.ui.status_content import status_bar_content
 
 class PiespectorScreen(Screen[None]):
     COMMANDS = {PiespectorCommandProvider}
+    BINDINGS = [
+        Binding(KEY_WORKSPACE_SEARCH, "search_workspace", "Search", show=False),
+    ]
 
     def compose(self) -> ComposeResult:
         with Vertical():
@@ -144,6 +149,14 @@ class PiespectorScreen(Screen[None]):
 
     def search_palette_id(self) -> str:
         return "--workspace-search"
+
+    def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
+        if action == "search_workspace":
+            state = self._state
+            if state is None:
+                return False
+            return state.mode not in COMMAND_BLOCKED_MODES
+        return True
 
     def action_search_workspace(self) -> None:
         app = self._owner_app()
