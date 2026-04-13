@@ -32,6 +32,7 @@ from piespector.interactions.keys import (
 )
 from piespector.screens.base import PiespectorScreen
 from piespector.screens.history import render as history_render
+from piespector.screens.home.request.method_selection import method_color
 from piespector.ui.body_editor_modal import BodyEditorModal
 from piespector.ui.command_palette import PiespectorHistorySearchProvider
 from piespector.ui.rendering_helpers import (
@@ -337,7 +338,7 @@ class HistoryScreen(PiespectorScreen):
             for entry in entries:
                 status = str(entry.status_code) if entry.status_code is not None else "ERR"
                 meta = Text()
-                meta.append(entry.method, style=history_render.method_color(entry.method))
+                meta.append(entry.method, style=method_color(entry.method))
                 meta.append(f" {status}")
                 history_list.add_row(
                     history_render.history_time_label(entry.created_at),

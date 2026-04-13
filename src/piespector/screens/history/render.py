@@ -1,12 +1,7 @@
 from __future__ import annotations
 
-from rich import box
-from rich.align import Align
-from rich.columns import Columns
 from rich.console import Group, RenderableType
-from rich.panel import Panel
 from rich.rule import Rule
-from rich.table import Table
 from rich.text import Text
 
 from piespector.domain.editor import (
@@ -17,16 +12,9 @@ from piespector.domain.editor import (
 from piespector.domain.history import HistoryEntry
 from piespector.domain.modes import MODE_HISTORY_RESPONSE_SELECT
 from piespector.formatting import format_bytes
-from piespector.screens.home.request.method_selection import method_color
 from piespector.state import PiespectorState
 from piespector.ui import rendering_helpers
 from piespector.ui.selection import selected_element_style
-
-
-def history_list_visible_rows(viewport_height: int | None) -> int:
-    if viewport_height is None:
-        return 14
-    return max(viewport_height - 6, 6)
 
 
 def history_time_label(created_at: str) -> str:
@@ -78,26 +66,6 @@ def history_sidebar_subtitle(
     if filter_query:
         return f"{visible_total} of {all_total}  |  filter: {filter_query}"
     return f"{all_total} entries"
-
-
-def history_sidebar_caption(
-    start: int,
-    end: int,
-    visible_total: int,
-    all_total: int,
-    filter_query: str,
-) -> str:
-    if all_total <= 0:
-        return "No entries"
-    if visible_total <= 0:
-        if filter_query:
-            return f"0 of {all_total}  |  filter {filter_query}"
-        return "No entries"
-    parts = [f"Entries {start + 1}-{end} of {visible_total}"]
-    if filter_query:
-        parts.append(f"filtered from {all_total}")
-        parts.append(f"filter {filter_query}")
-    return "  |  ".join(parts)
 
 
 def history_block_total(
@@ -287,150 +255,4 @@ def render_history_detail_content(
         Rule(style="dim"),
         response_tabs,
         response_content,
-    )
-
-
-def render_history_viewport(
-    state: PiespectorState,
-    viewport_height: int | None,
-    viewport_width: int | None,
-) -> RenderableType:
-    if not state.history_entries:
-        empty = Text()
-        empty.append("No history yet.\n")
-        empty.append("Send a request, then open the Command Palette with Ctrl+P and run ")
-        empty.append("history")
-        empty.append(" to inspect the snapshot.")
-        return Panel(
-            Align.left(empty),
-            title="History",
-            padding=(1, 2),
-        )
-
-    entries = state.visible_history_entries()
-    visible_rows = history_list_visible_rows(viewport_height)
-    if entries:
-        selected_index = max(0, min(state.selected_history_index, len(entries) - 1))
-    else:
-        selected_index = 0
-
-    max_offset = max(len(entries) - max(visible_rows, 1), 0)
-    scroll_offset = max(0, min(state.history_scroll_offset, max_offset))
-    if selected_index < scroll_offset:
-        scroll_offset = selected_index
-    elif selected_index >= scroll_offset + visible_rows:
-        scroll_offset = selected_index - visible_rows + 1
-
-    sidebar = render_history_sidebar(
-        state,
-        entries,
-        visible_rows,
-        selected_index,
-        scroll_offset,
-    )
-    detail = render_history_detail(
-        state,
-        entries[selected_index] if entries else None,
-        viewport_width,
-    )
-    return Columns((sidebar, detail), expand=True, equal=False)
-
-
-def render_history_sidebar(
-    state: PiespectorState,
-    entries: list[HistoryEntry],
-    visible_rows: int,
-    selected_index: int,
-    scroll_offset: int,
-) -> RenderableType:
-    start = scroll_offset
-    end = min(start + visible_rows, len(entries))
-    visible_entries = entries[start:end]
-
-    table = Table(
-        expand=True,
-        box=None,
-        show_header=False,
-        padding=(0, 1),
-    )
-    table.add_column("When", width=20)
-    table.add_column("Meta", width=10)
-    table.add_column("Name", ratio=1, no_wrap=True)
-
-    for index, entry in enumerate(visible_entries, start=start):
-        status = str(entry.status_code) if entry.status_code is not None else "ERR"
-        meta = Text()
-        meta.append(entry.method, style=method_color(entry.method))
-        meta.append(f" {status}")
-        row_style = selected_element_style(
-            state,
-            selected=index == selected_index,
-        )
-        table.add_row(
-            history_time_label(entry.created_at),
-            meta,
-            history_entry_name(entry),
-            style=row_style,
-        )
-
-    return Panel(
-        table,
-        title="History",
-        subtitle=history_sidebar_caption(
-            start,
-            end,
-            len(entries),
-            len(state.history_entries),
-            state.history_filter_query,
-        ),
-        subtitle_align="left",
-    )
-
-
-def render_history_detail(
-    state: PiespectorState,
-    entry: HistoryEntry | None,
-    viewport_width: int | None,
-) -> RenderableType:
-    request_total = (
-        history_block_total(
-            state.selected_history_request_tab,
-            entry.request_headers,
-            entry.request_body,
-            viewport_width,
-        )
-        if entry is not None
-        else 0
-    )
-    response_total = (
-        history_block_total(
-            state.selected_history_response_tab,
-            entry.response_headers,
-            entry.response_body,
-            viewport_width,
-        )
-        if entry is not None
-        else 0
-    )
-    request_start = max(
-        0,
-        min(state.history_request_scroll_offset, max(request_total - 8, 0)),
-    )
-    response_start = max(
-        0,
-        min(state.history_response_scroll_offset, max(response_total - 8, 0)),
-    )
-    request_end = min(request_start + 8, request_total)
-    response_end = min(response_start + 8, response_total)
-    return Panel(
-        render_history_detail_content(
-            state,
-            entry,
-            request_start=request_start,
-            request_end=request_end,
-            response_start=response_start,
-            response_end=response_end,
-            viewport_width=viewport_width,
-        ),
-        title="Detail",
     )

@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 
 from rich.console import Console
+from textual.widgets import Static, Tabs
 
 from piespector.placeholders import PLACEHOLDER_HIGHLIGHT_COLOR
 from piespector.domain.editor import (
@@ -12,27 +13,19 @@ from piespector.domain.editor import (
     RESPONSE_TABS,
 )
 from piespector.screens.help.render import render_help_viewport
-from piespector.screens.history.render import render_history_viewport
 from piespector.ui.command_line_content import build_command_line_text
 from piespector.screens.home.jump_titles import render_jump_hint_line, render_jump_panel_title
 from piespector.screens.home.messages import response_caption
-from piespector.screens.home.render import (
-    render_home_editor as _render_home_editor,
-    render_home_viewport,
-)
 from piespector.screens.home.response_panel import (
-    render_request_response,
     render_response_summary_line,
     response_status_style,
 )
 from piespector.screens.home.request.request_auth import render_request_auth_editor
 from piespector.screens.home.request.request_options import render_request_options_editor
-from piespector.screens.home.request.url_bar import render_request_url_display, render_top_url_bar
-from piespector.screens.home.sidebar import render_home_sidebar
+from piespector.screens.home.request.url_bar import render_request_url_display
 from piespector.app import PiespectorApp
 from piespector.state import (
     CollectionDefinition,
-    FolderDefinition,
     PiespectorState,
     RequestDefinition,
     RequestKeyValue,
@@ -50,25 +43,11 @@ def render_plain(renderable, *, width: int = 120) -> str:
     return console.export_text()
 
 
+def render_static_content(widget: Static, *, width: int = 120) -> str:
+    return render_plain(getattr(widget, "_Static__content"), width=width)
+
+
 class RenderingMiscTests(unittest.TestCase):
-    def test_render_home_viewport_empty_state(self) -> None:
-        state = PiespectorState(current_tab="home")
-
-        rendered = render_plain(render_home_viewport(state, viewport_height=20, viewport_width=120))
-
-        self.assertIn("No collections or requests yet.", rendered)
-        self.assertIn("Ctrl+P", rendered)
-        self.assertIn("new collection NAME", rendered)
-
-    def test_render_history_viewport_empty_state(self) -> None:
-        state = PiespectorState(current_tab="history")
-
-        rendered = render_plain(render_history_viewport(state, viewport_height=20, viewport_width=120))
-
-        self.assertIn("No history yet.", rendered)
-        self.assertIn("Ctrl+P", rendered)
-        self.assertIn("history", rendered)
-
     def test_render_help_viewport_history_context(self) -> None:
         state = PiespectorState(current_tab="help", help_source_tab="history", help_source_mode="NORMAL")
 
@@ -156,37 +135,6 @@ class RenderingMiscTests(unittest.TestCase):
 
         self.assertIn("Body: h/l tabs, j/k rows, H/L fields, e or Enter open or edit", rendered)
 
-    def test_render_home_response_pretty_prints_json_body(self) -> None:
-        collection = CollectionDefinition(collection_id="c1", name="Desserts")
-        folder = FolderDefinition(folder_id="f1", name="Core", collection_id="c1")
-        request = RequestDefinition(
-            request_id="r1",
-            name="Health",
-            collection_id="c1",
-            folder_id="f1",
-        )
-        request.last_response = ResponseSummary(
-            status_code=200,
-            elapsed_ms=12.3,
-            body_length=17,
-            body_text='{"ok":true}',
-            response_headers=[("Content-Type", "application/json")],
-        )
-        state = PiespectorState(current_tab="home")
-        state.collections = [collection]
-        state.folders = [folder]
-        state.requests = [request]
-        state.ensure_request_workspace()
-        state._set_selected_sidebar_by_request_id(request.request_id)
-        state.open_selected_request(pin=True)
-
-        rendered = render_plain(render_home_viewport(state, viewport_height=24, viewport_width=140), width=140)
-
-        self.assertIn("200 OK   12.3 ms   17 B", rendered)
-        self.assertNotIn("Status 200", rendered)
-        self.assertIn('"ok": true', rendered)
-        self.assertIn("Response", rendered)
-
     def test_render_response_summary_line_colors_status_by_status_code(self) -> None:
         cases = (
             (200, "#00ff00"),
@@ -230,122 +178,6 @@ class RenderingMiscTests(unittest.TestCase):
             caption,
             "Body  |  Lines 1-5 of 5  |  Error: HTTP Error 500: Internal Server Error",
         )
-
-    def test_render_home_editor_header_keeps_placeholder_url_without_resolved_block(self) -> None:
-        request = RequestDefinition(
-            request_id="r1",
-            name="Health",
-            method="GET",
-            url="{{BASE_URL}}/health",
-        )
-        state = PiespectorState(current_tab="home")
-        state.requests = [request]
-        state.active_request_id = request.request_id
-        state.env_pairs = {"BASE_URL": "https://example.com"}
-        state.ensure_request_workspace()
-        state.open_selected_request(pin=True)
-
-        rendered = render_plain(render_home_viewport(state, viewport_height=24, viewport_width=140), width=140)
-
-        self.assertIn("{{BASE_URL}}/health", rendered)
-        self.assertNotIn("https://example.com/health", rendered)
-        self.assertNotIn("Env Default", rendered)
-        self.assertNotIn("Resolved URL:", rendered)
-
-    def test_render_top_url_bar_url_click_targets_app_action(self) -> None:
-        request = RequestDefinition(
-            request_id="r1",
-            name="Health",
-            method="GET",
-            url="{{BASE_URL}}/health",
-        )
-        state = PiespectorState(current_tab="home")
-        state.requests = [request]
-        state.active_request_id = request.request_id
-        state.env_pairs = {"BASE_URL": "https://example.com"}
-
-        panel = render_top_url_bar(state)
-        clickable_spans = [
-            span
-            for span in panel.renderable.spans
-            if getattr(span.style, "meta", None)
-            and span.style.meta.get("@click") == "app.copy_active_request_url"
-        ]
-        self.assertTrue(clickable_spans)
-
-    def test_render_top_url_bar_keeps_active_tab_visible_in_window(self) -> None:
-        state = PiespectorState(current_tab="home")
-        requests = [
-            RequestDefinition(request_id=f"r{i}", name=f"Request {i}", method="GET", url=f"http://localhost/{i}")
-            for i in range(1, 10)
-        ]
-        state.requests = requests
-        state.open_request_ids = [request.request_id for request in requests]
-        state.active_request_id = requests[-1].request_id
-
-        rendered = render_plain(render_top_url_bar(state, viewport_width=60), width=60)
-
-        self.assertIn("Request 9", rendered)
-        self.assertIn("…", rendered)
-
-    def test_render_top_url_bar_omits_hl_switch_subtitle(self) -> None:
-        request = RequestDefinition(
-            request_id="r1",
-            name="Health",
-            method="GET",
-            url="https://example.com/health",
-        )
-        state = PiespectorState(current_tab="home")
-        state.requests = [request]
-        state.active_request_id = request.request_id
-
-        rendered = render_plain(render_top_url_bar(state), width=100)
-
-        self.assertNotIn("h/l switch", rendered)
-
-    def test_render_top_url_bar_method_selector_stays_compact_when_dropdown_is_open(self) -> None:
-        request = RequestDefinition(
-            request_id="r1",
-            name="Health",
-            method="GET",
-            url="https://example.com/health",
-        )
-        state = PiespectorState(current_tab="home")
-        state.requests = [request]
-        state.active_request_id = request.request_id
-        state.mode = "HOME_REQUEST_METHOD_SELECT"
-
-        selector_rendered = render_plain(render_top_url_bar(state), width=100)
-
-        self.assertIn("GET", selector_rendered)
-        self.assertIn("https://example.com/health", selector_rendered)
-        self.assertNotIn("POST", selector_rendered)
-
-        state.mode = "HOME_REQUEST_METHOD_EDIT"
-        compact_rendered = render_plain(render_top_url_bar(state), width=100)
-
-        self.assertIn("GET", compact_rendered)
-        self.assertIn("https://example.com/health", compact_rendered)
-        self.assertNotIn("\n        GET", compact_rendered)
-
-    def test_render_top_url_bar_url_edit_keeps_placeholder_url_preview(self) -> None:
-        request = RequestDefinition(
-            request_id="r1",
-            name="Health",
-            method="GET",
-            url="{{BASE_URL}}/health",
-        )
-        state = PiespectorState(current_tab="home")
-        state.requests = [request]
-        state.active_request_id = request.request_id
-        state.env_pairs = {"BASE_URL": "https://example.com"}
-        state.mode = "HOME_URL_EDIT"
-
-        rendered = render_plain(render_top_url_bar(state), width=100)
-
-        self.assertIn("{{BASE_URL}}/health", rendered)
-        self.assertNotIn("https://example.com/health", rendered)
-        self.assertNotIn("env: BASE_URL", rendered)
 
     def test_render_request_url_display_uses_multiple_styles_for_url_parts(self) -> None:
         request = RequestDefinition(
@@ -400,28 +232,6 @@ class RenderingMiscTests(unittest.TestCase):
             ["{{TOKEN}}"],
         )
 
-    def test_render_home_viewport_without_active_request_uses_single_empty_workspace(self) -> None:
-        collection = CollectionDefinition(collection_id="c1", name="Desserts")
-        request = RequestDefinition(
-            request_id="r1",
-            name="Health",
-            collection_id=collection.collection_id,
-        )
-        state = PiespectorState(current_tab="home")
-        state.collections = [collection]
-        state.requests = [request]
-        state.ensure_request_workspace()
-        state.request_workspace_initialized = True
-        state._set_selected_sidebar_node("collection", collection.collection_id)
-        state.active_request_id = None
-        state.preview_request_id = None
-
-        rendered = render_plain(render_home_viewport(state, viewport_height=24, viewport_width=140), width=140)
-
-        self.assertIn("No active request.", rendered)
-        self.assertNotIn("Response", rendered)
-        self.assertNotIn("Body   Headers", rendered)
-
     def test_jump_mode_uses_command_line_hint_not_bottom_hints(self) -> None:
         state = PiespectorState(current_tab="home")
         state.enter_jump_mode()
@@ -458,73 +268,6 @@ class RenderingMiscTests(unittest.TestCase):
 
         self.assertEqual(title.plain, "Request")
 
-    def test_render_home_editor_supports_auth_tab(self) -> None:
-        request = RequestDefinition(
-            request_id="r1",
-            name="Health",
-            auth_type="bearer",
-            auth_bearer_token="token",
-        )
-        app = PiespectorApp()
-        app.state.requests = [request]
-        app.state.active_request_id = request.request_id
-        app.state.home_editor_tab = "auth"
-
-        rendered = render_plain(_render_home_editor(request, app.state, viewport_height=20, viewport_width=120))
-
-        self.assertIn("Bearer Token", rendered)
-
-    def test_render_home_editor_auth_type_edit_shows_dropdown_values(self) -> None:
-        request = RequestDefinition(
-            request_id="r1",
-            name="Health",
-            auth_type="none",
-        )
-        app = PiespectorApp()
-        app.state.requests = [request]
-        app.state.active_request_id = request.request_id
-        app.state.home_editor_tab = "auth"
-        app.state.enter_home_auth_type_edit_mode(origin_mode="HOME_AUTH_SELECT")
-
-        rendered = render_plain(_render_home_editor(request, app.state, viewport_height=20, viewport_width=120))
-
-        self.assertIn("No Auth", rendered)
-        self.assertNotIn("Basic Auth", rendered)
-        self.assertNotIn("Bearer Token", rendered)
-
-    def test_render_home_editor_body_type_edit_shows_dropdown_values(self) -> None:
-        request = RequestDefinition(
-            request_id="r1",
-            name="Upload",
-            body_type="none",
-        )
-        app = PiespectorApp()
-        app.state.requests = [request]
-        app.state.active_request_id = request.request_id
-        app.state.home_editor_tab = "body"
-        app.state.enter_home_body_type_edit_mode(origin_mode="HOME_BODY_SELECT")
-
-        rendered = render_plain(_render_home_editor(request, app.state, viewport_height=20, viewport_width=120))
-
-        self.assertIn("None", rendered)
-        self.assertNotIn("Form-Data", rendered)
-        self.assertNotIn("Raw", rendered)
-
-    def test_render_home_editor_params_tab_hides_composed_url_footer(self) -> None:
-        request = RequestDefinition(
-            request_id="r1",
-            name="Health",
-            url="https://example.com/health",
-        )
-        app = PiespectorApp()
-        app.state.requests = [request]
-        app.state.active_request_id = request.request_id
-        app.state.home_editor_tab = "params"
-
-        rendered = render_plain(_render_home_editor(request, app.state, viewport_height=20, viewport_width=120))
-
-        self.assertNotIn("Composed URL:", rendered)
-
     def test_render_jump_hint_line_lists_request_hotkeys(self) -> None:
         rendered = render_plain(
             render_jump_hint_line(REQUEST_EDITOR_TABS, REQUEST_EDITOR_TAB_TO_JUMP_KEY),
@@ -537,94 +280,6 @@ class RenderingMiscTests(unittest.TestCase):
         self.assertIn(" r ", rendered)
         self.assertIn(" t ", rendered)
 
-    def test_render_home_editor_uses_fixed_request_title(self) -> None:
-        request = RequestDefinition(
-            request_id="r1",
-            name="test123",
-        )
-        state = PiespectorState(current_tab="home")
-        state.requests = [request]
-        state.active_request_id = request.request_id
-
-        rendered = render_plain(_render_home_editor(request, state, viewport_height=20, viewport_width=120))
-
-        first_line = rendered.splitlines()[0]
-        self.assertIn("Request", first_line)
-
-    def test_render_home_editor_keeps_same_height_in_jump_mode(self) -> None:
-        request = RequestDefinition(
-            request_id="r1",
-            name="test123",
-        )
-        state = PiespectorState(current_tab="home")
-        state.requests = [request]
-        state.active_request_id = request.request_id
-
-        normal_rendered = render_plain(_render_home_editor(request, state, viewport_height=20, viewport_width=120))
-        state.enter_jump_mode()
-        jump_rendered = render_plain(_render_home_editor(request, state, viewport_height=20, viewport_width=120))
-
-        self.assertEqual(len(normal_rendered.splitlines()), len(jump_rendered.splitlines()))
-
-    def test_render_home_editor_selected_block_keeps_request_title(self) -> None:
-        request = RequestDefinition(
-            request_id="r1",
-            name="test123",
-        )
-        app = PiespectorApp()
-        app.state.requests = [request]
-        app.state.active_request_id = request.request_id
-        app.state.home_editor_tab = "body"
-        app.state.mode = "HOME_BODY_SELECT"
-
-        panel = _render_home_editor(request, app.state, viewport_height=20, viewport_width=120)
-
-        self.assertEqual(panel.title.plain, "Request")
-
-    def test_render_home_sidebar_keeps_collections_title(self) -> None:
-        collection = CollectionDefinition(collection_id="c1", name="Desserts")
-        request = RequestDefinition(
-            request_id="r1",
-            name="Health",
-            collection_id=collection.collection_id,
-        )
-        state = PiespectorState(current_tab="home")
-        state.collections = [collection]
-        state.requests = [request]
-        state.ensure_request_workspace()
-        state.mode = "NORMAL"
-
-        panel = render_home_sidebar(state, visible_rows=8)
-        rendered = render_plain(panel, width=120)
-
-        self.assertEqual(panel.title.plain, "Collections")
-        self.assertIn("Rows 1-2 of 2", rendered)
-        self.assertNotIn("j/k browse", rendered)
-
-    def test_render_response_panel_shows_tabs_without_response(self) -> None:
-        request = RequestDefinition(
-            request_id="r1",
-            name="Health",
-        )
-        state = PiespectorState(current_tab="home")
-        state.requests = [request]
-        state.active_request_id = request.request_id
-
-        rendered = render_plain(
-            render_request_response(
-                request,
-                state,
-                viewport_height=18,
-                viewport_width=120,
-                shortcuts_enabled=True,
-            )
-        )
-
-        self.assertIn("Body", rendered)
-        self.assertIn("Headers", rendered)
-        self.assertIn("No response yet. Press s to send the active request.", rendered)
-        self.assertGreaterEqual(len(rendered.splitlines()), 8)
-
     def test_render_jump_hint_line_lists_response_hotkeys(self) -> None:
         rendered = render_plain(
             render_jump_hint_line(RESPONSE_TABS, RESPONSE_TAB_TO_JUMP_KEY),
@@ -634,56 +289,132 @@ class RenderingMiscTests(unittest.TestCase):
         self.assertIn(" a ", rendered)
         self.assertIn(" s ", rendered)
 
-    def test_render_response_panel_keeps_same_height_in_jump_mode(self) -> None:
+
+class ScreenWidgetRenderingTests(unittest.IsolatedAsyncioTestCase):
+    def make_app(self) -> PiespectorApp:
+        app = PiespectorApp()
+        app._load_env_workspace = lambda: None
+        app._load_history = lambda: None
+        app._load_request_workspace = lambda: None
+        return app
+
+    async def test_home_screen_url_display_keeps_placeholder_template_and_click_action(self) -> None:
+        app = self.make_app()
+        request = RequestDefinition(
+            request_id="r1",
+            name="Health",
+            method="GET",
+            url="{{BASE_URL}}/health",
+        )
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+        app.state.env_pairs = {"BASE_URL": "https://example.com"}
+
+        async with app.run_test(size=(140, 40)) as pilot:
+            app._refresh_screen()
+            await pilot.pause()
+
+            url_display = app.screen.query_one("#url-display", Static)
+            rendered = render_static_content(url_display, width=140)
+            content = getattr(url_display, "_Static__content")
+            clickable_spans = [
+                span
+                for span in content.spans
+                if getattr(span.style, "meta", None)
+                and span.style.meta.get("@click") == "app.copy_active_request_url"
+            ]
+
+            self.assertIn("{{BASE_URL}}/health", rendered)
+            self.assertNotIn("https://example.com/health", rendered)
+            self.assertTrue(clickable_spans)
+
+    async def test_home_response_panel_pretty_prints_json_body(self) -> None:
+        app = self.make_app()
+        request = RequestDefinition(
+            request_id="r1",
+            name="Health",
+            last_response=ResponseSummary(
+                status_code=200,
+                elapsed_ms=12.3,
+                body_length=17,
+                body_text='{"ok":true}',
+                response_headers=[("Content-Type", "application/json")],
+            ),
+        )
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+
+        async with app.run_test(size=(140, 40)) as pilot:
+            app._refresh_screen()
+            await pilot.pause()
+
+            response_title = app.screen.query_one("#response-title", Static)
+            response_summary = app.screen.query_one("#response-summary", Static)
+            response_body = app.screen.query_one("#response-body-content", Static)
+            rendered = render_static_content(response_body, width=140)
+
+            self.assertEqual(str(response_title.content), "Response")
+            self.assertEqual(str(response_summary.content), "200 OK   12.3 ms   17 B")
+            self.assertIn('"ok": true', rendered)
+
+    async def test_history_screen_empty_state_renders_in_real_detail_widget(self) -> None:
+        app = self.make_app()
+        app.state.current_tab = "history"
+
+        async with app.run_test(size=(140, 40)) as pilot:
+            await pilot.pause()
+
+            history_list = app.screen.query_one("#history-list")
+            history_detail = app.screen.query_one("#history-detail", Static)
+            rendered = render_static_content(history_detail, width=140)
+
+            self.assertEqual(history_list.row_count, 0)
+            self.assertIn("No history yet.", rendered)
+            self.assertIn("Send a request from the Home tab", rendered)
+
+    async def test_home_request_auth_content_is_rendered_by_auth_pane(self) -> None:
+        app = self.make_app()
+        request = RequestDefinition(
+            request_id="r1",
+            name="Health",
+            auth_type="bearer",
+            auth_bearer_token="token",
+        )
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+        app.state.home_editor_tab = "auth"
+
+        async with app.run_test(size=(140, 40)) as pilot:
+            app._refresh_screen()
+            await pilot.pause()
+
+            request_title = app.screen.query_one("#request-title", Static)
+            auth_content = app.screen.query_one("#request-auth-content", Static)
+            rendered = render_static_content(auth_content, width=120)
+
+            self.assertEqual(str(request_title.content), "Request")
+            self.assertIn("Bearer Token", rendered)
+
+    async def test_home_response_panel_without_response_uses_real_tabs_and_empty_message(self) -> None:
+        app = self.make_app()
         request = RequestDefinition(
             request_id="r1",
             name="Health",
         )
-        state = PiespectorState(current_tab="home")
-        state.requests = [request]
-        state.active_request_id = request.request_id
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
 
-        normal_rendered = render_plain(
-            render_request_response(
-                request,
-                state,
-                viewport_height=20,
-                viewport_width=120,
-                shortcuts_enabled=True,
-            )
-        )
-        state.enter_jump_mode()
-        jump_rendered = render_plain(
-            render_request_response(
-                request,
-                state,
-                viewport_height=20,
-                viewport_width=120,
-                shortcuts_enabled=True,
-            )
-        )
+        async with app.run_test(size=(140, 40)) as pilot:
+            app._refresh_screen()
+            await pilot.pause()
 
-        self.assertEqual(len(normal_rendered.splitlines()), len(jump_rendered.splitlines()))
+            response_tabs = app.screen.query_one("#response-tabs", Tabs)
+            response_body = app.screen.query_one("#response-body-content", Static)
+            rendered = render_static_content(response_body, width=140)
 
-    def test_render_response_panel_selected_block_keeps_response_title(self) -> None:
-        request = RequestDefinition(
-            request_id="r1",
-            name="Health",
-        )
-        state = PiespectorState(current_tab="home")
-        state.requests = [request]
-        state.active_request_id = request.request_id
-        state.mode = "HOME_RESPONSE_SELECT"
+            self.assertEqual(response_tabs.tab_count, 2)
+            self.assertIn("No response yet. Press s to send the active request.", rendered)
 
-        panel = render_request_response(
-            request,
-            state,
-            viewport_height=20,
-            viewport_width=120,
-            shortcuts_enabled=True,
-        )
-
-        self.assertEqual(panel.title.plain, "Response")
 
 class UiAndScrollbarTests(unittest.TestCase):
     def test_ui_constants_include_core_selectors_and_binding(self) -> None:

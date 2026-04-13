@@ -31,10 +31,10 @@ from piespector.domain.modes import (
     MODE_HOME_URL_EDIT,
     MODE_NORMAL,
 )
+from piespector.screens.home import messages
 from piespector.screens.home.collections_sidebar import CollectionsSidebar
 from piespector.screens.home.layout import home_top_bar_height
-from piespector.screens.home.render import refresh_home_request_content, sync_home_focus_highlights
-from piespector.screens.home.selection import home_selection
+from piespector.screens.home.selection import home_highlighted_panels, home_selection
 from piespector.screens.home.response_panel import ResponsePanel
 from piespector.screens.home.url_bar import UrlBar
 from piespector.screens.home.request.auth_pane import RequestAuthPane
@@ -48,6 +48,7 @@ from piespector.ui.body_editor_modal import BodyEditorModal
 from piespector.ui.confirm_modal import ConfirmModal
 from piespector.ui.jump_overlay import JumpOverlay
 from piespector.ui.jumper import JumpTarget, Jumper
+from piespector.ui.selection import FOCUS_FRAME_CLASS
 
 
 class HomeScreen(PiespectorScreen):
@@ -145,17 +146,51 @@ class HomeScreen(PiespectorScreen):
         app = self._owner_app()
         if app is None or not self.is_mounted:
             return
-        request_panel = self.query_one("#request-panel")
-        request_title = self.query_one("#request-title", Static)
+        state = app.state
         request_subtitle = self.query_one("#request-subtitle", Static)
         request_tabs = self.query_one("#request-tabs", TabbedContent)
-        refresh_home_request_content(
-            app.state,
-            request_tabs,
-            request_panel,
-            request_title,
-            request_subtitle,
-        )
+        active_request = state.get_active_request()
+
+        if request_tabs.query(f"TabPane#{state.home_editor_tab}"):
+            request_tabs.active = state.home_editor_tab
+
+        overview_pane = self.query_one("#request-overview-pane", RequestOverviewPane)
+        auth_pane = self.query_one("#request-auth-pane", RequestAuthPane)
+        params_pane = self.query_one("#request-params-pane", RequestParamsPane)
+        headers_pane = self.query_one("#request-headers-pane", RequestHeadersPane)
+        body_pane = self.query_one("#request-body-pane", RequestBodyPane)
+        options_pane = self.query_one("#request-options-pane", RequestOptionsPane)
+
+        overview_pane.refresh_from_state(state)
+        auth_pane.refresh_from_state(state)
+        body_pane.refresh_from_state(state)
+
+        if active_request is None:
+            options_pane.refresh_from_state(state)
+            params_pane.refresh_from_state(state)
+            headers_pane.refresh_from_state(state)
+            request_subtitle.update("")
+            return
+
+        request_subtitle.update(messages.home_editor_subtitle(state))
+
+        if state.home_editor_tab == HOME_EDITOR_TAB_REQUEST:
+            return
+
+        if state.home_editor_tab == HOME_EDITOR_TAB_AUTH:
+            return
+
+        if state.home_editor_tab == HOME_EDITOR_TAB_PARAMS:
+            params_pane.refresh_from_state(state)
+            return
+
+        if state.home_editor_tab == HOME_EDITOR_TAB_HEADERS:
+            headers_pane.refresh_from_state(state)
+            return
+
+        if state.home_editor_tab == HOME_EDITOR_TAB_OPTIONS:
+            options_pane.refresh_from_state(state)
+            return
 
     def refresh_response_panel(self) -> None:
         app = self._owner_app()
@@ -179,13 +214,19 @@ class HomeScreen(PiespectorScreen):
         request_panel.border_title = "Request"
         response_panel.border_title = "Response"
         url_bar_container.styles.height = home_top_bar_height()
-        sync_home_focus_highlights(
-            app.state,
-            url_bar_container,
-            sidebar_container,
-            request_panel,
-            response_panel,
+        selection = home_selection(app.state)
+        highlighted_panels = home_highlighted_panels(app.state)
+        highlighted_widgets = (
+            (url_bar_container, "topbar" in highlighted_panels),
+            (sidebar_container, "sidebar" in highlighted_panels),
+            (request_panel, "request" in highlighted_panels),
+            (response_panel, "response" in highlighted_panels),
         )
+        for widget, selected in highlighted_widgets:
+            widget.set_class(selected, FOCUS_FRAME_CLASS)
+
+        request_panel.set_class(selection.request_tab_select, "piespector-tab-select")
+        response_panel.set_class(selection.panel == "response", "piespector-tab-select")
 
     def visible_request_rows(self) -> int:
         if not self.is_mounted:

@@ -3,10 +3,7 @@ from __future__ import annotations
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
-from rich.align import Align
-from rich.columns import Columns
-from rich.console import Group, RenderableType
-from rich.panel import Panel
+from rich.console import RenderableType
 from rich.text import Text
 from textual import on
 from textual.app import ComposeResult
@@ -21,11 +18,9 @@ from piespector.domain.editor import (
     RESPONSE_TABS,
 )
 from piespector.domain.modes import REQUEST_RESPONSE_SHORTCUT_MODES
-from piespector.domain.requests import RequestDefinition
 from piespector.formatting import format_bytes
 from piespector.screens.home import messages
-from piespector.screens.home.jump_titles import render_panel_title
-from piespector.screens.home.layout import home_response_panel_body_height, home_response_visible_rows
+from piespector.screens.home.layout import home_response_visible_rows
 from piespector.screens.home.selection import home_selection
 from piespector.state import PiespectorState
 from piespector.ui.rendering_helpers import (
@@ -283,115 +278,4 @@ def render_response_summary(response: ResponseSummary) -> Text:
         response.status_code,
         response.elapsed_ms,
         response.body_length,
-    )
-
-
-def render_response_header(response_tabs: Text, response: ResponseSummary) -> RenderableType:
-    summary = render_response_summary(response)
-    return Columns(
-        (
-            response_tabs,
-            Align.right(summary),
-        ),
-        expand=True,
-        equal=False,
-    )
-
-
-def render_response_tabs(state: PiespectorState) -> Text:
-    response_tabs = Text()
-    for index, (tab_id, label) in enumerate(RESPONSE_TABS):
-        if index:
-            response_tabs.append(" ")
-        if state.selected_home_response_tab == tab_id:
-            response_tabs.append(f"[{label}]")
-        else:
-            response_tabs.append(label)
-    return response_tabs
-
-
-def render_request_response(
-    request: RequestDefinition | None,
-    state: PiespectorState,
-    viewport_height: int | None,
-    viewport_width: int | None,
-    shortcuts_enabled: bool,
-) -> RenderableType:
-    response_tabs = render_response_tabs(state)
-    panel_selected = home_selection(state).panel == "response"
-    title = render_panel_title("Response", selected=panel_selected)
-    body_height = home_response_panel_body_height(viewport_height)
-
-    if (
-        request is not None
-        and state.pending_request_id is not None
-        and request.request_id == state.pending_request_id
-    ):
-        return Panel(
-            Align.left(
-                Group(
-                    response_tabs,
-                    Text(messages.HOME_SENDING_REQUEST),
-                ),
-                vertical="top",
-                height=body_height,
-            ),
-            title=title,
-            title_align="right",
-            subtitle=messages.HOME_REQUEST_IN_PROGRESS,
-            subtitle_align="left",
-        )
-
-    if request is None or request.last_response is None:
-        return Panel(
-            Align.left(
-                Group(
-                    response_tabs,
-                    Text(messages.HOME_NO_RESPONSE),
-                ),
-                vertical="top",
-                height=body_height,
-            ),
-            title=title,
-            title_align="right",
-        )
-
-    response = request.last_response
-    header = render_response_header(response_tabs, response)
-
-    lines, unit_label = _response_lines(
-        response,
-        state.selected_home_response_tab,
-        viewport_width,
-    )
-    visible_rows = home_response_visible_rows(viewport_height)
-    state.clamp_response_scroll_offset(len(lines), visible_rows)
-    start = state.response_scroll_offset
-    end = min(start + visible_rows, len(lines))
-    content = _render_response_content(
-        response,
-        state.selected_home_response_tab,
-        viewport_width,
-        start,
-        end,
-    )
-    return Panel(
-        Align.left(
-            Group(header, content),
-            vertical="top",
-            height=body_height,
-        ),
-        title=title,
-        title_align="right",
-        subtitle=messages.response_caption(
-            start,
-            end,
-            len(lines),
-            shortcuts_enabled,
-            state.selected_home_response_tab,
-            panel_selected,
-            unit_label,
-            response.error,
-        ),
-        subtitle_align="left",
     )
