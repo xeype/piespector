@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from textual import events
-from textual.app import ScreenStackError
-from textual.css.query import NoMatches
 
 from piespector.domain.editor import (
     HOME_EDITOR_TAB_AUTH,
@@ -68,12 +66,12 @@ class HomeRequestController(HomeControllerBase):
         return False
 
     def _body_pane(self) -> RequestBodyPane:
-        try:
-            return self.app._query_current("#request-body-pane", RequestBodyPane)
-        except (NoMatches, ScreenStackError):
-            body_pane = RequestBodyPane()
-            body_pane._piespector_app = self.app
-            return body_pane
+        home_screen = self.home_screen()
+        if home_screen is not None and home_screen.is_mounted:
+            return home_screen.query_one("#request-body-pane", RequestBodyPane)
+        body_pane = RequestBodyPane()
+        body_pane._piespector_app = self.app
+        return body_pane
 
     def handle_home_request_select_key(self, event: events.Key) -> None:
         if event.key == KEY_ESCAPE:
@@ -89,13 +87,13 @@ class HomeRequestController(HomeControllerBase):
                 event.stop()
                 return
             self.state.select_request_field(-1)
-            self.app._refresh_home_request_panel()
+            self.app._home_screen.refresh_request_panel()
             event.stop()
             return
 
         if event.key in DOWN_KEYS:
             self.state.select_request_field(1)
-            self.app._refresh_home_request_panel()
+            self.app._home_screen.refresh_request_panel()
             event.stop()
             return
 
@@ -113,7 +111,7 @@ class HomeRequestController(HomeControllerBase):
 
         if self.state.home_editor_tab == HOME_EDITOR_TAB_OPTIONS and event.key in TOGGLE_KEYS:
             self.state.toggle_active_options_field()
-            self.app._refresh_home_request_panel()
+            self.app._home_screen.refresh_request_panel()
             event.stop()
             return
 

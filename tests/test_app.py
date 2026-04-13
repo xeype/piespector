@@ -194,7 +194,7 @@ class AppCommandModeTests(unittest.TestCase):
         app.state.current_tab = "env"
 
         with patch.object(app._env_screen, "refresh_from_state") as mock_refresh:
-            app.screen_refresh.refresh_viewport()
+            app._refresh_viewport()
 
         mock_refresh.assert_called_once_with()
 
@@ -203,7 +203,7 @@ class AppCommandModeTests(unittest.TestCase):
         app.state.current_tab = "history"
 
         with patch.object(app._history_screen, "refresh_from_state") as mock_refresh:
-            app.screen_refresh.refresh_viewport()
+            app._refresh_viewport()
 
         mock_refresh.assert_called_once_with()
 
@@ -562,7 +562,9 @@ class AppCommandModeTests(unittest.TestCase):
         app.state.collections = [first_collection, second_collection]
         app.state.selected_sidebar_index = 0
 
-        with patch.object(app, "_refresh_viewport"), patch.object(app, "_sync_home_sidebar_cursor"):
+        with patch.object(app, "_refresh_viewport"), patch.object(
+            app._home_screen, "sync_sidebar_cursor"
+        ):
             app.action_home_next_collection()
 
         selected = app.state.get_selected_sidebar_node()

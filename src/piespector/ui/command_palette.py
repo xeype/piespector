@@ -4,6 +4,7 @@ from asyncio import sleep as async_sleep
 from typing import TYPE_CHECKING
 
 from textual.binding import Binding
+from textual.containers import Horizontal
 from textual.command import (
     Command,
     CommandInput,
@@ -13,6 +14,7 @@ from textual.command import (
     Hit,
     Provider,
 )
+from textual.css.query import NoMatches
 from textual.events import Mount
 
 from piespector.search import search_targets
@@ -61,6 +63,18 @@ class PiespectorPalette(CommandPalette):
                 if text != command_input.value:
                     command_input.value = text
                     command_input.action_end()
+
+    def _watch__list_visible(self) -> None:
+        self.call_after_refresh(self._sync_list_visibility)
+
+    def _sync_list_visibility(self) -> None:
+        try:
+            self.query_one(CommandList).set_class(self._list_visible, "--visible")
+            self.query_one("#--input", Horizontal).set_class(
+                self._list_visible, "--list-visible"
+            )
+        except NoMatches:
+            pass
 
 
 class PiespectorProvider(Provider):

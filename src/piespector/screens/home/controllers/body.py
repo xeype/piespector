@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from textual import events
-from textual.app import ScreenStackError
-from textual.css.query import NoMatches
 
 from piespector.domain.modes import (
     MODE_HOME_BODY_EDIT,
@@ -24,12 +22,12 @@ class HomeBodyController(HomeControllerBase):
         }
 
     def _body_pane(self) -> RequestBodyPane:
-        try:
-            return self.app._query_current("#request-body-pane", RequestBodyPane)
-        except (NoMatches, ScreenStackError):
-            body_pane = RequestBodyPane()
-            body_pane._piespector_app = self.app
-            return body_pane
+        home_screen = self.home_screen()
+        if home_screen is not None and home_screen.is_mounted:
+            return home_screen.query_one("#request-body-pane", RequestBodyPane)
+        body_pane = RequestBodyPane()
+        body_pane._piespector_app = self.app
+        return body_pane
 
     def handle_home_body_select_key(self, event: events.Key) -> None:
         self._body_pane().handle_select_key(event)

@@ -393,7 +393,7 @@ class AppUiTests(unittest.TestCase):
         app.state.selected_param_field_index = 0
         event = FakeKeyEvent("L")
 
-        with patch.object(app, "_refresh_home_request_panel"):
+        with patch.object(app._home_screen, "refresh_request_panel"):
             app.home_controller.params.handle_home_params_select_key(event)
 
         self.assertEqual(app.state.home_editor_tab, "params")
@@ -413,7 +413,7 @@ class AppUiTests(unittest.TestCase):
         app.state.selected_param_field_index = 0
         event = FakeKeyEvent("right")
 
-        with patch.object(app, "_refresh_home_request_panel") as refresh_panel:
+        with patch.object(app._home_screen, "refresh_request_panel") as refresh_panel:
             app.home_controller.params.handle_home_params_select_key(event)
 
         self.assertEqual(app.state.home_editor_tab, "params")
@@ -542,7 +542,7 @@ class AppUiTests(unittest.TestCase):
         headers_pane = RequestHeadersPane()
         headers_pane._piespector_app = app
 
-        with patch.object(app, "_refresh_home_request_panel"):
+        with patch.object(app._home_screen, "refresh_request_panel"):
             headers_pane.handle_select_key(event)
 
         self.assertEqual(app.state.home_editor_tab, "headers")
@@ -564,7 +564,7 @@ class AppUiTests(unittest.TestCase):
         app.state.selected_body_field_index = 0
         event = FakeKeyEvent("L")
 
-        with patch.object(app, "_refresh_home_request_panel"):
+        with patch.object(app._home_screen, "refresh_request_panel"):
             app.home_controller.body.handle_home_body_select_key(event)
 
         self.assertEqual(app.state.home_editor_tab, "body")
@@ -3369,7 +3369,7 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
             tree = app.screen.query_one("#sidebar-tree")
             app.state._set_selected_sidebar_node("collection", first_collection.collection_id)
             app._refresh_viewport()
-            app._sync_home_sidebar_cursor()
+            app._home_screen.sync_sidebar_cursor()
             await pilot.pause()
             self.assertEqual(tree.cursor_line, 0)
 
@@ -3444,7 +3444,7 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
 
             tree = app.screen.query_one("#sidebar-tree")
             app._refresh_viewport()
-            app._sync_home_sidebar_cursor()
+            app._home_screen.sync_sidebar_cursor()
             await pilot.pause()
 
             visible_lines = len(tree._tree_lines)
@@ -3458,7 +3458,7 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
 
             app.state._set_selected_sidebar_node("folder", folder.folder_id)
             app._refresh_viewport()
-            app._sync_home_sidebar_cursor()
+            app._home_screen.sync_sidebar_cursor()
             await pilot.pause()
 
             selected = app.state.get_selected_sidebar_node()

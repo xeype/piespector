@@ -3,8 +3,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Callable
 
 from textual import events
-from textual.app import ScreenStackError
-from textual.css.query import NoMatches
 from textual.widgets import Input, Select
 
 from piespector.widget.tree import PiespectorTree
@@ -36,20 +34,23 @@ class HomeControllerBase:
         self.state.selected_home_response_tab = tab_id
         self.state.enter_home_response_select_mode(origin_mode=MODE_HOME_SECTION_SELECT)
 
+    def home_screen(self):
+        return getattr(self.app, "_home_screen", None)
+
     def sidebar_tree(self) -> PiespectorTree | None:
-        try:
-            return self.app._query_current("#sidebar-tree", PiespectorTree)
-        except (ScreenStackError, NoMatches):
+        screen = self.home_screen()
+        if screen is None:
             return None
+        return screen.sidebar_tree()
 
     def live_select(self, selector: str) -> Select | None:
-        try:
-            return self.app._query_current(selector, Select)
-        except (ScreenStackError, NoMatches):
+        screen = self.home_screen()
+        if screen is None:
             return None
+        return screen.live_select(selector)
 
     def live_input(self, selector: str) -> Input | None:
-        try:
-            return self.app._query_current(selector, Input)
-        except (ScreenStackError, NoMatches):
+        screen = self.home_screen()
+        if screen is None:
             return None
+        return screen.live_input(selector)

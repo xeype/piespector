@@ -40,7 +40,7 @@ class InteractionController:
     def handle_jump_key(self, event: events.Key) -> None:
         if event.key == KEY_ESCAPE:
             self.state.leave_jump_mode()
-            self.app._refresh_jump_state()
+            self.app._refresh_screen()
             event.stop()
             return
 

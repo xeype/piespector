@@ -46,13 +46,13 @@ class HomeAuthController(HomeControllerBase):
                 event.stop()
                 return
             self.state.select_auth_row(-1)
-            self.app._refresh_home_request_panel()
+            self.app._home_screen.refresh_request_panel()
             event.stop()
             return
 
         if event.key in DOWN_KEYS:
             self.state.select_auth_row(1)
-            self.app._refresh_home_request_panel()
+            self.app._home_screen.refresh_request_panel()
             event.stop()
             return
 

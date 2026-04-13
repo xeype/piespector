@@ -20,7 +20,6 @@ from piespector.screens.home import messages
 from piespector.screens.home.controllers.base import HomeControllerBase, HomeModeHandler
 from piespector.screens.home.response_panel import ResponsePanel
 
-
 class HomeResponseController(HomeControllerBase):
     def mode_handlers(self) -> dict[str, HomeModeHandler]:
         return {
@@ -40,11 +39,11 @@ class HomeResponseController(HomeControllerBase):
             return False
 
         if event.key in RESPONSE_SCROLL_KEYS:
-            response_step = self.app._home_response_scroll_step()
+            response_step = self.app._home_screen.response_scroll_step()
             self.state.scroll_response(
                 response_step if event.key == KEY_SCROLL_DOWN else -response_step
             )
-            self.app._refresh_home_response_panel()
+            self.app._home_screen.refresh_response_panel()
             event.stop()
             return True
 
@@ -59,25 +58,25 @@ class HomeResponseController(HomeControllerBase):
 
         if event.key in TAB_PREVIOUS_KEYS:
             self.state.cycle_home_response_tab(-1)
-            self.app._refresh_home_response_panel()
+            self.app._home_screen.refresh_response_panel()
             event.stop()
             return
 
         if event.key in TAB_NEXT_KEYS:
             self.state.cycle_home_response_tab(1)
-            self.app._refresh_home_response_panel()
+            self.app._home_screen.refresh_response_panel()
             event.stop()
             return
 
         if event.key in UP_KEYS:
             self.state.scroll_response(-1)
-            self.app._refresh_home_response_panel()
+            self.app._home_screen.refresh_response_panel()
             event.stop()
             return
 
         if event.key in DOWN_KEYS:
             self.state.scroll_response(1)
-            self.app._refresh_home_response_panel()
+            self.app._home_screen.refresh_response_panel()
             event.stop()
             return
 
@@ -87,8 +86,14 @@ class HomeResponseController(HomeControllerBase):
                 self.app._refresh_screen()
                 event.stop()
                 return
+            if not self.app._home_screen.is_mounted:
+                self.app._open_response_viewer(origin_mode=MODE_HOME_RESPONSE_SELECT)
+                event.stop()
+                return
             try:
-                response_panel = self.app._query_current("#response-panel", ResponsePanel)
+                response_panel = self.app._home_screen.query_one(
+                    "#response-panel", ResponsePanel
+                )
             except NoMatches:
                 self.app._open_response_viewer(origin_mode=MODE_HOME_RESPONSE_SELECT)
             else:

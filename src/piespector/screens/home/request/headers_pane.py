@@ -226,13 +226,13 @@ class RequestHeadersPane(Vertical):
                 event.stop()
                 return
             app.state.select_header_row(-1, total_rows)
-            app._refresh_home_request_panel()
+            app._home_screen.refresh_request_panel()
             event.stop()
             return
 
         if event.key in DOWN_KEYS:
             app.state.select_header_row(1, total_rows)
-            app._refresh_home_request_panel()
+            app._home_screen.refresh_request_panel()
             event.stop()
             return
 
@@ -250,13 +250,13 @@ class RequestHeadersPane(Vertical):
 
         if event.key in FIELD_PREVIOUS_KEYS:
             app.state.cycle_header_field(-1)
-            app._refresh_home_request_panel()
+            app._home_screen.refresh_request_panel()
             event.stop()
             return
 
         if event.key in FIELD_NEXT_KEYS:
             app.state.cycle_header_field(1)
-            app._refresh_home_request_panel()
+            app._home_screen.refresh_request_panel()
             event.stop()
             return
 

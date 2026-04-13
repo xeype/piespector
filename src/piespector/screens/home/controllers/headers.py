@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from textual import events
-from textual.app import ScreenStackError
-from textual.css.query import NoMatches
 
 from piespector.domain.modes import MODE_HOME_HEADERS_EDIT, MODE_HOME_HEADERS_SELECT
 from piespector.screens.home.controllers.base import HomeControllerBase, HomeModeHandler
@@ -17,10 +15,10 @@ class HomeHeadersController(HomeControllerBase):
         }
 
     def _headers_pane(self) -> RequestHeadersPane | None:
-        try:
-            return self.app._query_current("#request-headers-pane", RequestHeadersPane)
-        except (NoMatches, ScreenStackError):
+        home_screen = self.home_screen()
+        if home_screen is None or not home_screen.is_mounted:
             return None
+        return home_screen.query_one("#request-headers-pane", RequestHeadersPane)
 
     def handle_home_headers_select_key(self, event: events.Key) -> None:
         headers_pane = self._headers_pane()

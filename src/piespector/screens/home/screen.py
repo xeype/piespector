@@ -3,18 +3,24 @@ from __future__ import annotations
 from textual import events, on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
+from textual.css.query import NoMatches
 from textual.reactive import reactive
-from textual.widgets import Input, Static, TabbedContent, TabPane
+from textual.widgets import Input, Select, Static, TabbedContent, TabPane, Tabs, Tree
 
 from piespector.commands import CommandOutcome, DeleteConfirmationRequest
 from piespector.domain.editor import (
+    HOME_SIDEBAR_JUMP_KEY,
     HOME_EDITOR_TAB_AUTH,
     HOME_EDITOR_TAB_BODY,
     HOME_EDITOR_TAB_HEADERS,
     HOME_EDITOR_TAB_OPTIONS,
     HOME_EDITOR_TAB_PARAMS,
     HOME_EDITOR_TAB_REQUEST,
+    REQUEST_EDITOR_JUMP_BINDINGS,
     RESPONSE_TAB_BODY,
+    RESPONSE_JUMP_BINDINGS,
+    TOP_BAR_METHOD_JUMP_KEY,
+    TOP_BAR_URL_JUMP_KEY,
 )
 from piespector.domain.modes import (
     MODE_HOME_AUTH_EDIT,
@@ -22,9 +28,13 @@ from piespector.domain.modes import (
     MODE_HOME_BODY_SELECT,
     MODE_HOME_BODY_TYPE_EDIT,
     MODE_HOME_SECTION_SELECT,
+    MODE_HOME_URL_EDIT,
     MODE_NORMAL,
 )
 from piespector.screens.home.collections_sidebar import CollectionsSidebar
+from piespector.screens.home.layout import home_top_bar_height
+from piespector.screens.home.render import refresh_home_request_content, sync_home_focus_highlights
+from piespector.screens.home.selection import home_selection
 from piespector.screens.home.response_panel import ResponsePanel
 from piespector.screens.home.url_bar import UrlBar
 from piespector.screens.home.request.auth_pane import RequestAuthPane
@@ -36,6 +46,8 @@ from piespector.screens.base import PiespectorScreen
 from piespector.screens.home.request.overview_pane import RequestOverviewPane
 from piespector.ui.body_editor_modal import BodyEditorModal
 from piespector.ui.confirm_modal import ConfirmModal
+from piespector.ui.jump_overlay import JumpOverlay
+from piespector.ui.jumper import JumpTarget, Jumper
 
 
 class HomeScreen(PiespectorScreen):
@@ -103,6 +115,236 @@ class HomeScreen(PiespectorScreen):
         self.query_one("#sidebar-container").border_title = "Collections"
         self.query_one("#request-panel").border_title = "Request"
 
+    def refresh_from_state(self) -> None:
+        app = self._owner_app()
+        if app is None or not self.is_mounted:
+            return
+        app.state.ensure_request_workspace()
+        app.state.ensure_request_selection_visible(self.visible_request_rows())
+        self.refresh_sidebar()
+        self.refresh_url_bar()
+        self.refresh_request_panel()
+        self.refresh_response_panel()
+        self.refresh_jump_cues()
+
+    def refresh_sidebar(self) -> None:
+        app = self._owner_app()
+        if app is None or not self.is_mounted:
+            return
+        sidebar = self.query_one("#sidebar-container", CollectionsSidebar)
+        sidebar.refresh_from_state(app.state, self.visible_request_rows())
+
+    def refresh_url_bar(self) -> None:
+        app = self._owner_app()
+        if app is None or not self.is_mounted:
+            return
+        url_bar = self.query_one("#url-bar-container", UrlBar)
+        url_bar.refresh_from_state(app.state)
+
+    def refresh_request_panel(self) -> None:
+        app = self._owner_app()
+        if app is None or not self.is_mounted:
+            return
+        request_panel = self.query_one("#request-panel")
+        request_title = self.query_one("#request-title", Static)
+        request_subtitle = self.query_one("#request-subtitle", Static)
+        request_tabs = self.query_one("#request-tabs", TabbedContent)
+        refresh_home_request_content(
+            app.state,
+            request_tabs,
+            request_panel,
+            request_title,
+            request_subtitle,
+        )
+
+    def refresh_response_panel(self) -> None:
+        app = self._owner_app()
+        if app is None or not self.is_mounted:
+            return
+        response_panel = self.query_one("#response-panel", ResponsePanel)
+        response_panel.refresh_from_state(app.state)
+
+    def refresh_jump_cues(self) -> None:
+        app = self._owner_app()
+        if app is None or not self.is_mounted:
+            return
+        url_bar_container = self.query_one("#url-bar-container")
+        sidebar_container = self.query_one("#sidebar-container")
+        request_panel = self.query_one("#request-panel")
+        response_panel = self.query_one("#response-panel")
+        sidebar_container.styles.border_title_align = "right"
+        request_panel.styles.border_title_align = "right"
+        response_panel.styles.border_title_align = "right"
+        sidebar_container.border_title = "Collections"
+        request_panel.border_title = "Request"
+        response_panel.border_title = "Response"
+        url_bar_container.styles.height = home_top_bar_height()
+        sync_home_focus_highlights(
+            app.state,
+            url_bar_container,
+            sidebar_container,
+            request_panel,
+            response_panel,
+        )
+
+    def visible_request_rows(self) -> int:
+        if not self.is_mounted:
+            return 14
+        try:
+            tree = self.query_one("#sidebar-tree", Tree)
+            return max(tree.size.height - 2, 6)
+        except NoMatches:
+            return 14
+
+    def response_scroll_step(self) -> int:
+        if not self.is_mounted:
+            return 4
+        try:
+            response_panel = self.query_one("#response-panel", ResponsePanel)
+        except NoMatches:
+            return 4
+        return response_panel.scroll_step()
+
+    def sync_sidebar_cursor(self) -> None:
+        app = self._owner_app()
+        if app is None or not self.is_mounted:
+            return
+        try:
+            sidebar = self.query_one("#sidebar-container", CollectionsSidebar)
+        except NoMatches:
+            return
+        sidebar.sync_cursor(app.state.selected_sidebar_index)
+
+    def live_select(self, selector: str) -> Select | None:
+        if not self.is_mounted:
+            return None
+        try:
+            return self.query_one(selector, Select)
+        except NoMatches:
+            return None
+
+    def live_input(self, selector: str) -> Input | None:
+        if not self.is_mounted:
+            return None
+        try:
+            return self.query_one(selector, Input)
+        except NoMatches:
+            return None
+
+    def sidebar_tree(self) -> Tree | None:
+        if not self.is_mounted:
+            return None
+        try:
+            return self.query_one("#sidebar-tree", Tree)
+        except NoMatches:
+            return None
+
+    def open_jump_overlay(self) -> bool:
+        app = self._owner_app()
+        if app is None or not self.is_mounted:
+            return False
+        app._refresh_screen()
+        if app.screen.is_modal:
+            return False
+        app.push_screen(
+            self._build_jump_overlay(),
+            self._handle_jump_overlay_result,
+        )
+        return True
+
+    def clear_jump_focus(self) -> None:
+        app = self._owner_app()
+        if app is None or not self.is_mounted:
+            return
+
+        if app.state.mode == MODE_HOME_URL_EDIT:
+            url_input = self.live_input("#url-input")
+            if url_input is not None and url_input.display:
+                app.set_focus(url_input)
+                return
+
+        if app.state.current_tab == "home" and home_selection(app.state).panel == "sidebar":
+            tree = self.sidebar_tree()
+            if tree is not None and tree.can_focus:
+                app.set_focus(tree)
+                return
+
+        if home_selection(app.state).panel != "sidebar":
+            app.set_focus(None)
+        for widget_id in (
+            "method-select",
+            "auth-type-select",
+            "auth-option-select",
+            "body-type-select",
+            "body-raw-type-select",
+        ):
+            select = self.live_select(f"#{widget_id}")
+            if select is not None:
+                select.blur()
+        for widget_id in ("open-request-tabs", "request-tabs", "response-tabs"):
+            try:
+                self.query_one(f"#{widget_id}").blur()
+            except NoMatches:
+                pass
+
+    def _build_jump_overlay(self) -> JumpOverlay:
+        app = self._owner_app()
+        assert app is not None
+        active_request = app.state.get_active_request()
+        tree = self.query_one("#sidebar-tree", Tree)
+        method_select = self.query_one("#method-select", Select)
+        url_display = self.query_one("#url-display", Static)
+        url_input = self.query_one("#url-input", Input)
+        request_tabs = self.query_one("#request-tabs", TabbedContent)
+        response_tabs = self.query_one("#response-tabs", Tabs)
+
+        request_tab_widgets = sorted(
+            request_tabs.query("ContentTab"),
+            key=lambda widget: widget.region.x,
+        )
+        response_tab_widgets = sorted(
+            response_tabs.query("Tab"),
+            key=lambda widget: widget.region.x,
+        )
+
+        targets: list[JumpTarget] = [
+            JumpTarget(HOME_SIDEBAR_JUMP_KEY, "collections", tree),
+        ]
+        if active_request is not None:
+            targets.extend(
+                [
+                    JumpTarget(TOP_BAR_METHOD_JUMP_KEY, "topbar:method", method_select),
+                    JumpTarget(
+                        TOP_BAR_URL_JUMP_KEY,
+                        "topbar:url",
+                        url_input if url_input.display else url_display,
+                    ),
+                ]
+            )
+        targets.extend(
+            JumpTarget(jump_key, f"request:{tab_id}", widget)
+            for widget, (tab_id, jump_key) in zip(
+                request_tab_widgets, REQUEST_EDITOR_JUMP_BINDINGS
+            )
+        )
+        targets.extend(
+            JumpTarget(jump_key, f"response:{tab_id}", widget)
+            for widget, (tab_id, jump_key) in zip(
+                response_tab_widgets, RESPONSE_JUMP_BINDINGS
+            )
+        )
+        return JumpOverlay(Jumper(tuple(targets)))
+
+    def _handle_jump_overlay_result(self, target: str | None) -> None:
+        app = self._owner_app()
+        if app is None:
+            return
+        app.state.leave_jump_mode()
+        if target is not None:
+            app.interaction_controller.activate_jump_target(target)
+        app._refresh_screen()
+        app.call_after_refresh(self.clear_jump_focus)
+
     def open_body_text_editor(self, origin_mode: str | None = None) -> None:
         app = self.app
         if app is None:
@@ -127,7 +369,7 @@ class HomeScreen(PiespectorScreen):
             return
         app.set_focus(None)
         app._refresh_screen()
-        app.call_after_refresh(app._clear_home_jump_focus)
+        app.call_after_refresh(self.clear_jump_focus)
 
     def _open_delete_confirmation(self, request: DeleteConfirmationRequest) -> None:
         app = self.app
@@ -154,7 +396,7 @@ class HomeScreen(PiespectorScreen):
             self._apply_delete_confirmation(request)
         app.set_focus(None)
         app._refresh_screen()
-        app.call_after_refresh(app._clear_home_jump_focus)
+        app.call_after_refresh(self.clear_jump_focus)
 
     def _apply_delete_confirmation(self, request: DeleteConfirmationRequest) -> None:
         app = self.app

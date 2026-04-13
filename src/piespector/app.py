@@ -5,30 +5,17 @@ import shutil
 import subprocess
 
 from textual import events
-from textual.app import App, SystemCommand
+from textual.app import App, ScreenStackError, SystemCommand
 from textual.command import CommandPalette
 from textual.css.query import NoMatches
 from textual import work
-from textual.widgets import (
-    Input,
-    Select,
-    Static,
-    TabbedContent,
-    Tabs,
-    Tree,
-)
 
 from piespector.domain.editor import (
-    HOME_SIDEBAR_JUMP_KEY,
-    REQUEST_EDITOR_JUMP_BINDINGS,
-    RESPONSE_JUMP_BINDINGS,
     TAB_ENV,
     TAB_HISTORY,
     TAB_HOME,
     TAB_LABELS,
     TAB_ORDER,
-    TOP_BAR_METHOD_JUMP_KEY,
-    TOP_BAR_URL_JUMP_KEY,
 )
 from piespector.domain.modes import COMMAND_BLOCKED_MODES, REQUEST_RESPONSE_SHORTCUT_MODES
 from piespector.domain.modes import (
@@ -40,12 +27,11 @@ from piespector.interactions.controller import EventRouter, InteractionControlle
 from piespector.interactions.keys import response_copy_hint, response_copy_keys
 from piespector.persistence import PersistenceManager
 from piespector.request_executor import RequestExecutor
+from piespector.screens.base import PiespectorScreen
 from piespector.screens.env.screen import EnvScreen
 from piespector.screens.history.screen import HistoryScreen
 from piespector.screens.home.controller import HomeController
-from piespector.screens.home.selection import home_selection
 from piespector.screens.home.screen import HomeScreen
-from piespector.screen_refresh import ScreenRefreshCoordinator
 from piespector.state import PiespectorState
 from piespector.storage import (
     discover_workspace_paths,
@@ -62,8 +48,6 @@ from piespector.ui.command_palette import (
 )
 from piespector.ui.body_editor_modal import BodyEditorModal, body_text_editor_is_open
 from piespector.ui.help_panel import PiespectorHelpPanel
-from piespector.ui.jump_overlay import JumpOverlay
-from piespector.ui.jumper import JumpTarget, Jumper
 from piespector.ui.rendering_helpers import (
     detect_text_syntax_language,
     format_response_body,
@@ -105,8 +89,6 @@ class PiespectorApp(App[None]):
         self.home_controller = HomeController(self)
         self.interaction_controller = InteractionController(self)
         self.event_router = EventRouter(self)
-        self.screen_refresh = ScreenRefreshCoordinator(self)
-        self.screen_refresh.install_bindings()
         self._home_screen = HomeScreen()
         self._env_screen = EnvScreen()
         self._history_screen = HistoryScreen()
@@ -220,6 +202,71 @@ class PiespectorApp(App[None]):
     def on_resize(self) -> None:
         self._refresh_screen()
 
+    def _screen_for_tab(self, tab_id: str) -> PiespectorScreen:
+        if tab_id == TAB_ENV:
+            return self._env_screen
+        if tab_id == TAB_HISTORY:
+            return self._history_screen
+        return self._home_screen
+
+    def _current_base_screen(self) -> PiespectorScreen | None:
+        try:
+            for screen in reversed(self.screen_stack):
+                if isinstance(screen, PiespectorScreen):
+                    return screen
+        except ScreenStackError:
+            return None
+        return None
+
+    def _active_base_screen(self) -> PiespectorScreen:
+        current_screen = self._current_base_screen()
+        if current_screen is not None:
+            return current_screen
+        target_tab = self.state.current_tab if self.state.current_tab in TAB_ORDER else TAB_HOME
+        return self._screen_for_tab(target_tab)
+
+    def _switch_screen_visibility(self) -> None:
+        if not self._screens_installed:
+            return
+        current_screen = self._current_base_screen()
+        if current_screen is None:
+            return
+        try:
+            active_screen = self.screen
+        except ScreenStackError:
+            return
+        if active_screen.is_modal:
+            return
+
+        target_tab = self.state.current_tab if self.state.current_tab in TAB_ORDER else TAB_HOME
+        target_screen = self._screen_for_tab(target_tab)
+        if current_screen is not target_screen:
+            self.switch_screen(target_tab)
+
+    def _refresh_viewport(self) -> None:
+        screen = self._screen_for_tab(
+            self.state.current_tab if self.state.current_tab in TAB_ORDER else TAB_HOME
+        )
+        screen.refresh_from_state()
+
+    def _refresh_status_line(self) -> None:
+        self._active_base_screen().refresh_status_line()
+
+    def _refresh_command_line(self) -> None:
+        self._active_base_screen().refresh_command_line()
+
+    def _refresh_screen(self) -> None:
+        if not self._screens_installed:
+            return
+        self._switch_screen_visibility()
+        screen = self._active_base_screen()
+        if not screen.screen_widgets_ready():
+            self.call_after_refresh(self._refresh_screen)
+            return
+        screen.refresh_from_state()
+        screen.refresh_status_line()
+        screen.refresh_command_line()
+
     def on_key(self, event: events.Key) -> None:
         self.event_router.handle_key(event)
 
@@ -263,14 +310,9 @@ class PiespectorApp(App[None]):
 
     def action_enter_jump_mode(self) -> None:
         self.state.enter_jump_mode()
-        if self.state.current_tab == TAB_HOME and self._has_live_screen():
-            self._refresh_screen()
-            self.push_screen(
-                self._build_home_jump_overlay(),
-                self._handle_jump_overlay_result,
-            )
+        if self.state.current_tab == TAB_HOME and self._home_screen.open_jump_overlay():
             return
-        self._refresh_jump_state()
+        self._refresh_screen()
 
     def open_palette(
         self,
@@ -383,93 +425,6 @@ class PiespectorApp(App[None]):
             self.state.pending_request_spinner_tick + 1
         ) % 4
         self._refresh_viewport()
-
-    def _build_home_jump_overlay(self) -> JumpOverlay:
-        active_request = self.state.get_active_request()
-        tree = self._query_current("#sidebar-tree", Tree)
-        method_select = self._query_current("#method-select", Select)
-        url_display = self._query_current("#url-display", Static)
-        url_input = self._query_current("#url-input", Input)
-        request_tabs = self._query_current("#request-tabs", TabbedContent)
-        response_tabs = self._query_current("#response-tabs", Tabs)
-
-        request_tab_widgets = sorted(
-            request_tabs.query("ContentTab"),
-            key=lambda widget: widget.region.x,
-        )
-        response_tab_widgets = sorted(
-            response_tabs.query("Tab"),
-            key=lambda widget: widget.region.x,
-        )
-
-        targets: list[JumpTarget] = [
-            JumpTarget(HOME_SIDEBAR_JUMP_KEY, "collections", tree),
-        ]
-        if active_request is not None:
-            targets.extend(
-                [
-                    JumpTarget(TOP_BAR_METHOD_JUMP_KEY, "topbar:method", method_select),
-                    JumpTarget(
-                        TOP_BAR_URL_JUMP_KEY,
-                        "topbar:url",
-                        url_input if url_input.display else url_display,
-                    ),
-                ]
-            )
-        targets.extend(
-            JumpTarget(jump_key, f"request:{tab_id}", widget)
-            for widget, (tab_id, jump_key) in zip(request_tab_widgets, REQUEST_EDITOR_JUMP_BINDINGS)
-        )
-        targets.extend(
-            JumpTarget(jump_key, f"response:{tab_id}", widget)
-            for widget, (tab_id, jump_key) in zip(response_tab_widgets, RESPONSE_JUMP_BINDINGS)
-        )
-        return JumpOverlay(Jumper(tuple(targets)))
-
-    def _handle_jump_overlay_result(self, target: str | None) -> None:
-        self.state.leave_jump_mode()
-        if target is not None:
-            self.interaction_controller.activate_jump_target(target)
-        self._refresh_screen()
-        self.call_after_refresh(self._clear_home_jump_focus)
-
-    def _clear_home_jump_focus(self) -> None:
-        if self.state.mode == MODE_HOME_URL_EDIT:
-            try:
-                url_input = self._query_current("#url-input", Input)
-            except NoMatches:
-                url_input = None
-            if url_input is not None and url_input.display:
-                self.set_focus(url_input)
-                return
-
-        if self.state.current_tab == TAB_HOME and home_selection(self.state).panel == "sidebar":
-            try:
-                tree = self._query_current("#sidebar-tree", Tree)
-            except NoMatches:
-                tree = None
-            if tree is not None and tree.can_focus:
-                self.set_focus(tree)
-                return
-
-        if home_selection(self.state).panel != "sidebar":
-            self.set_focus(None)
-        for widget_id in (
-            "method-select",
-            "auth-type-select",
-            "auth-option-select",
-            "body-type-select",
-            "body-raw-type-select",
-        ):
-            try:
-                self._query_current(f"#{widget_id}", Select).blur()
-            except NoMatches:
-                pass
-        for widget_id in ("open-request-tabs", "request-tabs", "response-tabs"):
-            try:
-                self._query_current(f"#{widget_id}").blur()
-            except NoMatches:
-                pass
 
     def _persist_env_pairs(self) -> None:
         self.persistence_manager.persist_env_workspace()
@@ -638,4 +593,4 @@ class PiespectorApp(App[None]):
     def _handle_response_viewer_closed(self, _result: None) -> None:
         self.set_focus(None)
         self._refresh_screen()
-        self.call_after_refresh(self._clear_home_jump_focus)
+        self.call_after_refresh(self._home_screen.clear_jump_focus)

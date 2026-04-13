@@ -289,13 +289,13 @@ class RequestBodyPane(Vertical):
                 event.stop()
                 return
             app.state.select_body_row(-1)
-            app._refresh_home_request_panel()
+            app._home_screen.refresh_request_panel()
             event.stop()
             return
 
         if event.key in DOWN_KEYS:
             app.state.select_body_row(1)
-            app._refresh_home_request_panel()
+            app._home_screen.refresh_request_panel()
             event.stop()
             return
 
@@ -319,7 +319,7 @@ class RequestBodyPane(Vertical):
                 and 0 < app.state.selected_body_index <= len(app.state.get_active_request_body_items())
             ):
                 app.state.cycle_body_field(-1)
-                app._refresh_home_request_panel()
+                app._home_screen.refresh_request_panel()
                 event.stop()
             return
 
@@ -331,7 +331,7 @@ class RequestBodyPane(Vertical):
                 and 0 < app.state.selected_body_index <= len(app.state.get_active_request_body_items())
             ):
                 app.state.cycle_body_field(1)
-                app._refresh_home_request_panel()
+                app._home_screen.refresh_request_panel()
                 event.stop()
             return
 

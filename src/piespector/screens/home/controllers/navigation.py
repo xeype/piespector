@@ -37,7 +37,7 @@ class HomeNavigationController(HomeControllerBase):
         tree = self.sidebar_tree()
         if tree is None:
             self.state.select_request(step)
-            self.app._refresh_home_sidebar_panel()
+            self.app._home_screen.refresh_sidebar()
             return
         if not tree.has_focus:
             tree.focus()
@@ -53,12 +53,12 @@ class HomeNavigationController(HomeControllerBase):
     def jump_folder(self, step: int) -> None:
         if self.state.select_folder(step):
             self.app._refresh_viewport()
-            self.app._sync_home_sidebar_cursor()
+            self.app._home_screen.sync_sidebar_cursor()
 
     def jump_collection(self, step: int) -> None:
         if self.state.select_collection(step):
             self.app._refresh_viewport()
-            self.app._sync_home_sidebar_cursor()
+            self.app._home_screen.sync_sidebar_cursor()
 
     def handle_home_view_key(self, event: events.Key) -> bool:
         if event.key == KEY_ADD:
@@ -88,9 +88,9 @@ class HomeNavigationController(HomeControllerBase):
         if event.key == KEY_PAGE_DOWN:
             tree = self.sidebar_tree()
             if tree is None:
-                visible_rows = self.app._home_request_list_visible_rows()
+                visible_rows = self.app._home_screen.visible_request_rows()
                 self.state.scroll_request_window(visible_rows, visible_rows)
-                self.app._refresh_home_sidebar_panel()
+                self.app._home_screen.refresh_sidebar()
             else:
                 if not tree.has_focus:
                     tree.focus()
@@ -101,9 +101,9 @@ class HomeNavigationController(HomeControllerBase):
         if event.key == KEY_PAGE_UP:
             tree = self.sidebar_tree()
             if tree is None:
-                visible_rows = self.app._home_request_list_visible_rows()
+                visible_rows = self.app._home_screen.visible_request_rows()
                 self.state.scroll_request_window(-visible_rows, visible_rows)
-                self.app._refresh_home_sidebar_panel()
+                self.app._home_screen.refresh_sidebar()
             else:
                 if not tree.has_focus:
                     tree.focus()
@@ -121,7 +121,7 @@ class HomeNavigationController(HomeControllerBase):
                     event.stop()
                     return True
                 if self.state.toggle_selected_sidebar_node():
-                    self.app._refresh_home_sidebar_panel()
+                    self.app._home_screen.refresh_sidebar()
                     event.stop()
                     return True
                 self.state.message = messages.HOME_SELECT_REQUEST_FIRST

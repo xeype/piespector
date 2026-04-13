@@ -9,11 +9,13 @@ from textual.widgets import Static
 from piespector import commands as command_actions
 from piespector.domain.modes import MODE_NORMAL
 from piespector.search import activate_search_target
+from piespector.ui.command_line_content import build_command_line_text
 from piespector.ui.command_palette import (
     PiespectorCommandProvider,
     PiespectorSearchProvider,
 )
 from piespector.ui.footer import PiespectorFooter
+from piespector.ui.status_content import status_bar_content
 
 
 class PiespectorScreen(Screen[None]):
@@ -31,6 +33,9 @@ class PiespectorScreen(Screen[None]):
         raise NotImplementedError
 
     def on_mount(self) -> None:
+        pass
+
+    def refresh_from_state(self) -> None:
         pass
 
     def _owner_app(self):
@@ -104,6 +109,32 @@ class PiespectorScreen(Screen[None]):
             app._send_selected_request()
             return
         app._refresh_screen()
+
+    def screen_widgets_ready(self) -> bool:
+        if not self.is_mounted:
+            return False
+        try:
+            self.query_one("#workspace")
+            self.query_one("#status-line", PiespectorFooter)
+            self.query_one("#command-line")
+            self.query_one("#command-line-content", Static)
+        except NoMatches:
+            return False
+        return True
+
+    def refresh_status_line(self) -> None:
+        state = self._state
+        if state is None or not self.screen_widgets_ready():
+            return
+        footer = self.query_one("#status-line", PiespectorFooter)
+        footer.set_status_content(status_bar_content(state))
+
+    def refresh_command_line(self) -> None:
+        state = self._state
+        if state is None or not self.screen_widgets_ready():
+            return
+        command_content = self.query_one("#command-line-content", Static)
+        command_content.update(build_command_line_text(state))
 
     def search_palette_providers(self):
         return [PiespectorSearchProvider]
