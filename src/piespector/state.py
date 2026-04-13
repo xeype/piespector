@@ -22,17 +22,13 @@ from piespector.state_env import EnvStateMixin
 from piespector.state_history import HistoryStateMixin
 from piespector.state_home import HomeStateMixin
 from piespector.state_workspace import WorkspaceStateMixin
-from piespector.domain.editor import HISTORY_DETAIL_BLOCK_RESPONSE, HOME_EDITOR_TAB_REQUEST, RESPONSE_TAB_BODY
+from piespector.domain.editor import HISTORY_DETAIL_BLOCK_RESPONSE, HOME_EDITOR_TAB_REQUEST, RESPONSE_TAB_BODY, TAB_HOME
 from piespector.domain.modes import (
     MODE_HOME_AUTH_SELECT,
     MODE_HOME_BODY_SELECT,
     MODE_HOME_BODY_TYPE_EDIT,
     MODE_HOME_SECTION_SELECT,
     MODE_NORMAL,
-)
-from piespector.ui.session_state import (
-    SESSION_ROOT_FIELD_NAMES,
-    UISessionState,
 )
 
 
@@ -55,7 +51,6 @@ class PiespectorState(
     )
     selected_env_name: str = "Default"
     history_entries: list[HistoryEntry] = field(default_factory=list)
-    session: UISessionState = field(default_factory=UISessionState, repr=False)
     _collections_by_id: dict[str, CollectionDefinition]
     _folders_by_id: dict[str, FolderDefinition]
     _requests_by_id: dict[str, RequestDefinition]
@@ -79,12 +74,6 @@ class PiespectorState(
             )
 
     def __init__(self, **kwargs) -> None:
-        session = kwargs.pop("session", None)
-        session_root_kwargs = {
-            name: kwargs.pop(name)
-            for name in list(kwargs)
-            if name in SESSION_ROOT_FIELD_NAMES
-        }
         self.collections = kwargs.pop("collections", [])
         self.folders = kwargs.pop("folders", [])
         self.collapsed_collection_ids = kwargs.pop("collapsed_collection_ids", set())
@@ -94,18 +83,30 @@ class PiespectorState(
         self.env_sets = kwargs.pop("env_sets", {"Default": []})
         self.selected_env_name = kwargs.pop("selected_env_name", "Default")
         self.history_entries = kwargs.pop("history_entries", [])
+        self.mode = kwargs.pop("mode", MODE_NORMAL)
+        self.current_tab = kwargs.pop("current_tab", TAB_HOME)
+        self.jump_return_mode = kwargs.pop("jump_return_mode", MODE_NORMAL)
+        self.message = kwargs.pop("message", "")
+        _open_request_ids = kwargs.pop("open_request_ids", None)
+        self.open_request_ids = [] if _open_request_ids is None else _open_request_ids
+        self.active_request_id = kwargs.pop("active_request_id", None)
+        self.preview_request_id = kwargs.pop("preview_request_id", None)
+        self.request_workspace_initialized = kwargs.pop("request_workspace_initialized", False)
+        self.selected_sidebar_index = kwargs.pop("selected_sidebar_index", 0)
+        self.selected_request_index = kwargs.pop("selected_request_index", 0)
+        self.pending_request_id = kwargs.pop("pending_request_id", None)
+        self.pending_request_spinner_tick = kwargs.pop("pending_request_spinner_tick", 0)
+        _env_pairs = kwargs.pop("env_pairs", None)
+        self.env_pairs = {} if _env_pairs is None else _env_pairs
+        self.history_filter_query = kwargs.pop("history_filter_query", "")
+        self.help_return_tab = kwargs.pop("help_return_tab", TAB_HOME)
+        self.help_source_tab = kwargs.pop("help_source_tab", TAB_HOME)
+        self.help_source_mode = kwargs.pop("help_source_mode", MODE_NORMAL)
 
         if kwargs:
             unexpected = ", ".join(sorted(kwargs))
             raise TypeError(f"Unexpected state argument(s): {unexpected}")
 
-        if session is not None and session_root_kwargs:
-            conflicting = ", ".join(sorted(session_root_kwargs))
-            raise TypeError(
-                f"Cannot pass both session and session fields: {conflicting}"
-            )
-
-        self.session = session or UISessionState(**session_root_kwargs)
         self._app = None
         self._mutation_subscribers: dict[str, list[Callable[..., None]]] = {}
 
@@ -140,16 +141,6 @@ class PiespectorState(
             return getattr(app, "_history_screen", None)
         return None
 
-def _session_field_property(field_name: str) -> property:
-    def getter(self: PiespectorState):
-        return getattr(self.session, field_name)
-
-    def setter(self: PiespectorState, value) -> None:
-        setattr(self.session, field_name, value)
-
-    return property(getter, setter)
-
-
 def _screen_only_field_property(group_name: str, field_name: str, default) -> property:
     """Property that reads/writes exclusively from/to the owning screen's reactive attr.
 
@@ -171,9 +162,6 @@ def _screen_only_field_property(group_name: str, field_name: str, default) -> pr
 
     return property(getter, setter)
 
-
-for _session_field_name in SESSION_ROOT_FIELD_NAMES:
-    setattr(PiespectorState, _session_field_name, _session_field_property(_session_field_name))
 
 # Home screen — select UI fields live exclusively on HomeScreen reactive attrs.
 _HOME_SCREEN_ONLY_DEFAULTS: dict[str, object] = {
@@ -241,7 +229,6 @@ for _history_field_name, _history_default in _HISTORY_SCREEN_DEFAULTS.items():
         _screen_only_field_property("history", _history_field_name, _history_default),
     )
 
-del _session_field_name
 del _home_only_field_name, _home_only_default
 del _env_field_name, _env_default
 del _history_field_name, _history_default

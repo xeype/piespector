@@ -160,16 +160,15 @@ class AppCommandModeTests(unittest.TestCase):
         app = PiespectorApp()
         app.state.home_editor_tab = "auth"
 
-        self.assertFalse(hasattr(app.state.session, "home_editor_tab"))
-        self.assertFalse(hasattr(app.state.session, "home"))
+        self.assertFalse(hasattr(app.state, "session"))
         self.assertEqual(app._home_screen.home_editor_tab, "auth")
 
-    def test_env_and_history_ui_state_no_longer_mirrored_in_session(self) -> None:
-        # env and history sub-state dataclasses have been removed from UISessionState
+    def test_env_and_history_ui_state_not_stored_as_direct_state_fields(self) -> None:
+        # env/history UI fields live as reactive attrs on their screens, not on PiespectorState
         app = PiespectorApp()
 
-        self.assertFalse(hasattr(app.state.session, "env"))
-        self.assertFalse(hasattr(app.state.session, "history"))
+        self.assertFalse("selected_env_index" in app.state.__dict__)
+        self.assertFalse("selected_history_index" in app.state.__dict__)
 
     def test_env_screen_ui_state_written_directly_to_screen_reactive(self) -> None:
         app = PiespectorApp()
