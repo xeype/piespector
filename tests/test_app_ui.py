@@ -2108,7 +2108,7 @@ class AppMountedWidgetTests(unittest.IsolatedAsyncioTestCase):
             app._refresh_screen()
             await pilot.pause()
 
-            app._open_history_response_viewer(origin_mode="HISTORY_RESPONSE_SELECT")
+            app._history_screen.open_response_viewer(origin_mode="HISTORY_RESPONSE_SELECT")
             await pilot.pause()
 
             editor = app.screen.query_one("#body-editor", TextArea)

@@ -16,7 +16,7 @@ from piespector.domain.editor import (
     TAB_LABELS,
     TAB_ORDER,
 )
-from piespector.domain.modes import COMMAND_BLOCKED_MODES, REQUEST_RESPONSE_SHORTCUT_MODES
+from piespector.domain.modes import COMMAND_BLOCKED_MODES
 from piespector.domain.modes import (
     MODE_HOME_URL_EDIT,
     MODE_NORMAL,
@@ -62,7 +62,6 @@ class PiespectorApp(App[None]):
     CSS = APP_CSS
     BINDINGS = APP_BINDINGS
     COMMANDS = App.COMMANDS
-    REQUEST_RESPONSE_SHORTCUT_MODES = REQUEST_RESPONSE_SHORTCUT_MODES
 
     def __init__(self, *, persist_state: bool = False) -> None:
         super().__init__()
@@ -458,8 +457,6 @@ class PiespectorApp(App[None]):
         self.state.message = "Copied resolved URL." if copied else "Copy failed."
         self._refresh_command_line()
 
-        return True
-
     def _reset_edit_path_completion(self) -> None:
         self._edit_path_completion_anchor = ""
         self._edit_path_completion_index = -1
@@ -540,9 +537,6 @@ class PiespectorApp(App[None]):
             ),
             self._handle_response_viewer_closed,
         )
-
-    def _open_history_response_viewer(self, origin_mode: str | None = None) -> None:
-        self._history_screen.open_response_viewer(origin_mode=origin_mode)
 
     def _handle_response_viewer_closed(self, _result: None) -> None:
         self.set_focus(None)

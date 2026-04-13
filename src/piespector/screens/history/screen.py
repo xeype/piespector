@@ -67,20 +67,6 @@ class HistoryScreen(PiespectorScreen):
     def search_palette_id(self) -> str:
         return "--history-search"
 
-    def _owner_app(self):
-        owner_app = getattr(self, "_piespector_app", None)
-        if owner_app is not None:
-            return owner_app
-        try:
-            return self.app
-        except Exception:
-            return None
-
-    @property
-    def _state(self) -> PiespectorState | None:
-        app = self._owner_app()
-        return None if app is None else app.state
-
     def on_key(self, event: events.Key) -> None:
         state = self._state
         if state is None:

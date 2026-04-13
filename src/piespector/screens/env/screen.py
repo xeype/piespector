@@ -73,20 +73,6 @@ class EnvScreen(PiespectorScreen):
     env_scroll_offset = reactive(0)
     env_creating_new = reactive(False)
 
-    def _owner_app(self):
-        owner_app = getattr(self, "_piespector_app", None)
-        if owner_app is not None:
-            return owner_app
-        try:
-            return self.app
-        except Exception:
-            return None
-
-    @property
-    def _state(self) -> PiespectorState | None:
-        app = self._owner_app()
-        return None if app is None else app.state
-
     def _env_sidebar_tree(self) -> PiespectorTree | None:
         if not self.is_mounted:
             return None
