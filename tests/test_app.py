@@ -220,6 +220,24 @@ class AppCommandModeTests(unittest.TestCase):
         self.assertEqual(app.state.mode, MODE_NORMAL)
         self.assertEqual(app.state.message, "Import is only available from the Home or Env page.")
 
+    def test_execute_command_delegates_to_current_screen(self) -> None:
+        app = PiespectorApp()
+        app.state.current_tab = "env"
+
+        with patch.object(app._env_screen, "execute_command") as mock_execute:
+            app.execute_command("rename Staging")
+
+        mock_execute.assert_called_once_with("rename Staging")
+
+    def test_search_workspace_delegates_to_current_screen(self) -> None:
+        app = PiespectorApp()
+        app.state.current_tab = "history"
+
+        with patch.object(app._history_screen, "action_search_workspace") as mock_search:
+            app.action_search_workspace()
+
+        mock_search.assert_called_once_with()
+
     def test_command_palette_suggestions_follow_current_tab_context(self) -> None:
         app = PiespectorApp()
         app.state.current_tab = "env"

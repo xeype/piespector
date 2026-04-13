@@ -18,7 +18,6 @@ from textual.widgets import (
     Tree,
 )
 
-from piespector.commands import DeleteConfirmationRequest, run_command
 from piespector.domain.editor import (
     HOME_SIDEBAR_JUMP_KEY,
     REQUEST_EDITOR_JUMP_BINDINGS,
@@ -59,13 +58,9 @@ from piespector.storage import (
 from piespector.ui import APP_BINDINGS, APP_CSS
 from piespector.ui.command_palette import (
     PiespectorPalette,
-    PiespectorCommandProvider,
-    PiespectorHistorySearchProvider,
-    PiespectorSearchProvider,
     PiespectorThemeProvider,
 )
 from piespector.ui.body_editor_modal import BodyEditorModal, body_text_editor_is_open
-from piespector.ui.confirm_modal import ConfirmModal
 from piespector.ui.help_panel import PiespectorHelpPanel
 from piespector.ui.jump_overlay import JumpOverlay
 from piespector.ui.jumper import JumpTarget, Jumper
@@ -84,7 +79,7 @@ class PiespectorApp(App[None]):
     theme = "monokai"
     CSS = APP_CSS
     BINDINGS = APP_BINDINGS
-    COMMANDS = App.COMMANDS | {PiespectorCommandProvider}
+    COMMANDS = App.COMMANDS
     REQUEST_RESPONSE_SHORTCUT_MODES = REQUEST_RESPONSE_SHORTCUT_MODES
 
     def __init__(self, *, persist_state: bool = False) -> None:
@@ -306,52 +301,13 @@ class PiespectorApp(App[None]):
     def action_command_palette(self) -> None:
         self.open_command_palette()
 
-    def open_search_palette(self) -> None:
-        if self.state.current_tab == TAB_HISTORY:
-            self.open_palette(
-                providers=[PiespectorHistorySearchProvider],
-                placeholder="Search history by method, name, URL, status…",
-                palette_id="--history-search",
-            )
-            return
-        self.open_palette(
-            providers=[PiespectorSearchProvider],
-            placeholder="Search collections, folders, and requests…",
-            palette_id="--workspace-search",
-        )
-
     def action_search_workspace(self) -> None:
-        self.open_search_palette()
+        screen = self._current_base_screen() or self._screen_for_tab(self.state.current_tab)
+        screen.action_search_workspace()
 
     def execute_command(self, raw_command: str) -> None:
-        outcome = run_command(
-            self.state,
-            raw_command,
-            context_mode=self.state.mode,
-        )
-        if self.state.mode != MODE_NORMAL:
-            self.state.mode = MODE_NORMAL
-        if outcome.should_exit:
-            self.exit()
-            return
-        if outcome.confirmation_request is not None:
-            self._open_delete_confirmation(outcome.confirmation_request)
-            return
-        if outcome.send_request:
-            self._send_selected_request()
-            return
-        self._refresh_screen()
-
-    def open_search_target(self, target) -> None:
-        from piespector.search import activate_search_target
-
-        self.state.mode = MODE_NORMAL
-        if not activate_search_target(self.state, target):
-            self.state.message = f"Could not open {target.display}."
-        self._refresh_screen()
-
-    def navigate_to_history_entry(self, history_id: str) -> None:
-        self._history_screen.navigate_to_history_entry(history_id)
+        screen = self._current_base_screen() or self._screen_for_tab(self.state.current_tab)
+        screen.execute_command(raw_command)
 
     def action_show_home(self) -> None:
         self.state.switch_tab(TAB_HOME, TAB_LABELS[TAB_HOME])
@@ -401,48 +357,6 @@ class PiespectorApp(App[None]):
         self.state.create_request()
         self._persist_requests()
         self._refresh_viewport()
-
-    def _open_delete_confirmation(self, request: DeleteConfirmationRequest) -> None:
-        self._refresh_screen()
-        self.push_screen(
-            ConfirmModal(request.prompt),
-            lambda confirmed, request=request: self._handle_delete_confirmation_result(
-                request,
-                confirmed,
-            ),
-        )
-
-    def _handle_delete_confirmation_result(
-        self,
-        request: DeleteConfirmationRequest,
-        confirmed: bool | None,
-    ) -> None:
-        if confirmed:
-            self._apply_delete_confirmation(request)
-        self.set_focus(None)
-        self._refresh_screen()
-        self.call_after_refresh(self._clear_home_jump_focus)
-
-    def _apply_delete_confirmation(self, request: DeleteConfirmationRequest) -> None:
-        if request.action == "delete_collection":
-            self.state._set_selected_sidebar_node("collection", request.target_id)
-            node = self.state.get_selected_sidebar_node()
-            if (
-                node is not None
-                and node.kind == "collection"
-                and node.node_id == request.target_id
-            ):
-                self.state.delete_selected_collection()
-            return
-        if request.action == "delete_folder":
-            self.state._set_selected_sidebar_node("folder", request.target_id)
-            node = self.state.get_selected_sidebar_node()
-            if (
-                node is not None
-                and node.kind == "folder"
-                and node.node_id == request.target_id
-            ):
-                self.state.delete_selected_folder()
 
     def _send_selected_request(self) -> None:
         self.request_executor.send_selected_request()

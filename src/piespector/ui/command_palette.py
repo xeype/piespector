@@ -15,12 +15,12 @@ from textual.command import (
 )
 from textual.events import Mount
 
-from piespector.commands import command_completion_matches, command_palette_commands
 from piespector.search import search_targets
 
 if TYPE_CHECKING:
     from piespector.app import PiespectorApp
     from piespector.commands import PaletteCommand
+    from piespector.screens.base import PiespectorScreen
     from piespector.search import SearchTarget
 
 
@@ -68,6 +68,10 @@ class PiespectorProvider(Provider):
     def piespector_app(self) -> PiespectorApp:
         return self.app  # type: ignore[return-value]
 
+    @property
+    def piespector_screen(self) -> PiespectorScreen:
+        return self.screen  # type: ignore[return-value]
+
 
 class PiespectorCommandProvider(PiespectorProvider):
     def _system_command_names(self) -> set[str]:
@@ -78,11 +82,11 @@ class PiespectorCommandProvider(PiespectorProvider):
 
     def _entry_callback(self, entry: PaletteCommand):
         if entry.runnable:
-            return lambda command=entry.text.strip(): self.piespector_app.execute_command(command)
+            return lambda command=entry.text.strip(): self.piespector_screen.execute_command(command)
         return lambda command=entry.text: self.piespector_app.open_command_palette(command)
 
     async def discover(self):
-        for entry in command_palette_commands(self.piespector_app.state):
+        for entry in self.piespector_screen.command_palette_commands():
             yield DiscoveryHit(
                 entry.label,
                 self._entry_callback(entry),
@@ -92,10 +96,10 @@ class PiespectorCommandProvider(PiespectorProvider):
 
     async def search(self, query: str):
         await async_sleep(0)
-        entries = command_palette_commands(self.piespector_app.state)
+        entries = self.piespector_screen.command_palette_commands()
         entry_by_text = {entry.text.strip(): entry for entry in entries}
 
-        completions = command_completion_matches(self.piespector_app.state, query)
+        completions = self.piespector_screen.command_completion_matches(query)
         for index, completion in enumerate(completions):
             normalized = completion.strip()
             entry = entry_by_text.get(normalized)
@@ -111,7 +115,7 @@ class PiespectorCommandProvider(PiespectorProvider):
             yield Hit(
                 max(0.0, 1.0 - (index * 0.01)),
                 completion,
-                lambda command=completion: self.piespector_app.execute_command(command),
+                lambda command=completion: self.piespector_screen.execute_command(command),
                 text=completion,
                 help="Run this command.",
             )
@@ -131,7 +135,7 @@ class PiespectorCommandProvider(PiespectorProvider):
         yield Hit(
             0.05,
             f"Run {normalized_query}",
-            lambda command=normalized_query: self.piespector_app.execute_command(command),
+            lambda command=normalized_query: self.piespector_screen.execute_command(command),
             text=normalized_query,
             help="Run the command exactly as typed.",
         )
@@ -139,7 +143,7 @@ class PiespectorCommandProvider(PiespectorProvider):
 
 class PiespectorSearchProvider(PiespectorProvider):
     def _target_callback(self, target: SearchTarget):
-        return lambda target=target: self.piespector_app.open_search_target(target)
+        return lambda target=target: self.piespector_screen.open_search_target(target)
 
     def _target_help(self, target: SearchTarget) -> str:
         return f"Open this {target.kind}."
@@ -176,7 +180,7 @@ class PiespectorHistorySearchProvider(PiespectorProvider):
         return history_search_display(entry)
 
     def _entry_callback(self, entry):
-        return lambda e=entry: self.piespector_app.navigate_to_history_entry(e.history_id)
+        return lambda e=entry: self.piespector_screen.navigate_to_history_entry(e.history_id)
 
     async def discover(self):
         for entry in self.piespector_app.state.history_entries:

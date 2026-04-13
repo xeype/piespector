@@ -6,6 +6,7 @@ from textual.containers import Horizontal, Vertical
 from textual.reactive import reactive
 from textual.widgets import Input, Static, TabbedContent, TabPane
 
+from piespector.commands import CommandOutcome, DeleteConfirmationRequest
 from piespector.domain.editor import (
     HOME_EDITOR_TAB_AUTH,
     HOME_EDITOR_TAB_BODY,
@@ -34,6 +35,7 @@ from piespector.screens.home.request.params_pane import RequestParamsPane
 from piespector.screens.base import PiespectorScreen
 from piespector.screens.home.request.overview_pane import RequestOverviewPane
 from piespector.ui.body_editor_modal import BodyEditorModal
+from piespector.ui.confirm_modal import ConfirmModal
 
 
 class HomeScreen(PiespectorScreen):
@@ -61,6 +63,12 @@ class HomeScreen(PiespectorScreen):
     home_body_select_return_mode: reactive[str] = reactive(MODE_HOME_SECTION_SELECT)
     home_response_select_return_mode: reactive[str] = reactive(MODE_NORMAL)
     home_editor_tab: reactive[str] = reactive(HOME_EDITOR_TAB_REQUEST)
+
+    def _handle_command_outcome(self, outcome: CommandOutcome) -> None:
+        if outcome.confirmation_request is not None:
+            self._open_delete_confirmation(outcome.confirmation_request)
+            return
+        super()._handle_command_outcome(outcome)
 
     def compose_workspace(self) -> ComposeResult:
         with Vertical(id="home-screen"):
@@ -120,6 +128,57 @@ class HomeScreen(PiespectorScreen):
         app.set_focus(None)
         app._refresh_screen()
         app.call_after_refresh(app._clear_home_jump_focus)
+
+    def _open_delete_confirmation(self, request: DeleteConfirmationRequest) -> None:
+        app = self.app
+        if app is None:
+            return
+        app._refresh_screen()
+        app.push_screen(
+            ConfirmModal(request.prompt),
+            lambda confirmed, request=request: self._handle_delete_confirmation_result(
+                request,
+                confirmed,
+            ),
+        )
+
+    def _handle_delete_confirmation_result(
+        self,
+        request: DeleteConfirmationRequest,
+        confirmed: bool | None,
+    ) -> None:
+        app = self.app
+        if app is None:
+            return
+        if confirmed:
+            self._apply_delete_confirmation(request)
+        app.set_focus(None)
+        app._refresh_screen()
+        app.call_after_refresh(app._clear_home_jump_focus)
+
+    def _apply_delete_confirmation(self, request: DeleteConfirmationRequest) -> None:
+        app = self.app
+        if app is None:
+            return
+        if request.action == "delete_collection":
+            app.state._set_selected_sidebar_node("collection", request.target_id)
+            node = app.state.get_selected_sidebar_node()
+            if (
+                node is not None
+                and node.kind == "collection"
+                and node.node_id == request.target_id
+            ):
+                app.state.delete_selected_collection()
+            return
+        if request.action == "delete_folder":
+            app.state._set_selected_sidebar_node("folder", request.target_id)
+            node = app.state.get_selected_sidebar_node()
+            if (
+                node is not None
+                and node.kind == "folder"
+                and node.node_id == request.target_id
+            ):
+                app.state.delete_selected_folder()
 
     @on(CollectionsSidebar.SelectionChanged)
     def _on_sidebar_selection_changed(self, event: CollectionsSidebar.SelectionChanged) -> None:

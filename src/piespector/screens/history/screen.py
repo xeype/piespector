@@ -33,6 +33,7 @@ from piespector.interactions.keys import (
 from piespector.screens.base import PiespectorScreen
 from piespector.screens.history import render as history_render
 from piespector.ui.body_editor_modal import BodyEditorModal
+from piespector.ui.command_palette import PiespectorHistorySearchProvider
 from piespector.ui.rendering_helpers import (
     detect_text_syntax_language,
     format_response_body,
@@ -55,6 +56,15 @@ class HistoryScreen(PiespectorScreen):
     history_request_scroll_offset = reactive(0)
     history_response_scroll_offset = reactive(0)
     history_response_select_return_mode = reactive(MODE_NORMAL)
+
+    def search_palette_providers(self):
+        return [PiespectorHistorySearchProvider]
+
+    def search_palette_placeholder(self) -> str:
+        return "Search history by method, name, URL, status…"
+
+    def search_palette_id(self) -> str:
+        return "--history-search"
 
     def _owner_app(self):
         owner_app = getattr(self, "_piespector_app", None)

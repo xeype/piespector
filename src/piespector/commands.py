@@ -100,6 +100,18 @@ def command_context_mode(state: PiespectorState) -> str:
     return state.mode
 
 
+def _resolve_command_context(
+    state: PiespectorState,
+    *,
+    context_tab: str | None = None,
+    context_mode: str | None = None,
+) -> tuple[str, str]:
+    return (
+        context_tab or state.current_tab,
+        context_mode or state.mode,
+    )
+
+
 def _command_source(
     state: PiespectorState,
     context_mode: str,
@@ -258,8 +270,12 @@ def _filesystem_path_completions(raw_value: str) -> list[str]:
     return completions
 
 
-def _command_specs(state: PiespectorState, context_mode: str) -> list[CommandSpec]:
-    if state.current_tab == TAB_ENV:
+def _command_specs(
+    state: PiespectorState,
+    context_tab: str,
+    context_mode: str,
+) -> list[CommandSpec]:
+    if context_tab == TAB_ENV:
         return [
             CommandSpec(("home",)),
             CommandSpec(("env",)),
@@ -274,7 +290,7 @@ def _command_specs(state: PiespectorState, context_mode: str) -> list[CommandSpe
             CommandSpec(("edit",)),
         ]
 
-    if state.current_tab == TAB_HISTORY:
+    if context_tab == TAB_HISTORY:
         return [
             CommandSpec(("home",)),
             CommandSpec(("env",)),
@@ -422,16 +438,22 @@ def _command_help(spec: CommandSpec, current_tab: str) -> str:
 
 def command_palette_commands(
     state: PiespectorState,
+    *,
+    context_tab: str | None = None,
     context_mode: str | None = None,
 ) -> list[PaletteCommand]:
-    active_context_mode = context_mode or command_context_mode(state)
+    active_context_tab, active_context_mode = _resolve_command_context(
+        state,
+        context_tab=context_tab,
+        context_mode=context_mode,
+    )
     commands: list[PaletteCommand] = []
     seen: set[tuple[str, str, bool]] = set()
-    for spec in _command_specs(state, active_context_mode):
+    for spec in _command_specs(state, active_context_tab, active_context_mode):
         entry = PaletteCommand(
             label=_spec_display(spec),
             text=_command_text(spec),
-            help=_command_help(spec, state.current_tab),
+            help=_command_help(spec, active_context_tab),
             runnable=not spec.takes_value,
         )
         key = (entry.label, entry.text, entry.runnable)
@@ -447,12 +469,7 @@ def help_commands(
     context_tab: str,
     context_mode: str,
 ) -> list[str]:
-    original_tab = state.current_tab
-    state.current_tab = context_tab
-    try:
-        specs = _command_specs(state, context_mode)
-    finally:
-        state.current_tab = original_tab
+    specs = _command_specs(state, context_tab, context_mode)
 
     commands: list[str] = []
     for spec in specs:
@@ -479,10 +496,25 @@ def command_completion(state: PiespectorState, raw_buffer: str) -> str | None:
     return matches[0] if matches else None
 
 
-def command_completion_matches(state: PiespectorState, raw_buffer: str) -> list[str]:
-    context_mode = command_context_mode(state)
-    specs = _command_specs(state, context_mode)
-    path_completions = _path_value_completions(state, raw_buffer, context_mode, specs)
+def command_completion_matches(
+    state: PiespectorState,
+    raw_buffer: str,
+    *,
+    context_tab: str | None = None,
+    context_mode: str | None = None,
+) -> list[str]:
+    active_context_tab, active_context_mode = _resolve_command_context(
+        state,
+        context_tab=context_tab,
+        context_mode=context_mode,
+    )
+    specs = _command_specs(state, active_context_tab, active_context_mode)
+    path_completions = _path_value_completions(
+        state,
+        raw_buffer,
+        active_context_mode,
+        specs,
+    )
     if path_completions:
         return path_completions
 
@@ -589,9 +621,14 @@ def run_command(
     state: PiespectorState,
     raw_command: str,
     *,
+    context_tab: str | None = None,
     context_mode: str | None = None,
 ) -> CommandOutcome:
-    previous_mode = context_mode or command_context_mode(state)
+    previous_tab, previous_mode = _resolve_command_context(
+        state,
+        context_tab=context_tab,
+        context_mode=context_mode,
+    )
 
     parsed = _parse_command(raw_command)
     if parsed.error:
@@ -627,21 +664,21 @@ def run_command(
         return CommandOutcome()
 
     if normalized == "replay":
-        if state.current_tab != TAB_HISTORY:
+        if previous_tab != TAB_HISTORY:
             state.message = "Replay is only available on History."
             return CommandOutcome()
         replayed = state.replay_selected_history_entry()
         return CommandOutcome(save_requests=replayed is not None)
 
     if normalized == "new":
-        if state.current_tab != TAB_HOME:
+        if previous_tab != TAB_HOME:
             state.message = "New is only available on Home."
             return CommandOutcome()
         state.create_request()
         return CommandOutcome(save_requests=True)
 
     if normalized_tokens[:2] == ("new", "collection"):
-        if state.current_tab != TAB_HOME:
+        if previous_tab != TAB_HOME:
             state.message = "New collection is only available on Home."
             return CommandOutcome()
         name = _command_value(tokens, 2)
@@ -652,7 +689,7 @@ def run_command(
         return CommandOutcome(save_requests=True)
 
     if normalized_tokens[:2] == ("new", "folder"):
-        if state.current_tab != TAB_HOME:
+        if previous_tab != TAB_HOME:
             state.message = "New folder is only available on Home."
             return CommandOutcome()
         name = _command_value(tokens, 2)
@@ -662,7 +699,7 @@ def run_command(
         created = state.create_folder(name)
         return CommandOutcome(save_requests=created is not None)
 
-    if normalized_tokens[:1] == ("new",) and state.current_tab == TAB_ENV:
+    if normalized_tokens[:1] == ("new",) and previous_tab == TAB_ENV:
         name = _command_value(tokens, 1)
         if not name:
             state.message = "Usage: new NAME"
@@ -671,7 +708,7 @@ def run_command(
         return CommandOutcome(save_env_pairs=created)
 
     if normalized_tokens[:1] == ("import",):
-        if state.current_tab == TAB_ENV:
+        if previous_tab == TAB_ENV:
             import_path_value = _command_value(tokens, 1)
             if not import_path_value:
                 state.message = "Usage: import PATH"
@@ -688,7 +725,7 @@ def run_command(
             imported = state.import_env_sets(env_names, env_sets)
             return CommandOutcome(save_env_pairs=imported > 0)
 
-        if state.current_tab != TAB_HOME or previous_mode not in HOME_PAGE_COMMAND_CONTEXT_MODES:
+        if previous_tab != TAB_HOME or previous_mode not in HOME_PAGE_COMMAND_CONTEXT_MODES:
             state.message = "Import is only available from the Home or Env page."
             return CommandOutcome()
         import_path_value = _command_value(tokens, 1)
@@ -709,7 +746,7 @@ def run_command(
         return CommandOutcome(save_requests=imported > 0)
 
     if normalized_tokens[:1] == ("export",):
-        if state.current_tab == TAB_ENV:
+        if previous_tab == TAB_ENV:
             export_path_value = _command_value(tokens, 1)
             if not export_path_value:
                 state.message = "Usage: export PATH"
@@ -723,7 +760,7 @@ def run_command(
             state.message = f"Exported env to {export_path}."
             return CommandOutcome()
 
-        if state.current_tab != TAB_HOME or previous_mode not in HOME_PAGE_COMMAND_CONTEXT_MODES:
+        if previous_tab != TAB_HOME or previous_mode not in HOME_PAGE_COMMAND_CONTEXT_MODES:
             state.message = "Export is only available from the Home or Env page."
             return CommandOutcome()
         export_path_value = _command_value(tokens, 1)
@@ -758,14 +795,14 @@ def run_command(
         return CommandOutcome()
 
     if normalized_tokens[:1] == ("rename",):
-        if state.current_tab == TAB_ENV:
+        if previous_tab == TAB_ENV:
             name = _command_value(tokens, 1)
             if not name:
                 state.message = "Usage: rename NAME"
                 return CommandOutcome()
             renamed = state.rename_selected_env_set(name)
             return CommandOutcome(save_env_pairs=renamed)
-        if state.current_tab != TAB_HOME or previous_mode not in HOME_PAGE_COMMAND_CONTEXT_MODES:
+        if previous_tab != TAB_HOME or previous_mode not in HOME_PAGE_COMMAND_CONTEXT_MODES:
             state.message = "Rename is only available from the Home or Env page."
             return CommandOutcome()
         source = _command_source(state, previous_mode)
@@ -785,7 +822,7 @@ def run_command(
         return CommandOutcome(save_requests=renamed)
 
     if normalized_tokens[:1] == ("mv",):
-        if state.current_tab != TAB_HOME or previous_mode not in HOME_PAGE_COMMAND_CONTEXT_MODES:
+        if previous_tab != TAB_HOME or previous_mode not in HOME_PAGE_COMMAND_CONTEXT_MODES:
             state.message = "Move is only available from the Home page."
             return CommandOutcome()
         source = _command_source(state, previous_mode)
@@ -832,7 +869,7 @@ def run_command(
         return CommandOutcome(save_requests=moved)
 
     if normalized_tokens[:1] == ("cp",):
-        if state.current_tab != TAB_HOME or previous_mode not in HOME_PAGE_COMMAND_CONTEXT_MODES:
+        if previous_tab != TAB_HOME or previous_mode not in HOME_PAGE_COMMAND_CONTEXT_MODES:
             state.message = "Copy is only available from the Home page."
             return CommandOutcome()
         source = _command_source(state, previous_mode)
@@ -906,7 +943,7 @@ def run_command(
         return CommandOutcome(save_env_pairs=True)
 
     if normalized_tokens[:1] in {("del",), ("delete",)} and len(tokens) > 1:
-        if state.current_tab != TAB_ENV:
+        if previous_tab != TAB_ENV:
             state.message = "Usage: del"
             return CommandOutcome()
 
@@ -922,10 +959,10 @@ def run_command(
         return CommandOutcome()
 
     if normalized in {"del", "delete"}:
-        if state.current_tab == TAB_ENV:
+        if previous_tab == TAB_ENV:
             deleted = state.delete_selected_env_set()
             return CommandOutcome(save_env_pairs=deleted)
-        if state.current_tab != TAB_HOME:
+        if previous_tab != TAB_HOME:
             state.message = "Usage: del KEY"
             return CommandOutcome()
         if previous_mode not in HOME_PAGE_COMMAND_CONTEXT_MODES:
@@ -959,13 +996,13 @@ def run_command(
         return CommandOutcome(save_requests=True)
 
     if normalized == "edit":
-        if state.current_tab == TAB_HOME:
+        if previous_tab == TAB_HOME:
             if state.get_selected_request() is None:
                 state.message = "Select a request first."
                 return CommandOutcome()
             state.enter_home_section_select_mode()
             return CommandOutcome()
-        if state.current_tab == TAB_ENV:
+        if previous_tab == TAB_ENV:
             if not state.env_pairs:
                 state.message = "Nothing to edit."
                 return CommandOutcome()
