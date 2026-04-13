@@ -22,10 +22,15 @@ from piespector.state_env import EnvStateMixin
 from piespector.state_history import HistoryStateMixin
 from piespector.state_home import HomeStateMixin
 from piespector.state_workspace import WorkspaceStateMixin
-from piespector.domain.editor import HISTORY_DETAIL_BLOCK_RESPONSE, RESPONSE_TAB_BODY
-from piespector.domain.modes import MODE_NORMAL
+from piespector.domain.editor import HISTORY_DETAIL_BLOCK_RESPONSE, HOME_EDITOR_TAB_REQUEST, RESPONSE_TAB_BODY
+from piespector.domain.modes import (
+    MODE_HOME_AUTH_SELECT,
+    MODE_HOME_BODY_SELECT,
+    MODE_HOME_BODY_TYPE_EDIT,
+    MODE_HOME_SECTION_SELECT,
+    MODE_NORMAL,
+)
 from piespector.ui.session_state import (
-    HOME_SCREEN_FIELD_NAMES,
     SESSION_ROOT_FIELD_NAMES,
     UISessionState,
 )
@@ -80,11 +85,6 @@ class PiespectorState(
             for name in list(kwargs)
             if name in SESSION_ROOT_FIELD_NAMES
         }
-        home_kwargs = {
-            name: kwargs.pop(name)
-            for name in list(kwargs)
-            if name in HOME_SCREEN_FIELD_NAMES
-        }
         self.collections = kwargs.pop("collections", [])
         self.folders = kwargs.pop("folders", [])
         self.collapsed_collection_ids = kwargs.pop("collapsed_collection_ids", set())
@@ -99,16 +99,13 @@ class PiespectorState(
             unexpected = ", ".join(sorted(kwargs))
             raise TypeError(f"Unexpected state argument(s): {unexpected}")
 
-        session_override_kwargs = session_root_kwargs | home_kwargs
-        if session is not None and session_override_kwargs:
-            conflicting = ", ".join(sorted(session_override_kwargs))
+        if session is not None and session_root_kwargs:
+            conflicting = ", ".join(sorted(session_root_kwargs))
             raise TypeError(
                 f"Cannot pass both session and session fields: {conflicting}"
             )
 
         self.session = session or UISessionState(**session_root_kwargs)
-        for field_name, value in home_kwargs.items():
-            setattr(self.session.home, field_name, value)
         self._app = None
         self._mutation_subscribers: dict[str, list[Callable[..., None]]] = {}
 
@@ -153,16 +150,6 @@ def _session_field_property(field_name: str) -> property:
     return property(getter, setter)
 
 
-def _session_group_field_property(group_name: str, field_name: str) -> property:
-    def getter(self: PiespectorState):
-        return getattr(getattr(self.session, group_name), field_name)
-
-    def setter(self: PiespectorState, value) -> None:
-        setattr(getattr(self.session, group_name), field_name, value)
-
-    return property(getter, setter)
-
-
 def _screen_only_field_property(group_name: str, field_name: str, default) -> property:
     """Property that reads/writes exclusively from/to the owning screen's reactive attr.
 
@@ -187,17 +174,33 @@ def _screen_only_field_property(group_name: str, field_name: str, default) -> pr
 
 for _session_field_name in SESSION_ROOT_FIELD_NAMES:
     setattr(PiespectorState, _session_field_name, _session_field_property(_session_field_name))
-for _home_field_name in HOME_SCREEN_FIELD_NAMES:
-    setattr(
-        PiespectorState,
-        _home_field_name,
-        _session_group_field_property("home", _home_field_name),
-    )
 
 # Home screen — select UI fields live exclusively on HomeScreen reactive attrs.
 _HOME_SCREEN_ONLY_DEFAULTS: dict[str, object] = {
     "params_creating_new": False,
     "headers_creating_new": False,
+    "body_creating_new": False,
+    "request_scroll_offset": 0,
+    "response_scroll_offset": 0,
+    "selected_home_response_tab": RESPONSE_TAB_BODY,
+    "selected_request_field_index": 0,
+    "selected_auth_index": 0,
+    "selected_param_index": 0,
+    "selected_param_field_index": 0,
+    "selected_header_index": 0,
+    "selected_header_field_index": 0,
+    "selected_body_index": 0,
+    "selected_body_field_index": 0,
+    "selected_top_bar_field": "method",
+    "home_top_bar_return_mode": MODE_NORMAL,
+    "home_top_bar_edit_return_mode": MODE_NORMAL,
+    "home_auth_type_return_mode": MODE_HOME_AUTH_SELECT,
+    "home_body_type_return_mode": MODE_HOME_SECTION_SELECT,
+    "home_body_raw_type_return_mode": MODE_HOME_BODY_TYPE_EDIT,
+    "home_body_content_return_mode": MODE_HOME_BODY_SELECT,
+    "home_body_select_return_mode": MODE_HOME_SECTION_SELECT,
+    "home_response_select_return_mode": MODE_NORMAL,
+    "home_editor_tab": HOME_EDITOR_TAB_REQUEST,
 }
 for _home_only_field_name, _home_only_default in _HOME_SCREEN_ONLY_DEFAULTS.items():
     setattr(
@@ -239,7 +242,6 @@ for _history_field_name, _history_default in _HISTORY_SCREEN_DEFAULTS.items():
     )
 
 del _session_field_name
-del _home_field_name
 del _home_only_field_name, _home_only_default
 del _env_field_name, _env_default
 del _history_field_name, _history_default

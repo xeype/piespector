@@ -13,8 +13,16 @@ from piespector.domain.editor import (
     HOME_EDITOR_TAB_OPTIONS,
     HOME_EDITOR_TAB_PARAMS,
     HOME_EDITOR_TAB_REQUEST,
+    RESPONSE_TAB_BODY,
 )
-from piespector.domain.modes import MODE_HOME_AUTH_EDIT
+from piespector.domain.modes import (
+    MODE_HOME_AUTH_EDIT,
+    MODE_HOME_AUTH_SELECT,
+    MODE_HOME_BODY_SELECT,
+    MODE_HOME_BODY_TYPE_EDIT,
+    MODE_HOME_SECTION_SELECT,
+    MODE_NORMAL,
+)
 from piespector.screens.home.collections_sidebar import CollectionsSidebar
 from piespector.screens.home.response_panel import ResponsePanel
 from piespector.screens.home.url_bar import UrlBar
@@ -31,6 +39,28 @@ from piespector.ui.body_editor_modal import BodyEditorModal
 class HomeScreen(PiespectorScreen):
     params_creating_new: reactive[bool] = reactive(False)
     headers_creating_new: reactive[bool] = reactive(False)
+    body_creating_new: reactive[bool] = reactive(False)
+    request_scroll_offset: reactive[int] = reactive(0)
+    response_scroll_offset: reactive[int] = reactive(0)
+    selected_home_response_tab: reactive[str] = reactive(RESPONSE_TAB_BODY)
+    selected_request_field_index: reactive[int] = reactive(0)
+    selected_auth_index: reactive[int] = reactive(0)
+    selected_param_index: reactive[int] = reactive(0)
+    selected_param_field_index: reactive[int] = reactive(0)
+    selected_header_index: reactive[int] = reactive(0)
+    selected_header_field_index: reactive[int] = reactive(0)
+    selected_body_index: reactive[int] = reactive(0)
+    selected_body_field_index: reactive[int] = reactive(0)
+    selected_top_bar_field: reactive[str] = reactive("method")
+    home_top_bar_return_mode: reactive[str] = reactive(MODE_NORMAL)
+    home_top_bar_edit_return_mode: reactive[str] = reactive(MODE_NORMAL)
+    home_auth_type_return_mode: reactive[str] = reactive(MODE_HOME_AUTH_SELECT)
+    home_body_type_return_mode: reactive[str] = reactive(MODE_HOME_SECTION_SELECT)
+    home_body_raw_type_return_mode: reactive[str] = reactive(MODE_HOME_BODY_TYPE_EDIT)
+    home_body_content_return_mode: reactive[str] = reactive(MODE_HOME_BODY_SELECT)
+    home_body_select_return_mode: reactive[str] = reactive(MODE_HOME_SECTION_SELECT)
+    home_response_select_return_mode: reactive[str] = reactive(MODE_NORMAL)
+    home_editor_tab: reactive[str] = reactive(HOME_EDITOR_TAB_REQUEST)
 
     def compose_workspace(self) -> ComposeResult:
         with Vertical(id="home-screen"):

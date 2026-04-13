@@ -156,11 +156,13 @@ class AppCommandModeTests(unittest.TestCase):
                 )
             )
 
-    def test_session_moves_home_screen_local_fields_out_of_session_root(self) -> None:
-        state = PiespectorState(home_editor_tab="auth")
+    def test_home_editor_tab_lives_on_home_screen_reactive(self) -> None:
+        app = PiespectorApp()
+        app.state.home_editor_tab = "auth"
 
-        self.assertFalse(hasattr(state.session, "home_editor_tab"))
-        self.assertEqual(state.session.home.home_editor_tab, "auth")
+        self.assertFalse(hasattr(app.state.session, "home_editor_tab"))
+        self.assertFalse(hasattr(app.state.session, "home"))
+        self.assertEqual(app._home_screen.home_editor_tab, "auth")
 
     def test_env_and_history_ui_state_no_longer_mirrored_in_session(self) -> None:
         # env and history sub-state dataclasses have been removed from UISessionState

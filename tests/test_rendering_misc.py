@@ -29,6 +29,7 @@ from piespector.screens.home.request.request_auth import render_request_auth_edi
 from piespector.screens.home.request.request_options import render_request_options_editor
 from piespector.screens.home.request.url_bar import render_request_url_display, render_top_url_bar
 from piespector.screens.home.sidebar import render_home_sidebar
+from piespector.app import PiespectorApp
 from piespector.state import (
     CollectionDefinition,
     FolderDefinition,
@@ -464,12 +465,12 @@ class RenderingMiscTests(unittest.TestCase):
             auth_type="bearer",
             auth_bearer_token="token",
         )
-        state = PiespectorState(current_tab="home")
-        state.requests = [request]
-        state.active_request_id = request.request_id
-        state.home_editor_tab = "auth"
+        app = PiespectorApp()
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+        app.state.home_editor_tab = "auth"
 
-        rendered = render_plain(_render_home_editor(request, state, viewport_height=20, viewport_width=120))
+        rendered = render_plain(_render_home_editor(request, app.state, viewport_height=20, viewport_width=120))
 
         self.assertIn("Bearer Token", rendered)
 
@@ -479,13 +480,13 @@ class RenderingMiscTests(unittest.TestCase):
             name="Health",
             auth_type="none",
         )
-        state = PiespectorState(current_tab="home")
-        state.requests = [request]
-        state.active_request_id = request.request_id
-        state.home_editor_tab = "auth"
-        state.enter_home_auth_type_edit_mode(origin_mode="HOME_AUTH_SELECT")
+        app = PiespectorApp()
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+        app.state.home_editor_tab = "auth"
+        app.state.enter_home_auth_type_edit_mode(origin_mode="HOME_AUTH_SELECT")
 
-        rendered = render_plain(_render_home_editor(request, state, viewport_height=20, viewport_width=120))
+        rendered = render_plain(_render_home_editor(request, app.state, viewport_height=20, viewport_width=120))
 
         self.assertIn("No Auth", rendered)
         self.assertNotIn("Basic Auth", rendered)
@@ -497,13 +498,13 @@ class RenderingMiscTests(unittest.TestCase):
             name="Upload",
             body_type="none",
         )
-        state = PiespectorState(current_tab="home")
-        state.requests = [request]
-        state.active_request_id = request.request_id
-        state.home_editor_tab = "body"
-        state.enter_home_body_type_edit_mode(origin_mode="HOME_BODY_SELECT")
+        app = PiespectorApp()
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+        app.state.home_editor_tab = "body"
+        app.state.enter_home_body_type_edit_mode(origin_mode="HOME_BODY_SELECT")
 
-        rendered = render_plain(_render_home_editor(request, state, viewport_height=20, viewport_width=120))
+        rendered = render_plain(_render_home_editor(request, app.state, viewport_height=20, viewport_width=120))
 
         self.assertIn("None", rendered)
         self.assertNotIn("Form-Data", rendered)
@@ -515,12 +516,12 @@ class RenderingMiscTests(unittest.TestCase):
             name="Health",
             url="https://example.com/health",
         )
-        state = PiespectorState(current_tab="home")
-        state.requests = [request]
-        state.active_request_id = request.request_id
-        state.home_editor_tab = "params"
+        app = PiespectorApp()
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+        app.state.home_editor_tab = "params"
 
-        rendered = render_plain(_render_home_editor(request, state, viewport_height=20, viewport_width=120))
+        rendered = render_plain(_render_home_editor(request, app.state, viewport_height=20, viewport_width=120))
 
         self.assertNotIn("Composed URL:", rendered)
 
@@ -570,13 +571,13 @@ class RenderingMiscTests(unittest.TestCase):
             request_id="r1",
             name="test123",
         )
-        state = PiespectorState(current_tab="home")
-        state.requests = [request]
-        state.active_request_id = request.request_id
-        state.home_editor_tab = "body"
-        state.mode = "HOME_BODY_SELECT"
+        app = PiespectorApp()
+        app.state.requests = [request]
+        app.state.active_request_id = request.request_id
+        app.state.home_editor_tab = "body"
+        app.state.mode = "HOME_BODY_SELECT"
 
-        panel = _render_home_editor(request, state, viewport_height=20, viewport_width=120)
+        panel = _render_home_editor(request, app.state, viewport_height=20, viewport_width=120)
 
         self.assertEqual(panel.title.plain, "Request")
 
